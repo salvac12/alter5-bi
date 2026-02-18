@@ -1,0 +1,9 @@
+node_modules
+.DS_Store
+*.local
+data_sources
+scripts
+.git
+.gitignore
+README.md
+.claude.md

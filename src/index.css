@@ -1,0 +1,78 @@
+/* ── Alter5 Design Tokens ── */
+:root {
+  /* Navy */
+  --navy-dark: #0A1628;
+  --navy-mid: #132238;
+  --navy-primary: #1B3A5C;
+
+  /* Emerald — sectors, ESG, sustainability, energy */
+  --emerald: #10B981;
+  --emerald-light: #34D399;
+  --emerald-bg: #ECFDF5;
+
+  /* Blue — platform, solutions, tech, AI */
+  --blue: #3B82F6;
+  --blue-light: #60A5FA;
+  --blue-bg: #EFF6FF;
+
+  /* Surfaces */
+  --light-bg: #F7F9FC;
+  --white: #FFFFFF;
+
+  /* Text */
+  --text: #1A2B3D;
+  --muted: #6B7F94;
+
+  /* Border */
+  --border: #E2E8F0;
+
+  /* Status */
+  --status-active: #10B981;
+  --status-dormant: #F59E0B;
+  --status-lost: #EF4444;
+}
+
+/* ── Reset & Base ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  background: var(--light-bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+::selection { background: var(--emerald); color: white; }
+input::placeholder { color: var(--muted); }
+
+/* ── Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.fade-in { animation: fadeIn 0.25s ease both; }
+.slide-in { animation: slideIn 0.2s ease both; }
+
+/* ── Table rows ── */
+.row-hover { transition: background 0.12s ease; }
+.row-hover:hover { background: var(--light-bg) !important; }
