@@ -1,4 +1,7 @@
+import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
+import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize } from '../utils/companyData';
+import { COUNTRIES, COMPANY_SIZES } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -28,6 +31,41 @@ export default function DetailPanel({ company, onClose }) {
   if (!company) return null;
   const c = company;
   const det = c.detail;
+
+  // Estado para datos manuales
+  const [manualData, setManualData] = useState({});
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedData, setEditedData] = useState({});
+
+  // Cargar datos manuales al abrir el panel
+  useEffect(() => {
+    if (c.domain) {
+      const data = getCompanyDataByDomain(c.domain);
+      setManualData(data);
+      setEditedData(data);
+    }
+  }, [c.domain]);
+
+  // Datos cualificados
+  const qualifiedCountry = qualifyCountry(c);
+  const qualifiedSize = qualifyCompanySize(c);
+
+  const handleSave = () => {
+    const success = saveCompanyData(c.domain, editedData);
+    if (success) {
+      setManualData(editedData);
+      setIsEditing(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditedData(manualData);
+    setIsEditing(false);
+  };
+
+  const updateField = (field, value) => {
+    setEditedData(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
     <div className="slide-in" style={{
@@ -231,27 +269,159 @@ export default function DetailPanel({ company, onClose }) {
           </div>
         )}
 
-        {/* Manual fields */}
+        {/* Información cualificada */}
         <div style={{
           marginTop: 20, padding: 14, background: "#132238", borderRadius: 10,
+          border: "1px solid #1B3A5C", marginBottom: 16,
+        }}>
+          <DarkSectionTitle>Cualificación automática</DarkSectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <InfoField
+              label="País"
+              value={COUNTRIES.find(c => c.id === qualifiedCountry)?.label || "Sin clasificar"}
+              icon="🌍"
+            />
+            <InfoField
+              label="Tamaño"
+              value={COMPANY_SIZES.find(s => s.id === qualifiedSize)?.label || "Sin datos"}
+              icon="👥"
+            />
+          </div>
+        </div>
+
+        {/* Manual fields */}
+        <div style={{
+          marginTop: 0, padding: 14, background: "#132238", borderRadius: 10,
           border: "1px dashed #1B3A5C",
         }}>
-          <DarkSectionTitle>Datos manuales</DarkSectionTitle>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            {["Facturación", "Empleados", "Importancia", "Notas"].map(f => (
-              <div key={f} style={{
-                background: "#0A1628", borderRadius: 6, padding: "7px 10px",
-                border: "1px solid #1B3A5C",
-              }}>
-                <div style={{
-                  fontSize: 8, color: "#6B7F94", marginBottom: 1,
-                  textTransform: "uppercase", letterSpacing: "2px", fontWeight: 700,
-                }}>{f}</div>
-                <div style={{ fontSize: 12, color: "#1B3A5C", fontStyle: "italic", fontWeight: 400 }}>
-                  Sin datos
-                </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <DarkSectionTitle style={{ marginBottom: 0 }}>Datos manuales</DarkSectionTitle>
+            {!isEditing ? (
+              <button
+                onClick={() => setIsEditing(true)}
+                style={{
+                  background: "linear-gradient(135deg, #3B82F6, #10B981)",
+                  border: "none",
+                  color: "#FFFFFF",
+                  padding: "6px 12px",
+                  borderRadius: 6,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                ✏️ Editar
+              </button>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={handleCancel}
+                  style={{
+                    background: "#1B3A5C",
+                    border: "1px solid #2A4A6C",
+                    color: "#94A3B8",
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSave}
+                  style={{
+                    background: "linear-gradient(135deg, #3B82F6, #10B981)",
+                    border: "none",
+                    color: "#FFFFFF",
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  💾 Guardar
+                </button>
               </div>
-            ))}
+            )}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Facturación */}
+            <EditableField
+              label="Facturación anual"
+              value={isEditing ? editedData.revenue : manualData.revenue}
+              placeholder="Ej: 5M €, 10M €, 50M €"
+              isEditing={isEditing}
+              onChange={(v) => updateField('revenue', v)}
+            />
+
+            {/* Empleados */}
+            <EditableField
+              label="Número de empleados"
+              value={isEditing ? editedData.employeesCount : manualData.employeesCount}
+              placeholder="Ej: 25, 150, 500"
+              isEditing={isEditing}
+              type="number"
+              onChange={(v) => updateField('employeesCount', v)}
+            />
+
+            {/* País (manual override) */}
+            <SelectField
+              label="País (manual)"
+              value={isEditing ? editedData.country : manualData.country}
+              options={COUNTRIES}
+              placeholder="Seleccionar país..."
+              isEditing={isEditing}
+              onChange={(v) => updateField('country', v)}
+            />
+
+            {/* Importancia/Prioridad */}
+            <SelectField
+              label="Importancia"
+              value={isEditing ? editedData.priority : manualData.priority}
+              options={[
+                { id: 'high', label: '⭐⭐⭐ Alta' },
+                { id: 'medium', label: '⭐⭐ Media' },
+                { id: 'low', label: '⭐ Baja' },
+              ]}
+              placeholder="Seleccionar prioridad..."
+              isEditing={isEditing}
+              onChange={(v) => updateField('priority', v)}
+            />
+
+            {/* Sitio web */}
+            <EditableField
+              label="Sitio web"
+              value={isEditing ? editedData.website : manualData.website}
+              placeholder={`https://${c.domain}`}
+              isEditing={isEditing}
+              onChange={(v) => updateField('website', v)}
+            />
+
+            {/* LinkedIn */}
+            <EditableField
+              label="LinkedIn"
+              value={isEditing ? editedData.linkedin : manualData.linkedin}
+              placeholder="https://linkedin.com/company/..."
+              isEditing={isEditing}
+              onChange={(v) => updateField('linkedin', v)}
+            />
+
+            {/* Notas */}
+            <EditableField
+              label="Notas"
+              value={isEditing ? editedData.notes : manualData.notes}
+              placeholder="Añadir notas, observaciones o comentarios..."
+              isEditing={isEditing}
+              multiline
+              onChange={(v) => updateField('notes', v)}
+            />
           </div>
         </div>
       </div>
@@ -288,11 +458,192 @@ function ScoreBarDark({ score, max, label }) {
   );
 }
 
-function DarkSectionTitle({ children }) {
+function DarkSectionTitle({ children, style = {} }) {
   return (
     <div style={{
       fontSize: 10, textTransform: "uppercase", color: "#6B7F94",
       fontWeight: 700, letterSpacing: "2.5px", marginBottom: 8,
+      ...style,
     }}>{children}</div>
+  );
+}
+
+/* ── Info Field (read-only) ── */
+function InfoField({ label, value, icon }) {
+  return (
+    <div style={{
+      background: "#0A1628", borderRadius: 6, padding: "10px 12px",
+      border: "1px solid #1B3A5C",
+    }}>
+      <div style={{
+        fontSize: 9, color: "#6B7F94", marginBottom: 4,
+        textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
+      }}>
+        {icon && <span style={{ marginRight: 4 }}>{icon}</span>}
+        {label}
+      </div>
+      <div style={{
+        fontSize: 13, color: "#FFFFFF", fontWeight: 600,
+      }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+/* ── Editable Field ── */
+function EditableField({ label, value, placeholder, isEditing, onChange, type = "text", multiline = false }) {
+  const displayValue = value || placeholder;
+  const hasValue = !!value;
+
+  if (!isEditing) {
+    return (
+      <div style={{
+        background: "#0A1628", borderRadius: 6, padding: "10px 12px",
+        border: "1px solid #1B3A5C",
+      }}>
+        <div style={{
+          fontSize: 9, color: "#6B7F94", marginBottom: 4,
+          textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
+        }}>
+          {label}
+        </div>
+        <div style={{
+          fontSize: 13,
+          color: hasValue ? "#FFFFFF" : "#475569",
+          fontWeight: hasValue ? 500 : 400,
+          fontStyle: hasValue ? "normal" : "italic",
+          whiteSpace: multiline ? "pre-wrap" : "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}>
+          {hasValue ? value : displayValue}
+        </div>
+      </div>
+    );
+  }
+
+  // Modo edición
+  const InputComponent = multiline ? "textarea" : "input";
+
+  return (
+    <div style={{
+      background: "#0A1628", borderRadius: 6, padding: "10px 12px",
+      border: "2px solid #3B82F6",
+    }}>
+      <div style={{
+        fontSize: 9, color: "#60A5FA", marginBottom: 6,
+        textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
+      }}>
+        {label}
+      </div>
+      <InputComponent
+        type={type}
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          width: "100%",
+          background: "#132238",
+          border: "1px solid #2A4A6C",
+          borderRadius: 4,
+          padding: "8px 10px",
+          color: "#FFFFFF",
+          fontSize: 13,
+          fontFamily: "inherit",
+          fontWeight: 500,
+          outline: "none",
+          resize: multiline ? "vertical" : "none",
+          minHeight: multiline ? 80 : "auto",
+        }}
+        onFocus={(e) => {
+          e.target.style.borderColor = "#3B82F6";
+          e.target.style.background = "#1A2B3D";
+        }}
+        onBlur={(e) => {
+          e.target.style.borderColor = "#2A4A6C";
+          e.target.style.background = "#132238";
+        }}
+      />
+    </div>
+  );
+}
+
+/* ── Select Field ── */
+function SelectField({ label, value, options, placeholder, isEditing, onChange }) {
+  const displayValue = value
+    ? (options.find(o => o.id === value)?.label || value)
+    : placeholder;
+  const hasValue = !!value;
+
+  if (!isEditing) {
+    return (
+      <div style={{
+        background: "#0A1628", borderRadius: 6, padding: "10px 12px",
+        border: "1px solid #1B3A5C",
+      }}>
+        <div style={{
+          fontSize: 9, color: "#6B7F94", marginBottom: 4,
+          textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
+        }}>
+          {label}
+        </div>
+        <div style={{
+          fontSize: 13,
+          color: hasValue ? "#FFFFFF" : "#475569",
+          fontWeight: hasValue ? 500 : 400,
+          fontStyle: hasValue ? "normal" : "italic",
+        }}>
+          {displayValue}
+        </div>
+      </div>
+    );
+  }
+
+  // Modo edición
+  return (
+    <div style={{
+      background: "#0A1628", borderRadius: 6, padding: "10px 12px",
+      border: "2px solid #3B82F6",
+    }}>
+      <div style={{
+        fontSize: 9, color: "#60A5FA", marginBottom: 6,
+        textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
+      }}>
+        {label}
+      </div>
+      <select
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: "100%",
+          background: "#132238",
+          border: "1px solid #2A4A6C",
+          borderRadius: 4,
+          padding: "8px 10px",
+          color: "#FFFFFF",
+          fontSize: 13,
+          fontFamily: "inherit",
+          fontWeight: 500,
+          outline: "none",
+          cursor: "pointer",
+        }}
+        onFocus={(e) => {
+          e.target.style.borderColor = "#3B82F6";
+          e.target.style.background = "#1A2B3D";
+        }}
+        onBlur={(e) => {
+          e.target.style.borderColor = "#2A4A6C";
+          e.target.style.background = "#132238";
+        }}
+      >
+        <option value="">{placeholder}</option>
+        {options.map(opt => (
+          <option key={opt.id} value={opt.id}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }

@@ -1,8 +1,8 @@
 /* ── Filter options ── */
 export const SECTORS = [
-  "Asesor Financiero", "Banca", "Construcción", "Consultoría", "Energía",
-  "Fintech", "Institucional", "Inversión", "Inversor/Fondo", "Legal",
-  "Otro", "Renovables", "Tecnología"
+  "Asesor Financiero", "Asociación", "Banca", "Construcción", "Consultoría",
+  "Energía", "Fintech", "Institucional", "Inversión", "Inversor/Fondo",
+  "Legal", "Otro", "Renovables", "Tecnología"
 ];
 
 export const TIPOS = [
