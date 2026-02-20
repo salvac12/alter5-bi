@@ -1,6 +1,6 @@
 # Estado del Proyecto - Alter5 BI
 **Fecha actualización:** 20 de febrero de 2026
-**Última modificación:** Sistema completo de edición y cualificación de empresas implementado
+**Última modificación:** Sistema de eliminación, edición de contactos y sector editable implementados
 
 ---
 
@@ -39,15 +39,20 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
    - Tabla ordenable y paginada con mejoras visuales (hover effects, estado selected)
 
    **Ficha de empresa detallada:**
-   - **NUEVO:** Sistema completo de edición de campos manuales
-   - **NUEVO:** Cualificación automática de país (por extensión de dominio)
-   - **NUEVO:** Cualificación automática de tamaño de empresa
-   - **NUEVO:** Campos editables: facturación, empleados, país, prioridad, web, LinkedIn, notas
-   - **NUEVO:** Almacenamiento persistente en localStorage
-   - **NUEVO:** Modo edición con feedback visual (bordes azules)
+   - **NUEVO:** Sistema de eliminación de empresas con confirmación modal
+   - **NUEVO:** Edición completa de contactos (añadir, editar, eliminar con cargo)
+   - **NUEVO:** Sector editable con desplegable (refleja cambios en badges)
+   - **NUEVO:** Website clickable con valor por defecto desde dominio
+   - Sistema completo de edición de campos manuales
+   - Cualificación automática de país (por extensión de dominio)
+   - Cualificación automática de tamaño de empresa
+   - Campos editables: facturación, empleados, sector, país, prioridad, web, LinkedIn, notas
+   - Almacenamiento persistente en localStorage
+   - Modo edición con feedback visual (bordes azules)
    - Panel de detalle con desglose por empleado
-   - Timeline de interacciones
-   - Contactos clave priorizados
+   - Timeline de interacciones ampliada y visual
+   - Contactos clave priorizados con edición
+   - Resumen de relación destacado
    - Información de contexto
 
    - Exportación CSV (compatible Airtable)
@@ -61,9 +66,9 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
 5. **Deploy y versioning**
    - Git repository: `https://github.com/salvac12/alter5-bi.git`
    - Branch actual: `main`
-   - Commit actual: `1cb720f` - "feat: sistema completo de edición y cualificación de empresas"
-   - Deploy en Vercel: `https://alter5-574qcf5st-salvas-workspaces-projects.vercel.app`
-   - Deploy ID: `EBbJcaqG2ZadAaTpNQjjYbfnd3YV`
+   - Commit actual: `0df2730` - "fix: badges muestran sector editado en lugar del original"
+   - Deploy en Vercel: `https://alter5-c9hf7iora-salvas-workspaces-projects.vercel.app`
+   - Deploy ID: `HMecHBUr8UcSoyxMoUNWECmNKELs`
    - Panel Vercel: `https://vercel.com/salvas-workspaces-projects/alter5-bi`
 
 ---
@@ -86,7 +91,8 @@ alter5-bi/
 │   │   └── DetailPanel.jsx    # Ficha detallada de empresa
 │   ├── utils/
 │   │   ├── constants.js       # SECTORS, TYPES, SCORE_WEIGHTS
-│   │   └── data.js            # loadCompanies(), exportToCSV()
+│   │   ├── data.js            # loadCompanies(), exportToCSV()
+│   │   └── companyData.js     # localStorage management, qualifications
 │   └── data/
 │       ├── companies.json     # Datos compactos (auto-generado)
 │       ├── companies_full.json # Datos completos con sources (auto-generado)
@@ -311,6 +317,18 @@ Ninguno reportado hasta la fecha.
 
 ## 🔄 Historial de Versiones
 
+### v1.2.0 (20/02/2026) - Gestión avanzada de empresas y contactos
+- ✅ Sistema de eliminación de empresas con modal de confirmación
+- ✅ Empresas ocultas almacenadas en localStorage (reversible)
+- ✅ Edición completa de contactos (añadir, editar, eliminar)
+- ✅ Asignación y edición de cargos en contactos
+- ✅ Sector editable con desplegable (todos los sectores disponibles)
+- ✅ Badges superiores reflejan sector editado en tiempo real
+- ✅ Campo website clickable con valor por defecto automático (https://{domain})
+- ✅ Link website abre en nueva ventana con seguridad
+- ✅ Funciones saveCompanyContacts() y getCompanyContacts() en companyData.js
+- ✅ Funciones hideCompany(), unhideCompany(), isCompanyHidden() en companyData.js
+
 ### v1.1.0 (20/02/2026) - Sistema de edición y cualificación
 - ✅ Sistema completo de edición de campos manuales
 - ✅ Cualificación automática de país por extensión de dominio
@@ -356,5 +374,5 @@ Ninguno reportado hasta la fecha.
 
 ---
 
-**Última actualización:** 20 de febrero de 2026, 11:00 AM
+**Última actualización:** 20 de febrero de 2026, 11:30 AM
 **Actualizado por:** Claude Code (Anthropic)
