@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts } from '../utils/companyData';
-import { COUNTRIES, COMPANY_SIZES } from '../utils/constants';
+import { COUNTRIES, COMPANY_SIZES, SECTORS } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -960,6 +960,16 @@ export default function DetailPanel({ company, onClose, onDelete }) {
               onChange={(v) => updateField('employeesCount', v)}
             />
 
+            {/* Sector */}
+            <SelectField
+              label="Sector"
+              value={isEditing ? editedData.sector : manualData.sector}
+              options={SECTORS.map(s => ({ id: s, label: s }))}
+              placeholder={c.sectors || "Seleccionar sector..."}
+              isEditing={isEditing}
+              onChange={(v) => updateField('sector', v)}
+            />
+
             {/* País (manual override) */}
             <SelectField
               label="País (manual)"
@@ -990,6 +1000,7 @@ export default function DetailPanel({ company, onClose, onDelete }) {
               value={isEditing ? editedData.website : manualData.website}
               placeholder={`https://${c.domain}`}
               isEditing={isEditing}
+              isLink={true}
               onChange={(v) => updateField('website', v)}
             />
 
@@ -1269,7 +1280,7 @@ function InfoField({ label, value, icon }) {
 }
 
 /* ── Editable Field ── */
-function EditableField({ label, value, placeholder, isEditing, onChange, type = "text", multiline = false }) {
+function EditableField({ label, value, placeholder, isEditing, onChange, type = "text", multiline = false, isLink = false }) {
   const displayValue = value || placeholder;
   const hasValue = !!value;
 
@@ -1285,17 +1296,43 @@ function EditableField({ label, value, placeholder, isEditing, onChange, type = 
         }}>
           {label}
         </div>
-        <div style={{
-          fontSize: 13,
-          color: hasValue ? "#FFFFFF" : "#475569",
-          fontWeight: hasValue ? 500 : 400,
-          fontStyle: hasValue ? "normal" : "italic",
-          whiteSpace: multiline ? "pre-wrap" : "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}>
-          {hasValue ? value : displayValue}
-        </div>
+        {isLink && (hasValue || placeholder) ? (
+          <a
+            href={hasValue ? value : placeholder}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontSize: 13,
+              color: "#60A5FA",
+              fontWeight: 500,
+              textDecoration: "none",
+              display: "block",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.textDecoration = "underline";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.textDecoration = "none";
+            }}
+          >
+            🔗 {hasValue ? value : displayValue}
+          </a>
+        ) : (
+          <div style={{
+            fontSize: 13,
+            color: hasValue ? "#FFFFFF" : "#475569",
+            fontWeight: hasValue ? 500 : 400,
+            fontStyle: hasValue ? "normal" : "italic",
+            whiteSpace: multiline ? "pre-wrap" : "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}>
+            {hasValue ? value : displayValue}
+          </div>
+        )}
       </div>
     );
   }
