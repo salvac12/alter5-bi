@@ -6,9 +6,17 @@ import Sidebar from './components/Sidebar';
 import CompanyTable from './components/CompanyTable';
 import DetailPanel from './components/DetailPanel';
 import EmployeeTabs from './components/EmployeeTabs';
+import { getHiddenCompanies, hideCompany } from './utils/companyData';
 
 export default function App() {
-  const companies = useMemo(() => parseCompanies(), []);
+  const allCompanies = useMemo(() => parseCompanies(), []);
+  const [hiddenCompanies, setHiddenCompanies] = useState(() => getHiddenCompanies());
+
+  // Filtrar empresas ocultas
+  const companies = useMemo(() => {
+    return allCompanies.filter(c => !hiddenCompanies.includes(c.domain));
+  }, [allCompanies, hiddenCompanies]);
+
   const employees = useMemo(() => getEmployees(companies), [companies]);
 
   const [search, setSearch] = useState("");
@@ -78,6 +86,15 @@ export default function App() {
   const handleTabChange = (tabId) => {
     setActiveEmployeeTab(tabId);
     setPage(0); // Resetear paginación al cambiar de tab
+  };
+
+  const handleDeleteCompany = (domain) => {
+    const success = hideCompany(domain);
+    if (success) {
+      setHiddenCompanies(getHiddenCompanies());
+      setSelected(null); // Cerrar panel de detalle
+    }
+    return success;
   };
 
   const subtitle = employees.length === 1
@@ -197,7 +214,11 @@ export default function App() {
           style={{ position: "fixed", inset: 0, background: "rgba(10,22,40,0.35)", zIndex: 99 }}
         />
       )}
-      <DetailPanel company={selected} onClose={() => setSelected(null)} />
+      <DetailPanel
+        company={selected}
+        onClose={() => setSelected(null)}
+        onDelete={handleDeleteCompany}
+      />
     </div>
   );
 }

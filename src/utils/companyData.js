@@ -4,6 +4,7 @@
  */
 
 const STORAGE_KEY = 'alter5_company_data';
+const HIDDEN_COMPANIES_KEY = 'alter5_hidden_companies';
 
 /**
  * Obtener todos los datos manuales de empresas
@@ -94,4 +95,84 @@ export function qualifyCompany(company) {
     country: qualifyCountry(company),
     companySize: qualifyCompanySize(company),
   };
+}
+
+/**
+ * Obtener lista de empresas ocultas
+ */
+export function getHiddenCompanies() {
+  try {
+    const data = localStorage.getItem(HIDDEN_COMPANIES_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error loading hidden companies:', error);
+    return [];
+  }
+}
+
+/**
+ * Ocultar/eliminar una empresa
+ */
+export function hideCompany(domain) {
+  try {
+    const hidden = getHiddenCompanies();
+    if (!hidden.includes(domain)) {
+      hidden.push(domain);
+      localStorage.setItem(HIDDEN_COMPANIES_KEY, JSON.stringify(hidden));
+    }
+    return true;
+  } catch (error) {
+    console.error('Error hiding company:', error);
+    return false;
+  }
+}
+
+/**
+ * Restaurar una empresa oculta
+ */
+export function unhideCompany(domain) {
+  try {
+    const hidden = getHiddenCompanies();
+    const filtered = hidden.filter(d => d !== domain);
+    localStorage.setItem(HIDDEN_COMPANIES_KEY, JSON.stringify(filtered));
+    return true;
+  } catch (error) {
+    console.error('Error unhiding company:', error);
+    return false;
+  }
+}
+
+/**
+ * Verificar si una empresa está oculta
+ */
+export function isCompanyHidden(domain) {
+  const hidden = getHiddenCompanies();
+  return hidden.includes(domain);
+}
+
+/**
+ * Guardar contactos editados de una empresa
+ */
+export function saveCompanyContacts(domain, contacts) {
+  try {
+    const allData = getCompanyData();
+    allData[domain] = {
+      ...allData[domain],
+      contacts: contacts,
+      contactsUpdatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+    return true;
+  } catch (error) {
+    console.error('Error saving contacts:', error);
+    return false;
+  }
+}
+
+/**
+ * Obtener contactos editados de una empresa (si existen)
+ */
+export function getCompanyContacts(domain) {
+  const data = getCompanyDataByDomain(domain);
+  return data.contacts || null;
 }

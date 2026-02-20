@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
-import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize } from '../utils/companyData';
+import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts } from '../utils/companyData';
 import { COUNTRIES, COMPANY_SIZES } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
@@ -27,7 +27,7 @@ function contactPriorityInfo(role) {
   return { rank: 4, label: role, color: "#94A3B8" };
 }
 
-export default function DetailPanel({ company, onClose }) {
+export default function DetailPanel({ company, onClose, onDelete }) {
   if (!company) return null;
   const c = company;
   const det = c.detail;
@@ -36,6 +36,13 @@ export default function DetailPanel({ company, onClose }) {
   const [manualData, setManualData] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Estado para edición de contactos
+  const [isEditingContacts, setIsEditingContacts] = useState(false);
+  const [editedContacts, setEditedContacts] = useState([]);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [newContact, setNewContact] = useState({ name: '', role: '', email: '' });
 
   // Cargar datos manuales al abrir el panel
   useEffect(() => {
@@ -43,8 +50,12 @@ export default function DetailPanel({ company, onClose }) {
       const data = getCompanyDataByDomain(c.domain);
       setManualData(data);
       setEditedData(data);
+
+      // Cargar contactos guardados o usar los originales
+      const savedContacts = getCompanyContacts(c.domain);
+      setEditedContacts(savedContacts || (det?.contacts || []));
     }
-  }, [c.domain]);
+  }, [c.domain, det?.contacts]);
 
   // Datos cualificados
   const qualifiedCountry = qualifyCountry(c);
@@ -65,6 +76,43 @@ export default function DetailPanel({ company, onClose }) {
 
   const updateField = (field, value) => {
     setEditedData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Handlers para contactos
+  const handleSaveContacts = () => {
+    const success = saveCompanyContacts(c.domain, editedContacts);
+    if (success) {
+      setIsEditingContacts(false);
+      setShowAddContact(false);
+      setNewContact({ name: '', role: '', email: '' });
+    }
+  };
+
+  const handleCancelContactsEdit = () => {
+    // Recargar contactos guardados o usar originales
+    const savedContacts = getCompanyContacts(c.domain);
+    setEditedContacts(savedContacts || (det?.contacts || []));
+    setIsEditingContacts(false);
+    setShowAddContact(false);
+    setNewContact({ name: '', role: '', email: '' });
+  };
+
+  const handleAddContact = () => {
+    if (newContact.name.trim()) {
+      setEditedContacts(prev => [...prev, { ...newContact }]);
+      setNewContact({ name: '', role: '', email: '' });
+      setShowAddContact(false);
+    }
+  };
+
+  const handleUpdateContact = (index, field, value) => {
+    setEditedContacts(prev => prev.map((ct, i) =>
+      i === index ? { ...ct, [field]: value } : ct
+    ));
+  };
+
+  const handleDeleteContact = (index) => {
+    setEditedContacts(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -330,14 +378,14 @@ export default function DetailPanel({ company, onClose }) {
         )}
 
 
-        {/* Contacts - MEJORADO */}
-        {det?.contacts?.length > 0 && (
+        {/* Contacts - EDITABLE */}
+        {(editedContacts.length > 0 || isEditingContacts) && (
           <div style={{
             marginBottom: 20,
             background: "#132238",
             borderRadius: 12,
             padding: 18,
-            border: "1px solid #1B3A5C",
+            border: isEditingContacts ? "2px solid #3B82F6" : "1px solid #1B3A5C",
           }}>
             <div style={{
               display: "flex",
@@ -346,7 +394,7 @@ export default function DetailPanel({ company, onClose }) {
               marginBottom: 16,
             }}>
               <span style={{ fontSize: 20 }}>👤</span>
-              <DarkSectionTitle style={{ marginBottom: 0 }}>
+              <DarkSectionTitle style={{ marginBottom: 0, color: isEditingContacts ? "#60A5FA" : "#6B7F94" }}>
                 Contactos clave
               </DarkSectionTitle>
               <span style={{
@@ -355,76 +403,346 @@ export default function DetailPanel({ company, onClose }) {
                 color: "#6B7F94",
                 fontWeight: 600,
               }}>
-                {det.contacts.length} contactos
+                {editedContacts.length} contactos
               </span>
+              {!isEditingContacts ? (
+                <button
+                  onClick={() => setIsEditingContacts(true)}
+                  style={{
+                    background: "linear-gradient(135deg, #3B82F6, #10B981)",
+                    border: "none",
+                    color: "#FFFFFF",
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  ✏️ Editar
+                </button>
+              ) : (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    onClick={handleCancelContactsEdit}
+                    style={{
+                      background: "#1B3A5C",
+                      border: "1px solid #2A4A6C",
+                      color: "#94A3B8",
+                      padding: "5px 10px",
+                      borderRadius: 6,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveContacts}
+                    style={{
+                      background: "linear-gradient(135deg, #3B82F6, #10B981)",
+                      border: "none",
+                      color: "#FFFFFF",
+                      padding: "5px 10px",
+                      borderRadius: 6,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    💾 Guardar
+                  </button>
+                </div>
+              )}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[...det.contacts]
-                .sort((a, b) => contactPriorityRank(a.role) - contactPriorityRank(b.role))
-                .map((ct, i) => {
-                  const { rank, label, color } = contactPriorityInfo(ct.role);
-                  return (
-                    <div key={i} style={{
-                      padding: "12px 14px",
-                      background: rank <= 3 ? color + "10" : "#0A1628",
-                      borderRadius: 8,
-                      border: `1px solid ${rank <= 3 ? color + "40" : "#1B3A5C"}`,
-                      transition: "all 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = rank <= 3 ? color + "20" : "#132238";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = rank <= 3 ? color + "10" : "#0A1628";
-                      e.currentTarget.style.transform = "translateY(0)";
-                    }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                        <span style={{
-                          fontSize: 14,
-                          fontWeight: 700,
-                          color: "#FFFFFF",
-                          flex: 1,
-                          lineHeight: 1.3,
-                        }}>{ct.name}</span>
-                        <span style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          letterSpacing: "0.5px",
-                          padding: "3px 7px",
-                          borderRadius: 4,
-                          background: color + "30",
-                          color,
-                          textTransform: "uppercase",
-                          whiteSpace: "nowrap",
-                          marginLeft: 8,
-                        }}>{label}</span>
-                      </div>
-                      <div style={{
-                        fontSize: 10,
-                        color: "#6B7F94",
-                        marginBottom: ct.email ? 4 : 0,
-                        fontWeight: 600,
-                      }}>
-                        {ct.role || "Cargo desconocido"}
-                      </div>
-                      {ct.email && (
-                        <div style={{
-                          fontSize: 11,
-                          color: "#60A5FA",
-                          fontWeight: 500,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}>
-                          📧 {ct.email}
+
+            {/* Contact list */}
+            {!isEditingContacts ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[...editedContacts]
+                  .sort((a, b) => contactPriorityRank(a.role) - contactPriorityRank(b.role))
+                  .map((ct, i) => {
+                    const { rank, label, color } = contactPriorityInfo(ct.role);
+                    return (
+                      <div key={i} style={{
+                        padding: "12px 14px",
+                        background: rank <= 3 ? color + "10" : "#0A1628",
+                        borderRadius: 8,
+                        border: `1px solid ${rank <= 3 ? color + "40" : "#1B3A5C"}`,
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = rank <= 3 ? color + "20" : "#132238";
+                        e.currentTarget.style.transform = "translateY(-2px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = rank <= 3 ? color + "10" : "#0A1628";
+                        e.currentTarget.style.transform = "translateY(0)";
+                      }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                          <span style={{
+                            fontSize: 14,
+                            fontWeight: 700,
+                            color: "#FFFFFF",
+                            flex: 1,
+                            lineHeight: 1.3,
+                          }}>{ct.name}</span>
+                          <span style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            letterSpacing: "0.5px",
+                            padding: "3px 7px",
+                            borderRadius: 4,
+                            background: color + "30",
+                            color,
+                            textTransform: "uppercase",
+                            whiteSpace: "nowrap",
+                            marginLeft: 8,
+                          }}>{label}</span>
                         </div>
-                      )}
+                        <div style={{
+                          fontSize: 10,
+                          color: "#6B7F94",
+                          marginBottom: ct.email ? 4 : 0,
+                          fontWeight: 600,
+                        }}>
+                          {ct.role || "Cargo desconocido"}
+                        </div>
+                        {ct.email && (
+                          <div style={{
+                            fontSize: 11,
+                            color: "#60A5FA",
+                            fontWeight: 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}>
+                            📧 {ct.email}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {editedContacts.map((ct, i) => (
+                  <div key={i} style={{
+                    background: "#0A1628",
+                    borderRadius: 8,
+                    padding: "12px 14px",
+                    border: "1px solid #2A4A6C",
+                  }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="text"
+                        value={ct.name}
+                        onChange={(e) => handleUpdateContact(i, 'name', e.target.value)}
+                        placeholder="Nombre"
+                        style={{
+                          flex: 1,
+                          background: "#132238",
+                          border: "1px solid #2A4A6C",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#FFFFFF",
+                          fontSize: 13,
+                          fontFamily: "inherit",
+                          fontWeight: 600,
+                          outline: "none",
+                        }}
+                      />
+                      <button
+                        onClick={() => handleDeleteContact(i)}
+                        style={{
+                          background: "#7F1D1D",
+                          border: "1px solid #991B1B",
+                          color: "#FCA5A5",
+                          padding: "6px 10px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                        title="Eliminar contacto"
+                      >
+                        🗑️
+                      </button>
                     </div>
-                  );
-                })}
-            </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        type="text"
+                        value={ct.role || ''}
+                        onChange={(e) => handleUpdateContact(i, 'role', e.target.value)}
+                        placeholder="Cargo"
+                        style={{
+                          flex: 1,
+                          background: "#132238",
+                          border: "1px solid #2A4A6C",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#94A3B8",
+                          fontSize: 12,
+                          fontFamily: "inherit",
+                          outline: "none",
+                        }}
+                      />
+                      <input
+                        type="email"
+                        value={ct.email || ''}
+                        onChange={(e) => handleUpdateContact(i, 'email', e.target.value)}
+                        placeholder="Email"
+                        style={{
+                          flex: 1,
+                          background: "#132238",
+                          border: "1px solid #2A4A6C",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#60A5FA",
+                          fontSize: 11,
+                          fontFamily: "inherit",
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add new contact */}
+                {!showAddContact ? (
+                  <button
+                    onClick={() => setShowAddContact(true)}
+                    style={{
+                      background: "#132238",
+                      border: "1px dashed #2A4A6C",
+                      color: "#60A5FA",
+                      padding: "10px",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                    }}
+                  >
+                    ➕ Añadir contacto
+                  </button>
+                ) : (
+                  <div style={{
+                    background: "#0A1628",
+                    borderRadius: 8,
+                    padding: "12px 14px",
+                    border: "2px solid #10B981",
+                  }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="text"
+                        value={newContact.name}
+                        onChange={(e) => setNewContact(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Nombre *"
+                        style={{
+                          flex: 1,
+                          background: "#132238",
+                          border: "1px solid #2A4A6C",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#FFFFFF",
+                          fontSize: 13,
+                          fontFamily: "inherit",
+                          fontWeight: 600,
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="text"
+                        value={newContact.role}
+                        onChange={(e) => setNewContact(prev => ({ ...prev, role: e.target.value }))}
+                        placeholder="Cargo"
+                        style={{
+                          flex: 1,
+                          background: "#132238",
+                          border: "1px solid #2A4A6C",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#94A3B8",
+                          fontSize: 12,
+                          fontFamily: "inherit",
+                          outline: "none",
+                        }}
+                      />
+                      <input
+                        type="email"
+                        value={newContact.email}
+                        onChange={(e) => setNewContact(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="Email"
+                        style={{
+                          flex: 1,
+                          background: "#132238",
+                          border: "1px solid #2A4A6C",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#60A5FA",
+                          fontSize: 11,
+                          fontFamily: "inherit",
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => {
+                          setShowAddContact(false);
+                          setNewContact({ name: '', role: '', email: '' });
+                        }}
+                        style={{
+                          flex: 1,
+                          background: "#1B3A5C",
+                          border: "1px solid #2A4A6C",
+                          color: "#94A3B8",
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleAddContact}
+                        disabled={!newContact.name.trim()}
+                        style={{
+                          flex: 1,
+                          background: newContact.name.trim() ? "linear-gradient(135deg, #10B981, #059669)" : "#1B3A5C",
+                          border: "none",
+                          color: newContact.name.trim() ? "#FFFFFF" : "#6B7F94",
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: newContact.name.trim() ? "pointer" : "not-allowed",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        ✅ Añadir
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -695,7 +1013,168 @@ export default function DetailPanel({ company, onClose }) {
             />
           </div>
         </div>
+
+        {/* Delete button */}
+        <div style={{
+          marginTop: 20,
+          paddingTop: 20,
+          borderTop: "1px solid #1B3A5C",
+        }}>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isEditing}
+            style={{
+              width: "100%",
+              background: isEditing ? "#1B3A5C" : "#EF4444",
+              border: "none",
+              color: isEditing ? "#6B7F94" : "#FFFFFF",
+              padding: "10px 16px",
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: isEditing ? "not-allowed" : "pointer",
+              fontFamily: "inherit",
+              opacity: isEditing ? 0.5 : 1,
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!isEditing) {
+                e.currentTarget.style.background = "#DC2626";
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isEditing) {
+                e.currentTarget.style.background = "#EF4444";
+                e.currentTarget.style.transform = "translateY(0)";
+              }
+            }}
+          >
+            🗑️ Eliminar empresa
+          </button>
+          {isEditing && (
+            <p style={{
+              fontSize: 11,
+              color: "#6B7F94",
+              textAlign: "center",
+              marginTop: 8,
+              marginBottom: 0,
+            }}>
+              Guarda o cancela los cambios antes de eliminar
+            </p>
+          )}
+        </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <>
+          <div
+            onClick={() => setShowDeleteConfirm(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(10,22,40,0.7)",
+              zIndex: 150,
+            }}
+          />
+          <div style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "#0A1628",
+            borderRadius: 12,
+            padding: 28,
+            maxWidth: 440,
+            width: "90%",
+            border: "1px solid #1B3A5C",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+            zIndex: 151,
+          }}>
+            <div style={{
+              fontSize: 20,
+              fontWeight: 800,
+              color: "#FFFFFF",
+              marginBottom: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}>
+              <span style={{ fontSize: 28 }}>⚠️</span>
+              Confirmar eliminación
+            </div>
+            <p style={{
+              fontSize: 14,
+              color: "#94A3B8",
+              lineHeight: 1.6,
+              marginBottom: 20,
+            }}>
+              ¿Estás seguro de que deseas eliminar <strong style={{ color: "#FFFFFF" }}>{c.name}</strong>?
+              Esta acción ocultará la empresa de la vista pero se puede restaurar desde localStorage.
+            </p>
+            <div style={{
+              display: "flex",
+              gap: 10,
+              justifyContent: "flex-end",
+            }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  background: "#132238",
+                  border: "1px solid #2A4A6C",
+                  color: "#94A3B8",
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#1B3A5C";
+                  e.currentTarget.style.color = "#FFFFFF";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#132238";
+                  e.currentTarget.style.color = "#94A3B8";
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (onDelete) {
+                    onDelete(c.domain);
+                  }
+                  setShowDeleteConfirm(false);
+                }}
+                style={{
+                  background: "#EF4444",
+                  border: "none",
+                  color: "#FFFFFF",
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#DC2626";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#EF4444";
+                }}
+              >
+                🗑️ Eliminar
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
