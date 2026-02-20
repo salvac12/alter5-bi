@@ -1,6 +1,6 @@
 # Estado del Proyecto - Alter5 BI
 **Fecha actualización:** 20 de febrero de 2026
-**Última modificación:** Deploy a Vercel completado
+**Última modificación:** Rediseño del panel principal con tabs de empleado y filtros ampliados
 
 ---
 
@@ -28,9 +28,15 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
 3. **Funcionalidades core**
    - Sistema de scoring 0-100 (Volumen 35% + Recencia 30% + Red 15% + Tipo 20%)
    - Estados de relación: Activa (<6m), Dormida (6-18m), Perdida (>18m)
+   - **NUEVO:** Sistema de tabs por empleado (Todos/Salvador/Guillermo/Leticia) con contadores dinámicos
+   - **NUEVO:** Ordenamiento alfabético por defecto (A-Z) con capacidad de reordenar por columnas
+   - **NUEVO:** Indicadores visuales mejorados de ordenamiento (↑↓↕ en headers de tabla)
    - Búsqueda libre por nombre/dominio/sector/tipo
-   - Filtros combinables por buzón, estado, sector y tipo
-   - Tabla ordenable y paginada
+   - Filtros combinables por estado, sector y tipo
+   - **NUEVO:** Filtros preparados para futuro (Tamaño Empresa y País) con estado disabled
+   - **NUEVO:** Badge contador de filtros activos en sidebar
+   - **NUEVO:** Tooltips explicativos en filtros disabled
+   - Tabla ordenable y paginada con mejoras visuales (hover effects, estado selected)
    - Panel de detalle con desglose por empleado
    - Timeline de interacciones
    - Exportación CSV (compatible Airtable)
@@ -44,9 +50,10 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
 5. **Deploy y versioning**
    - Git repository: `https://github.com/salvac12/alter5-bi.git`
    - Branch actual: `main`
-   - Commit actual: `cccc763` - "feat: initial commit — Alter5 BI dashboard"
-   - Deploy en Vercel: `https://alter5-ld9bt3m7f-salvas-workspaces-projects.vercel.app`
-   - Deploy ID: `6UnAiu5oAjXfTWEfSfVRLZ4NXLHs`
+   - Commit actual: `7f82a07` - "feat: rediseño del panel principal de empresas"
+   - Deploy en Vercel: `https://alter5-4c2qkeuik-salvas-workspaces-projects.vercel.app`
+   - Deploy ID: `7UffxUBLWHWxG8iwpYLcaxzUbTKg`
+   - Panel Vercel: `https://vercel.com/salvas-workspaces-projects/alter5-bi`
 
 ---
 
