@@ -69,30 +69,40 @@ export default function DetailPanel({ company, onClose }) {
 
   return (
     <div className="slide-in" style={{
-      position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "100vw",
+      position: "fixed", top: 0, right: 0, bottom: 0, width: 720, maxWidth: "100vw",
       background: "#0A1628", zIndex: 100,
       overflow: "auto", boxShadow: "-12px 0 40px rgba(10,22,40,0.4)",
     }}>
-      <div style={{ padding: 24 }}>
+      <div style={{ padding: 28 }}>
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+          <div style={{ flex: 1 }}>
             <h2 style={{
-              margin: 0, fontSize: 22, fontWeight: 800, color: "#FFFFFF",
-              letterSpacing: "-0.8px", lineHeight: 1.2,
+              margin: 0, fontSize: 26, fontWeight: 800, color: "#FFFFFF",
+              letterSpacing: "-1px", lineHeight: 1.2,
             }}>{c.name}</h2>
-            <div style={{ fontSize: 13, color: "#6B7F94", marginTop: 3, fontWeight: 400 }}>{c.domain}</div>
+            <div style={{ fontSize: 14, color: "#6B7F94", marginTop: 6, fontWeight: 400 }}>{c.domain}</div>
           </div>
           <button onClick={onClose} style={{
             background: "#132238", border: "1px solid #1B3A5C", color: "#6B7F94",
-            width: 30, height: 30, borderRadius: 6, cursor: "pointer", fontSize: 14,
+            width: 36, height: 36, borderRadius: 8, cursor: "pointer", fontSize: 16,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: "inherit",
-          }}>✕</button>
+            transition: "all 0.15s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#1B3A5C";
+            e.currentTarget.style.color = "#FFFFFF";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "#132238";
+            e.currentTarget.style.color = "#6B7F94";
+          }}
+          >✕</button>
         </div>
 
         {/* Tags */}
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
           <StatusBadge status={c.status} />
           {c.sectors.split(", ").map((s, i) => (
             <Badge key={i} variant="sector">{s}</Badge>
@@ -102,14 +112,47 @@ export default function DetailPanel({ company, onClose }) {
           ))}
         </div>
 
+        {/* Context/Summary - HIGHLIGHTED */}
+        {det?.context && (
+          <div style={{
+            background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
+            borderRadius: 12,
+            padding: 20,
+            marginBottom: 20,
+            border: "1px solid #2A4A6C",
+          }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+            }}>
+              <span style={{ fontSize: 20 }}>💼</span>
+              <DarkSectionTitle style={{ marginBottom: 0, color: "#94A3B8" }}>
+                Resumen de la relación
+              </DarkSectionTitle>
+            </div>
+            <p style={{
+              fontSize: 14,
+              color: "#FFFFFF",
+              lineHeight: 1.7,
+              margin: 0,
+              fontWeight: 400,
+            }}>
+              {det.context}
+            </p>
+          </div>
+        )}
+
         {/* Employee sources */}
         {c.employees.length > 0 && (
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 18 }}>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 20 }}>
             {c.employees.map(emp => (
               <span key={emp} style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                padding: "3px 8px", borderRadius: 4, fontSize: 9, fontWeight: 600,
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
                 color: "#60A5FA", background: "#132238", letterSpacing: "0.02em",
+                border: "1px solid #1B3A5C",
               }}>
                 📧 {emp.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
               </span>
@@ -117,23 +160,52 @@ export default function DetailPanel({ company, onClose }) {
           </div>
         )}
 
-        {/* Score */}
+        {/* Score - MEJORADO */}
         <div style={{
-          background: "#132238", borderRadius: 10, padding: 16, marginBottom: 16,
-          border: "1px solid #1B3A5C",
+          background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
+          borderRadius: 12,
+          padding: 20,
+          marginBottom: 20,
+          border: "1px solid #2A4A6C",
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{
-              fontSize: 10, textTransform: "uppercase", color: "#6B7F94",
-              fontWeight: 700, letterSpacing: "2.5px",
-            }}>Score</span>
-            <span style={{
-              fontSize: 24, fontWeight: 800, letterSpacing: "-1px",
-              background: "linear-gradient(90deg, #3B82F6, #10B981)",
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-            }}>{c.score}</span>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 16,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 20 }}>⭐</span>
+              <span style={{
+                fontSize: 12,
+                textTransform: "uppercase",
+                color: "#94A3B8",
+                fontWeight: 700,
+                letterSpacing: "2px",
+              }}>Score de Prioridad</span>
+            </div>
+            <div style={{
+              background: "linear-gradient(135deg, #3B82F6, #10B981)",
+              padding: "8px 20px",
+              borderRadius: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}>
+              <span style={{
+                fontSize: 28,
+                fontWeight: 800,
+                letterSpacing: "-1.5px",
+                color: "#FFFFFF",
+              }}>{c.score}</span>
+              <span style={{
+                fontSize: 12,
+                color: "#FFFFFF",
+                opacity: 0.8,
+              }}>/100</span>
+            </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <ScoreBarDark score={c.volScore} max={35} label="Volumen" />
             <ScoreBarDark score={c.recScore} max={30} label="Recencia" />
             <ScoreBarDark score={c.netScore} max={15} label="Red" />
@@ -141,130 +213,329 @@ export default function DetailPanel({ company, onClose }) {
           </div>
         </div>
 
-        {/* Metrics */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+        {/* Metrics - Grid ampliado */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
           {[
-            { label: "Interacciones", value: c.interactions.toLocaleString(), big: true },
-            { label: "Contactos", value: c.nContacts, big: true },
-            { label: "Primera vez", value: c.firstDate },
-            { label: "Último contacto", value: c.lastDate },
+            { label: "Interacciones", value: c.interactions.toLocaleString(), big: true, icon: "📊" },
+            { label: "Contactos", value: c.nContacts, big: true, icon: "👥" },
+            { label: "Primera vez", value: c.firstDate, icon: "🗓️" },
+            { label: "Último contacto", value: c.lastDate, icon: "📅" },
           ].map((m, i) => (
             <div key={i} style={{
-              background: "#132238", borderRadius: 8, padding: "10px 12px",
+              background: "#132238", borderRadius: 10, padding: "14px 16px",
               border: "1px solid #1B3A5C",
-            }}>
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#1B3A5C";
+              e.currentTarget.style.borderColor = "#2A4A6C";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#132238";
+              e.currentTarget.style.borderColor = "#1B3A5C";
+            }}
+            >
               <div style={{
                 fontSize: 10, color: "#6B7F94", fontWeight: 700,
-                textTransform: "uppercase", letterSpacing: "2.5px",
-              }}>{m.label}</div>
+                textTransform: "uppercase", letterSpacing: "2px",
+                marginBottom: 6,
+              }}>
+                <span style={{ marginRight: 6 }}>{m.icon}</span>
+                {m.label}
+              </div>
               <div style={{
-                fontSize: m.big ? 20 : 13, fontWeight: m.big ? 800 : 600,
-                color: "#FFFFFF", marginTop: 2,
-                letterSpacing: m.big ? "-0.8px" : "0",
+                fontSize: m.big ? 22 : 15, fontWeight: m.big ? 800 : 600,
+                color: "#FFFFFF",
+                letterSpacing: m.big ? "-1px" : "0",
               }}>{m.value}</div>
             </div>
           ))}
         </div>
 
-        {/* Per-employee breakdown */}
+        {/* Per-employee breakdown - MEJORADO */}
         {det?.sources?.length > 1 && (
-          <div style={{ marginBottom: 18 }}>
-            <DarkSectionTitle>Interacciones por buzón</DarkSectionTitle>
+          <div style={{
+            marginBottom: 20,
+            background: "#132238",
+            borderRadius: 12,
+            padding: 18,
+            border: "1px solid #1B3A5C",
+          }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 16,
+            }}>
+              <span style={{ fontSize: 20 }}>📊</span>
+              <DarkSectionTitle style={{ marginBottom: 0 }}>
+                Interacciones por buzón
+              </DarkSectionTitle>
+            </div>
             {det.sources.map((s, i) => {
               const maxS = Math.max(...det.sources.map(x => x.interactions));
               const empName = s.employee.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+              const pct = (s.interactions / maxS) * 100;
+
               return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                <div key={i} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 10,
+                  padding: "8px 0",
+                }}>
                   <span style={{
-                    width: 100, fontSize: 11, color: "#6B7F94", fontWeight: 500,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    width: 140,
+                    fontSize: 12,
+                    color: "#FFFFFF",
+                    fontWeight: 600,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
                   }}>{empName}</span>
                   <div style={{
-                    flex: 1, height: 14, background: "#0A1628", borderRadius: 3, overflow: "hidden",
+                    flex: 1,
+                    height: 18,
+                    background: "#0A1628",
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    position: "relative",
                   }}>
                     <div style={{
-                      height: "100%", width: `${(s.interactions / maxS) * 100}%`,
-                      background: "linear-gradient(90deg, #3B82F6, #10B981)", borderRadius: 3,
+                      height: "100%",
+                      width: `${pct}%`,
+                      background: "linear-gradient(90deg, #3B82F6, #10B981)",
+                      borderRadius: 6,
+                      transition: "width 0.3s ease",
                     }} />
+                    {s.interactions > 0 && (
+                      <span style={{
+                        position: "absolute",
+                        right: 8,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: pct > 30 ? "#FFFFFF" : "#94A3B8",
+                      }}>
+                        {s.interactions.toLocaleString()} emails
+                      </span>
+                    )}
                   </div>
-                  <span style={{
-                    width: 48, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#FFFFFF",
-                  }}>{s.interactions.toLocaleString()}</span>
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* Context */}
-        {det?.context && (
-          <div style={{ marginBottom: 18 }}>
-            <DarkSectionTitle>Contexto</DarkSectionTitle>
-            <p style={{ fontSize: 13, color: "#94A3B8", lineHeight: 1.6, margin: 0, fontWeight: 400 }}>
-              {det.context}
-            </p>
-          </div>
-        )}
 
-        {/* Contacts */}
+        {/* Contacts - MEJORADO */}
         {det?.contacts?.length > 0 && (
-          <div style={{ marginBottom: 18 }}>
-            <DarkSectionTitle>Contactos clave</DarkSectionTitle>
-            {[...det.contacts]
-              .sort((a, b) => contactPriorityRank(a.role) - contactPriorityRank(b.role))
-              .map((ct, i) => {
-                const { rank, label, color } = contactPriorityInfo(ct.role);
-                return (
-                  <div key={i} style={{
-                    padding: "9px 12px", background: "#132238", borderRadius: 6, marginBottom: 4,
-                    border: `1px solid ${rank <= 3 ? color + "40" : "#1B3A5C"}`,
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>{ct.name}</span>
-                      <span style={{
-                        fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
-                        padding: "2px 6px", borderRadius: 3,
-                        background: color + "20", color,
-                      }}>{label}</span>
-                    </div>
-                    {ct.email && (
-                      <div style={{ fontSize: 11, color: "#60A5FA", marginTop: 3, fontWeight: 400 }}>
-                        {ct.email}
+          <div style={{
+            marginBottom: 20,
+            background: "#132238",
+            borderRadius: 12,
+            padding: 18,
+            border: "1px solid #1B3A5C",
+          }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 16,
+            }}>
+              <span style={{ fontSize: 20 }}>👤</span>
+              <DarkSectionTitle style={{ marginBottom: 0 }}>
+                Contactos clave
+              </DarkSectionTitle>
+              <span style={{
+                marginLeft: "auto",
+                fontSize: 11,
+                color: "#6B7F94",
+                fontWeight: 600,
+              }}>
+                {det.contacts.length} contactos
+              </span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[...det.contacts]
+                .sort((a, b) => contactPriorityRank(a.role) - contactPriorityRank(b.role))
+                .map((ct, i) => {
+                  const { rank, label, color } = contactPriorityInfo(ct.role);
+                  return (
+                    <div key={i} style={{
+                      padding: "12px 14px",
+                      background: rank <= 3 ? color + "10" : "#0A1628",
+                      borderRadius: 8,
+                      border: `1px solid ${rank <= 3 ? color + "40" : "#1B3A5C"}`,
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = rank <= 3 ? color + "20" : "#132238";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = rank <= 3 ? color + "10" : "#0A1628";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                        <span style={{
+                          fontSize: 14,
+                          fontWeight: 700,
+                          color: "#FFFFFF",
+                          flex: 1,
+                          lineHeight: 1.3,
+                        }}>{ct.name}</span>
+                        <span style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          letterSpacing: "0.5px",
+                          padding: "3px 7px",
+                          borderRadius: 4,
+                          background: color + "30",
+                          color,
+                          textTransform: "uppercase",
+                          whiteSpace: "nowrap",
+                          marginLeft: 8,
+                        }}>{label}</span>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      <div style={{
+                        fontSize: 10,
+                        color: "#6B7F94",
+                        marginBottom: ct.email ? 4 : 0,
+                        fontWeight: 600,
+                      }}>
+                        {ct.role || "Cargo desconocido"}
+                      </div>
+                      {ct.email && (
+                        <div style={{
+                          fontSize: 11,
+                          color: "#60A5FA",
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}>
+                          📧 {ct.email}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
           </div>
         )}
 
-        {/* Timeline */}
+        {/* Timeline - MEJORADO */}
         {det?.timeline?.length > 0 && (
-          <div style={{ marginBottom: 18 }}>
-            <DarkSectionTitle>Actividad trimestral</DarkSectionTitle>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <div style={{
+            marginBottom: 20,
+            background: "#132238",
+            borderRadius: 12,
+            padding: 18,
+            border: "1px solid #1B3A5C",
+          }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 16,
+            }}>
+              <span style={{ fontSize: 20 }}>📈</span>
+              <DarkSectionTitle style={{ marginBottom: 0 }}>
+                Histórico de interacciones
+              </DarkSectionTitle>
+              <span style={{
+                marginLeft: "auto",
+                fontSize: 11,
+                color: "#6B7F94",
+                fontWeight: 600,
+              }}>
+                {det.timeline.length} trimestres
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {det.timeline.map((t, i) => {
                 const maxE = Math.max(...det.timeline.map(x => x.emails));
+                const pct = (t.emails / maxE) * 100;
+                const isRecent = i < 3; // Los 3 trimestres más recientes
+
                 return (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div key={i} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "6px 0",
+                  }}>
                     <span style={{
-                      width: 52, fontSize: 10, color: "#6B7F94", fontFamily: "'DM Sans', monospace",
-                      fontWeight: 600,
+                      width: 70,
+                      fontSize: 12,
+                      color: isRecent ? "#FFFFFF" : "#6B7F94",
+                      fontFamily: "'DM Sans', monospace",
+                      fontWeight: isRecent ? 700 : 600,
                     }}>{t.quarter}</span>
                     <div style={{
-                      flex: 1, height: 14, background: "#0A1628", borderRadius: 3, overflow: "hidden",
+                      flex: 1,
+                      height: 20,
+                      background: "#0A1628",
+                      borderRadius: 6,
+                      overflow: "hidden",
+                      position: "relative",
                     }}>
                       <div style={{
-                        height: "100%", width: `${(t.emails / maxE) * 100}%`,
-                        background: "#10B981", borderRadius: 3,
+                        height: "100%",
+                        width: `${pct}%`,
+                        background: isRecent
+                          ? "linear-gradient(90deg, #10B981, #059669)"
+                          : "linear-gradient(90deg, #3B82F6, #2563EB)",
+                        borderRadius: 6,
+                        transition: "width 0.3s ease",
                       }} />
+                      {t.emails > 0 && (
+                        <span style={{
+                          position: "absolute",
+                          right: 8,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: pct > 30 ? "#FFFFFF" : "#94A3B8",
+                        }}>
+                          {t.emails} emails
+                        </span>
+                      )}
                     </div>
-                    <span style={{
-                      width: 38, textAlign: "right", fontSize: 11, fontWeight: 700, color: "#FFFFFF",
-                    }}>{t.emails}</span>
                   </div>
                 );
               })}
+            </div>
+            <div style={{
+              marginTop: 12,
+              padding: 12,
+              background: "#0A1628",
+              borderRadius: 8,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}>
+              <div>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
+                  Total histórico
+                </div>
+                <div style={{ fontSize: 18, color: "#FFFFFF", fontWeight: 800, marginTop: 2 }}>
+                  {det.timeline.reduce((sum, t) => sum + t.emails, 0).toLocaleString()} emails
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
+                  Promedio trimestral
+                </div>
+                <div style={{ fontSize: 18, color: "#10B981", fontWeight: 800, marginTop: 2 }}>
+                  {Math.round(det.timeline.reduce((sum, t) => sum + t.emails, 0) / det.timeline.length)} emails
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -429,31 +700,58 @@ export default function DetailPanel({ company, onClose }) {
   );
 }
 
-/* ── Dark theme score bar ── */
+/* ── Dark theme score bar - MEJORADO ── */
 function ScoreBarDark({ score, max, label }) {
   const pct = (score / max) * 100;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
       {label && (
         <span style={{
-          width: 56, fontSize: 10, fontWeight: 700, color: "#6B7F94",
-          textTransform: "uppercase", letterSpacing: "0.03em",
+          width: 70,
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#94A3B8",
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
         }}>{label}</span>
       )}
       <div style={{
-        flex: 1, height: 4, background: "#0A1628", borderRadius: 2, overflow: "hidden",
+        flex: 1,
+        height: 8,
+        background: "#0A1628",
+        borderRadius: 4,
+        overflow: "hidden",
+        position: "relative",
       }}>
         <div style={{
-          height: "100%", width: `${pct}%`, borderRadius: 2,
-          background: pct > 60
-            ? "linear-gradient(90deg, #3B82F6, #10B981)"
-            : pct > 30 ? "#3B82F6" : "#1B3A5C",
+          height: "100%",
+          width: `${pct}%`,
+          borderRadius: 4,
+          background: pct > 70
+            ? "linear-gradient(90deg, #10B981, #059669)"
+            : pct > 40
+              ? "linear-gradient(90deg, #3B82F6, #2563EB)"
+              : "linear-gradient(90deg, #6B7F94, #475569)",
           transition: "width 0.3s ease",
         }} />
       </div>
-      <span style={{ width: 20, textAlign: "right", fontWeight: 700, color: "#FFFFFF", fontSize: 11 }}>
-        {score}
-      </span>
+      <div style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: 2,
+        minWidth: 50,
+      }}>
+        <span style={{
+          fontWeight: 800,
+          color: "#FFFFFF",
+          fontSize: 14,
+        }}>{score}</span>
+        <span style={{
+          fontSize: 10,
+          color: "#6B7F94",
+          fontWeight: 600,
+        }}>/{max}</span>
+      </div>
     </div>
   );
 }
