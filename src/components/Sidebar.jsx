@@ -1,5 +1,5 @@
-import { SECTORS, TIPOS, STATUS_LABELS } from '../utils/constants';
-import { FilterChip, SectionLabel } from './UI';
+import { SECTORS, TIPOS, STATUS_LABELS, COMPANY_SIZES, COUNTRIES } from '../utils/constants';
+import { FilterChip, SectionLabel, ComingSoonBadge, Tooltip } from './UI';
 
 export default function Sidebar({
   companies, employees,
@@ -22,27 +22,48 @@ export default function Sidebar({
     lost: companies.filter(c => c.status === "lost").length,
   };
 
+  const totalActiveFilters = selEmployees.length + selSectors.length + selTipos.length + selStatus.length;
+
   return (
     <div style={{
-      width: 216, minWidth: 216, borderRight: "1px solid #E2E8F0",
-      padding: "16px 14px", overflow: "auto", maxHeight: "calc(100vh - 57px)",
+      width: 280, minWidth: 280, borderRight: "1px solid #E2E8F0",
+      padding: "20px", overflow: "auto", maxHeight: "calc(100vh - 57px)",
       background: "#FFFFFF",
     }}>
-      {/* Employees */}
-      {employees.length > 1 && (
-        <FilterSection title="Buzón">
-          {employees.map(emp => (
-            <FilterChip key={emp.id}
-              label={`${emp.name} (${emp.count})`}
-              active={selEmployees.includes(emp.id)}
-              onClick={() => toggle(selEmployees, setSelEmployees, emp.id)}
-            />
-          ))}
-        </FilterSection>
-      )}
+      {/* Header con badge contador */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 20,
+      }}>
+        <div style={{
+          fontSize: 14,
+          textTransform: "uppercase",
+          color: "#1E293B",
+          fontWeight: 700,
+          letterSpacing: "0.5px",
+        }}>
+          FILTROS
+        </div>
+        {totalActiveFilters > 0 && (
+          <div style={{
+            background: "linear-gradient(135deg, #3B82F6, #10B981)",
+            color: "white",
+            borderRadius: 12,
+            padding: "4px 8px",
+            fontSize: 12,
+            fontWeight: 600,
+            minWidth: 24,
+            textAlign: "center",
+          }}>
+            {totalActiveFilters}
+          </div>
+        )}
+      </div>
 
-      {/* Status */}
-      <FilterSection title="Estado">
+      {/* Status (más usado, arriba) */}
+      <FilterSection title="Estado de Empresa">
         {["active", "dormant", "lost"].map(s => (
           <FilterChip key={s}
             label={`${STATUS_LABELS[s]} (${statusCounts[s]})`}
@@ -63,12 +84,74 @@ export default function Sidebar({
       </FilterSection>
 
       {/* Type */}
-      <FilterSection title="Tipo Relación">
+      <FilterSection title="Tipo de Relación">
         {TIPOS.map(t => (
           <FilterChip key={t} label={t}
             active={selTipos.includes(t)}
             onClick={() => toggle(selTipos, setSelTipos, t)}
           />
+        ))}
+      </FilterSection>
+
+      {/* Separador visual */}
+      <div style={{
+        margin: "24px 0",
+        borderTop: "2px solid #E2E8F0",
+        paddingTop: 16,
+      }}>
+        <div style={{
+          fontSize: 11,
+          textTransform: "uppercase",
+          color: "#94A3B8",
+          fontWeight: 600,
+          letterSpacing: "1px",
+          textAlign: "center",
+        }}>
+          FILTROS FUTUROS
+        </div>
+      </div>
+
+      {/* Tamaño Empresa (disabled) */}
+      <FilterSection title={
+        <span>
+          Tamaño Empresa
+          <ComingSoonBadge />
+        </span>
+      }>
+        {COMPANY_SIZES.map(size => (
+          <Tooltip key={size.id} text="Requiere cualificación de datos de LinkedIn">
+            <FilterChip
+              label={size.label}
+              active={false}
+              onClick={() => {}}
+              style={{
+                opacity: 0.4,
+                cursor: "not-allowed",
+              }}
+            />
+          </Tooltip>
+        ))}
+      </FilterSection>
+
+      {/* País (disabled) */}
+      <FilterSection title={
+        <span>
+          País
+          <ComingSoonBadge />
+        </span>
+      }>
+        {COUNTRIES.map(country => (
+          <Tooltip key={country.id} text="Requiere cualificación de datos por idioma de correos">
+            <FilterChip
+              label={country.label}
+              active={false}
+              onClick={() => {}}
+              style={{
+                opacity: 0.4,
+                cursor: "not-allowed",
+              }}
+            />
+          </Tooltip>
         ))}
       </FilterSection>
 
@@ -79,13 +162,31 @@ export default function Sidebar({
             setSelEmployees([]); setSelSectors([]); setSelTipos([]); setSelStatus([]); setPage(0);
           }}
           style={{
-            marginTop: 12, width: "100%", padding: "7px 12px", borderRadius: 6,
-            border: "none", cursor: "pointer", fontWeight: 600, fontSize: 11,
-            background: "#FEF2F2", color: "#EF4444",
+            marginTop: 20,
+            width: "100%",
+            padding: "10px 16px",
+            borderRadius: 8,
+            border: "1px solid #CBD5E1",
+            cursor: "pointer",
+            fontWeight: 500,
+            fontSize: 14,
+            background: "transparent",
+            color: "#64748B",
             fontFamily: "inherit",
+            transition: "all 0.15s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#F8FAFC";
+            e.currentTarget.style.borderColor = "#94A3B8";
+            e.currentTarget.style.color = "#475569";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+            e.currentTarget.style.borderColor = "#CBD5E1";
+            e.currentTarget.style.color = "#64748B";
           }}
         >
-          Limpiar filtros
+          Limpiar todos
         </button>
       )}
     </div>
@@ -94,12 +195,20 @@ export default function Sidebar({
 
 function FilterSection({ title, children }) {
   return (
-    <div style={{ marginBottom: 18 }}>
+    <div style={{ marginBottom: 20 }}>
       <div style={{
-        fontSize: 10, textTransform: "uppercase", color: "#6B7F94",
-        fontWeight: 700, letterSpacing: "2.5px", marginBottom: 6,
-      }}>{title}</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>{children}</div>
+        fontSize: 12,
+        textTransform: "uppercase",
+        color: "#6B7F94",
+        fontWeight: 700,
+        letterSpacing: "0.5px",
+        marginBottom: 8,
+        display: "flex",
+        alignItems: "center",
+      }}>
+        {title}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{children}</div>
     </div>
   );
 }

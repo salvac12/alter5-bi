@@ -5,23 +5,31 @@ import { KPI } from './components/UI';
 import Sidebar from './components/Sidebar';
 import CompanyTable from './components/CompanyTable';
 import DetailPanel from './components/DetailPanel';
+import EmployeeTabs from './components/EmployeeTabs';
 
 export default function App() {
   const companies = useMemo(() => parseCompanies(), []);
   const employees = useMemo(() => getEmployees(companies), [companies]);
 
   const [search, setSearch] = useState("");
+  const [activeEmployeeTab, setActiveEmployeeTab] = useState("all");
   const [selEmployees, setSelEmployees] = useState([]);
   const [selSectors, setSelSectors] = useState([]);
   const [selTipos, setSelTipos] = useState([]);
   const [selStatus, setSelStatus] = useState([]);
-  const [sortBy, setSortBy] = useState("score");
-  const [sortDir, setSortDir] = useState("desc");
+  const [sortBy, setSortBy] = useState("name");
+  const [sortDir, setSortDir] = useState("asc");
   const [selected, setSelected] = useState(null);
   const [page, setPage] = useState(0);
 
   const filtered = useMemo(() => {
     let list = companies;
+
+    // Filtro por tab de empleado
+    if (activeEmployeeTab !== "all") {
+      list = list.filter(c => c.employees.includes(activeEmployeeTab));
+    }
+
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(c =>
@@ -41,22 +49,35 @@ export default function App() {
       if (sortBy === "name") return m * a.name.localeCompare(b.name);
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, search, selEmployees, selSectors, selTipos, selStatus, sortBy, sortDir]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selSectors, selTipos, selStatus, sortBy, sortDir]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
 
+  // Stats basados en el tab activo (no en todas las empresas)
+  const tabFilteredCompanies = useMemo(() => {
+    if (activeEmployeeTab === "all") return companies;
+    return companies.filter(c => c.employees.includes(activeEmployeeTab));
+  }, [companies, activeEmployeeTab]);
+
   const stats = useMemo(() => ({
-    total: companies.length,
-    active: companies.filter(c => c.status === "active").length,
-    dormant: companies.filter(c => c.status === "dormant").length,
-    lost: companies.filter(c => c.status === "lost").length,
-    avgScore: Math.round(companies.reduce((s, c) => s + c.score, 0) / companies.length),
-  }), [companies]);
+    total: tabFilteredCompanies.length,
+    active: tabFilteredCompanies.filter(c => c.status === "active").length,
+    dormant: tabFilteredCompanies.filter(c => c.status === "dormant").length,
+    lost: tabFilteredCompanies.filter(c => c.status === "lost").length,
+    avgScore: tabFilteredCompanies.length > 0
+      ? Math.round(tabFilteredCompanies.reduce((s, c) => s + c.score, 0) / tabFilteredCompanies.length)
+      : 0,
+  }), [tabFilteredCompanies]);
 
   const handleSort = (col) => {
     if (sortBy === col) setSortDir(d => d === "desc" ? "asc" : "desc");
     else { setSortBy(col); setSortDir("desc"); }
+  };
+
+  const handleTabChange = (tabId) => {
+    setActiveEmployeeTab(tabId);
+    setPage(0); // Resetear paginación al cambiar de tab
   };
 
   const subtitle = employees.length === 1
@@ -145,6 +166,13 @@ export default function App() {
             <KPI label="Perdidas" value={stats.lost} accent="#EF4444" sub="> 18 meses" />
             <KPI label="Score medio" value={stats.avgScore} accent="#3B82F6" sub="/100 puntos" />
           </div>
+
+          {/* Employee Tabs */}
+          <EmployeeTabs
+            activeTab={activeEmployeeTab}
+            onTabChange={handleTabChange}
+            totalCount={companies.length}
+          />
 
           {/* Count */}
           <div style={{

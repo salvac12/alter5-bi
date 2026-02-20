@@ -41,3 +41,20 @@ export const BLUE_SECTORS = ["Fintech", "Tecnología", "Consultoría"];
 
 export const REF_DATE = new Date("2026-02-14");
 export const PER_PAGE = 50;
+
+/* ── Tamaño de empresa (rangos de empleados) ── */
+export const COMPANY_SIZES = [
+  { id: "micro", label: "Micro (1-10)", min: 1, max: 10 },
+  { id: "small", label: "Pequeña (11-50)", min: 11, max: 50 },
+  { id: "medium", label: "Mediana (51-200)", min: 51, max: 200 },
+  { id: "large", label: "Grande (201-500)", min: 201, max: 500 },
+  { id: "xlarge", label: "Muy Grande (500+)", min: 500, max: Infinity },
+  { id: "unknown", label: "Sin datos", min: null, max: null },
+];
+
+/* ── Países (preparado para futuro) ── */
+export const COUNTRIES = [
+  { id: "es", label: "España" },
+  { id: "intl", label: "Internacional" },
+  { id: "unknown", label: "Sin clasificar" },
+];

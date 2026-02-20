@@ -1,3 +1,4 @@
+import React from 'react';
 import { STATUS_LABELS, STATUS_COLORS, STATUS_BG, EMERALD_SECTORS, BLUE_SECTORS } from '../utils/constants';
 
 /* ── Color logic for sector badges ── */
@@ -104,7 +105,7 @@ export function KPI({ label, value, sub, accent }) {
 }
 
 /* ── Filter Chip ── */
-export function FilterChip({ label, active, onClick }) {
+export function FilterChip({ label, active, onClick, style = {} }) {
   return (
     <button onClick={onClick} style={{
       padding: "4px 10px", borderRadius: 4, fontSize: 12, fontWeight: 500,
@@ -113,6 +114,7 @@ export function FilterChip({ label, active, onClick }) {
       background: active ? "#ECFDF5" : "transparent",
       color: active ? "#10B981" : "#6B7F94",
       transition: "all 0.12s ease",
+      ...style,
     }}>
       {label}
     </button>
@@ -127,6 +129,74 @@ export function SectionLabel({ children }) {
       fontWeight: 700, letterSpacing: "2.5px", marginBottom: 8,
     }}>
       {children}
+    </div>
+  );
+}
+
+/* ── Badge "Próximamente" ── */
+export function ComingSoonBadge() {
+  return (
+    <span style={{
+      display: "inline-block",
+      background: "#FEF3C7",
+      color: "#92400E",
+      border: "1px solid #FCD34D",
+      borderRadius: 4,
+      padding: "2px 8px",
+      fontSize: 11,
+      fontWeight: 600,
+      letterSpacing: "0.5px",
+      textTransform: "uppercase",
+      marginLeft: 8,
+    }}>
+      Próximamente
+    </span>
+  );
+}
+
+/* ── Tooltip ── */
+export function Tooltip({ children, text }) {
+  const [show, setShow] = React.useState(false);
+
+  return (
+    <div style={{ position: "relative", display: "inline-block" }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <div style={{
+          position: "absolute",
+          left: "100%",
+          top: "50%",
+          transform: "translateY(-50%)",
+          marginLeft: 8,
+          background: "#1E293B",
+          color: "white",
+          padding: "8px 12px",
+          borderRadius: 6,
+          fontSize: 12,
+          maxWidth: 200,
+          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+          zIndex: 1000,
+          whiteSpace: "normal",
+          pointerEvents: "none",
+        }}>
+          {text}
+          {/* Arrow */}
+          <div style={{
+            position: "absolute",
+            right: "100%",
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: 0,
+            height: 0,
+            borderTop: "6px solid transparent",
+            borderBottom: "6px solid transparent",
+            borderRight: "6px solid #1E293B",
+          }} />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,14 +1,14 @@
 import { Badge, StatusBadge } from './UI';
 
 const COLUMNS = [
-  { key: "score", label: "Score", w: 64 },
-  { key: "name", label: "Empresa", w: 200 },
-  { key: null, label: "Sector", w: 150 },
-  { key: null, label: "Tipo", w: 120 },
-  { key: null, label: "Estado", w: 80 },
-  { key: "interactions", label: "Emails", w: 80 },
-  { key: "nContacts", label: "Contactos", w: 76 },
-  { key: null, label: "Último", w: 86 },
+  { key: "score", label: "Score", w: 64, sortable: true },
+  { key: "name", label: "Empresa", w: 200, sortable: true },
+  { key: null, label: "Sector", w: 150, sortable: false },
+  { key: null, label: "Tipo", w: 120, sortable: false },
+  { key: null, label: "Estado", w: 80, sortable: false },
+  { key: "interactions", label: "Emails", w: 80, sortable: true },
+  { key: "nContacts", label: "Contactos", w: 76, sortable: true },
+  { key: "monthsAgo", label: "Último", w: 86, sortable: true },
 ];
 
 export default function CompanyTable({
@@ -16,8 +16,20 @@ export default function CompanyTable({
   page, totalPages, setPage,
 }) {
   const SortIcon = ({ col }) => {
-    if (sortBy !== col) return <span style={{ color: "#E2E8F0", fontSize: 9 }}>⇅</span>;
-    return <span style={{ color: "#3B82F6", fontSize: 9 }}>{sortDir === "desc" ? "▼" : "▲"}</span>;
+    if (sortBy !== col) {
+      return <span style={{ color: "#CBD5E1", fontSize: 12, opacity: 0.6, marginLeft: 4 }}>↕</span>;
+    }
+    return (
+      <span style={{
+        color: "#3B82F6",
+        fontSize: 14,
+        marginLeft: 4,
+        display: "inline-block",
+        transition: "transform 0.2s ease"
+      }}>
+        {sortDir === "desc" ? "↓" : "↑"}
+      </span>
+    );
   };
 
   return (
@@ -25,35 +37,85 @@ export default function CompanyTable({
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr>
-            {COLUMNS.map((col, i) => (
-              <th key={i}
-                onClick={col.key ? () => onSort(col.key) : undefined}
-                style={{
-                  padding: "10px 10px", textAlign: "left",
-                  fontSize: 10, textTransform: "uppercase", letterSpacing: "2.5px",
-                  color: "#6B7F94", fontWeight: 700,
-                  cursor: col.key ? "pointer" : "default", width: col.w,
-                  whiteSpace: "nowrap", userSelect: "none",
-                  borderBottom: "2px solid #E2E8F0",
-                }}
-              >
-                {col.label} {col.key && <SortIcon col={col.key} />}
-              </th>
-            ))}
+            {COLUMNS.map((col, i) => {
+              const isActive = sortBy === col.key;
+              const isSortable = col.sortable;
+
+              return (
+                <th key={i}
+                  onClick={isSortable ? () => onSort(col.key) : undefined}
+                  style={{
+                    padding: "16px 12px",
+                    textAlign: "left",
+                    fontSize: 13,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    color: isActive ? "#3B82F6" : "#64748B",
+                    fontWeight: isActive ? 700 : 600,
+                    cursor: isSortable ? "pointer" : "default",
+                    width: col.w,
+                    whiteSpace: "nowrap",
+                    userSelect: "none",
+                    background: isActive
+                      ? "linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%)"
+                      : "transparent",
+                    borderBottom: isActive ? "3px solid #3B82F6" : "2px solid #E2E8F0",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isSortable && !isActive) {
+                      e.currentTarget.style.background = "#F8FAFC";
+                      e.currentTarget.style.color = "#475569";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isSortable && !isActive) {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = "#64748B";
+                    }
+                  }}
+                >
+                  {col.label} {isSortable && <SortIcon col={col.key} />}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
-          {companies.map((c, i) => (
-            <tr key={c.idx}
-              onClick={() => onSelect(c)}
-              className="row-hover fade-in"
-              style={{
-                cursor: "pointer",
-                background: selected?.idx === c.idx ? "#F7F9FC" : "#FFFFFF",
-                animationDelay: `${i * 12}ms`,
-                borderBottom: "1px solid #F1F5F9",
-              }}
-            >
+          {companies.map((c, i) => {
+            const isSelected = selected?.idx === c.idx;
+
+            return (
+              <tr key={c.idx}
+                onClick={() => onSelect(c)}
+                className="row-hover fade-in"
+                style={{
+                  cursor: "pointer",
+                  background: isSelected
+                    ? "linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.03) 100%)"
+                    : "#FFFFFF",
+                  animationDelay: `${i * 12}ms`,
+                  borderBottom: "1px solid #F1F5F9",
+                  borderLeft: isSelected ? "4px solid #3B82F6" : "4px solid transparent",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = "linear-gradient(90deg, #F8FAFC 0%, #F1F5F9 100%)";
+                    e.currentTarget.style.borderLeft = "3px solid #3B82F6";
+                    e.currentTarget.style.transform = "translateX(2px)";
+                    e.currentTarget.style.boxShadow = "0 2px 4px rgba(0,0,0,0.04)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = "#FFFFFF";
+                    e.currentTarget.style.borderLeft = "4px solid transparent";
+                    e.currentTarget.style.transform = "translateX(0)";
+                    e.currentTarget.style.boxShadow = "none";
+                  }
+                }}
+              >
               {/* Score */}
               <td style={{ padding: "10px" }}>
                 <ScoreChip score={c.score} />
@@ -101,7 +163,8 @@ export default function CompanyTable({
                 {c.lastDate}
               </td>
             </tr>
-          ))}
+          );
+          })}
         </tbody>
       </table>
 
