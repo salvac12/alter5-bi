@@ -152,7 +152,8 @@ export default function DetailPanel({ company, onClose, onDelete }) {
         {/* Tags */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
           <StatusBadge status={c.status} />
-          {c.sectors.split(", ").map((s, i) => (
+          {/* Mostrar sector editado si existe, sino el original */}
+          {(manualData.sector ? [manualData.sector] : c.sectors.split(", ")).map((s, i) => (
             <Badge key={i} variant="sector">{s}</Badge>
           ))}
           {c.relType.split(", ").map((t, i) => (
