@@ -1,6 +1,6 @@
 # Estado del Proyecto - Alter5 BI
 **Fecha actualización:** 20 de febrero de 2026
-**Última modificación:** Rediseño del panel principal con tabs de empleado y filtros ampliados
+**Última modificación:** Sistema completo de edición y cualificación de empresas implementado
 
 ---
 
@@ -28,17 +28,28 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
 3. **Funcionalidades core**
    - Sistema de scoring 0-100 (Volumen 35% + Recencia 30% + Red 15% + Tipo 20%)
    - Estados de relación: Activa (<6m), Dormida (6-18m), Perdida (>18m)
-   - **NUEVO:** Sistema de tabs por empleado (Todos/Salvador/Guillermo/Leticia) con contadores dinámicos
-   - **NUEVO:** Ordenamiento alfabético por defecto (A-Z) con capacidad de reordenar por columnas
-   - **NUEVO:** Indicadores visuales mejorados de ordenamiento (↑↓↕ en headers de tabla)
+   - Sistema de tabs por empleado (Todos/Salvador/Guillermo/Leticia) con contadores dinámicos
+   - Ordenamiento alfabético por defecto (A-Z) con capacidad de reordenar por columnas
+   - Indicadores visuales mejorados de ordenamiento (↑↓↕ en headers de tabla)
    - Búsqueda libre por nombre/dominio/sector/tipo
-   - Filtros combinables por estado, sector y tipo
-   - **NUEVO:** Filtros preparados para futuro (Tamaño Empresa y País) con estado disabled
-   - **NUEVO:** Badge contador de filtros activos en sidebar
-   - **NUEVO:** Tooltips explicativos en filtros disabled
+   - Filtros combinables por estado, sector (incluye "Asociación") y tipo
+   - Filtros preparados para futuro (Tamaño Empresa y País) con estado disabled
+   - Badge contador de filtros activos en sidebar
+   - Tooltips explicativos en filtros disabled
    - Tabla ordenable y paginada con mejoras visuales (hover effects, estado selected)
+
+   **Ficha de empresa detallada:**
+   - **NUEVO:** Sistema completo de edición de campos manuales
+   - **NUEVO:** Cualificación automática de país (por extensión de dominio)
+   - **NUEVO:** Cualificación automática de tamaño de empresa
+   - **NUEVO:** Campos editables: facturación, empleados, país, prioridad, web, LinkedIn, notas
+   - **NUEVO:** Almacenamiento persistente en localStorage
+   - **NUEVO:** Modo edición con feedback visual (bordes azules)
    - Panel de detalle con desglose por empleado
    - Timeline de interacciones
+   - Contactos clave priorizados
+   - Información de contexto
+
    - Exportación CSV (compatible Airtable)
 
 4. **Sistema de importación**
@@ -50,9 +61,9 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
 5. **Deploy y versioning**
    - Git repository: `https://github.com/salvac12/alter5-bi.git`
    - Branch actual: `main`
-   - Commit actual: `7f82a07` - "feat: rediseño del panel principal de empresas"
-   - Deploy en Vercel: `https://alter5-4c2qkeuik-salvas-workspaces-projects.vercel.app`
-   - Deploy ID: `7UffxUBLWHWxG8iwpYLcaxzUbTKg`
+   - Commit actual: `1cb720f` - "feat: sistema completo de edición y cualificación de empresas"
+   - Deploy en Vercel: `https://alter5-574qcf5st-salvas-workspaces-projects.vercel.app`
+   - Deploy ID: `EBbJcaqG2ZadAaTpNQjjYbfnd3YV`
    - Panel Vercel: `https://vercel.com/salvas-workspaces-projects/alter5-bi`
 
 ---
@@ -300,13 +311,50 @@ Ninguno reportado hasta la fecha.
 
 ## 🔄 Historial de Versiones
 
-### v1.0.0 (20/02/2026)
+### v1.1.0 (20/02/2026) - Sistema de edición y cualificación
+- ✅ Sistema completo de edición de campos manuales
+- ✅ Cualificación automática de país por extensión de dominio
+- ✅ Cualificación automática de tamaño de empresa
+- ✅ Almacenamiento persistente en localStorage
+- ✅ Campos editables: facturación, empleados, país, prioridad, web, LinkedIn, notas
+- ✅ Componentes EditableField, SelectField, InfoField
+- ✅ Modo edición con feedback visual
+- ✅ Nueva categoría "Asociación" en sectores
+- ✅ Archivo companyData.js para gestión de datos manuales
+
+### v1.0.0 (20/02/2026) - Rediseño del panel principal
 - Commit inicial con dashboard completo
 - Sistema de scoring implementado
 - Soporte multi-buzón
 - Deploy en Vercel configurado
+- Sistema de tabs por empleado
+- Ordenamiento alfabético por defecto
+- Indicadores visuales de ordenamiento
+- Filtros ampliados (tamaño y país preparados)
 
 ---
 
-**Última actualización:** 20 de febrero de 2026, 10:30 AM
+## 📋 Próximos Pasos Sugeridos
+
+### Alta Prioridad
+- [ ] Integración con LinkedIn para cualificación automática de tamaño
+- [ ] Implementar cualificación de país por idioma de correos
+- [ ] Exportar datos editados junto con el CSV
+- [ ] Sincronización bidireccional con Airtable
+
+### Media Prioridad
+- [ ] Gráficos de distribución (sector, tipo, estado)
+- [ ] Filtro por rango de fechas
+- [ ] Sistema de notificaciones para relaciones en riesgo
+- [ ] Búsqueda avanzada con operadores
+
+### Baja Prioridad
+- [ ] Enriquecimiento automático con APIs públicas
+- [ ] Sistema de tareas y recordatorios
+- [ ] Multi-idioma (i18n)
+- [ ] Modo oscuro/claro
+
+---
+
+**Última actualización:** 20 de febrero de 2026, 11:00 AM
 **Actualizado por:** Claude Code (Anthropic)
