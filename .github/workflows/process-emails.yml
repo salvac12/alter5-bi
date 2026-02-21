@@ -1,0 +1,48 @@
+name: Process Gmail Emails
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 03:00 UTC = 04:00 Madrid
+  workflow_dispatch:       # Manual trigger or from GAS webhook
+
+permissions:
+  contents: write
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install gspread google-auth google-generativeai
+
+      - name: Process pending emails
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: python scripts/process_sheet_emails.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "alter5-bi-bot"
+          git config user.email "bot@alter5.com"
+          git add src/data/companies.json src/data/companies_full.json src/data/employees.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "data: actualización automática desde Gmail pipeline
+
+            $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi

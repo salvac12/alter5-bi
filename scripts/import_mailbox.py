@@ -29,9 +29,23 @@ from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-COMPACT_FILE = os.path.join(PROJECT_DIR, "src", "data", "companies.json")
-FULL_FILE = os.path.join(PROJECT_DIR, "src", "data", "companies_full.json")
-EMPLOYEES_FILE = os.path.join(PROJECT_DIR, "src", "data", "employees.json")
+
+
+def get_data_paths(project_dir=None):
+    """Return paths to the three data files. Accepts override for CI environments."""
+    base = project_dir or PROJECT_DIR
+    return {
+        "compact": os.path.join(base, "src", "data", "companies.json"),
+        "full": os.path.join(base, "src", "data", "companies_full.json"),
+        "employees": os.path.join(base, "src", "data", "employees.json"),
+    }
+
+
+# Default paths (used by main() and legacy callers)
+_paths = get_data_paths()
+COMPACT_FILE = _paths["compact"]
+FULL_FILE = _paths["full"]
+EMPLOYEES_FILE = _paths["employees"]
 
 
 def read_excel(filepath):
@@ -120,6 +134,11 @@ def merge_company(existing, new_data, employee_id):
             "timeline": new_data["timeline"],
             "context": new_data["context"],
         }}
+        # Preserve subjects/snippets at top level
+        if "subjects" not in new_data:
+            new_data["subjects"] = []
+        if "snippets" not in new_data:
+            new_data["snippets"] = []
         return new_data
     
     # Existing company — merge data
@@ -134,6 +153,20 @@ def merge_company(existing, new_data, employee_id):
         "timeline": new_data["timeline"],
         "context": new_data["context"],
     }
+
+    # Merge subjects and snippets (deduplicate, keep latest)
+    old_subjects = existing.get("subjects", [])
+    new_subjects = new_data.get("subjects", [])
+    seen = set(old_subjects)
+    for s in new_subjects:
+        if s not in seen:
+            old_subjects.append(s)
+            seen.add(s)
+    existing["subjects"] = old_subjects[:30]
+
+    old_snippets = existing.get("snippets", [])
+    new_snippets = new_data.get("snippets", [])
+    existing["snippets"] = list({s: None for s in old_snippets + new_snippets}.keys())[:15]
     
     # Recalculate aggregates across all employee sources
     all_interactions = sum(s["interactions"] for s in existing["sources"].values())
@@ -201,6 +234,7 @@ def export_to_compact(all_companies):
         contacts = c.get("contacts", [])
         timeline = c.get("timeline", [])
         context = c.get("context", "")
+        subjects = c.get("subjects", [])
         
         if contacts or timeline or context:
             # Include per-employee breakdown
@@ -213,6 +247,7 @@ def export_to_compact(all_companies):
                 [[t["quarter"], t["emails"]] for t in timeline[:8]],
                 context[:150],
                 source_breakdown,
+                subjects[:20],
             ]
     
     return {"r": records, "d": details}
