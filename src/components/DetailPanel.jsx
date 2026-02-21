@@ -27,7 +27,7 @@ function contactPriorityInfo(role) {
   return { rank: 4, label: role, color: "#94A3B8" };
 }
 
-export default function DetailPanel({ company, onClose, onDelete }) {
+export default function DetailPanel({ company, onClose, onDelete, productMatches }) {
   if (!company) return null;
   const c = company;
   const det = c.detail;
@@ -192,6 +192,9 @@ export default function DetailPanel({ company, onClose, onDelete }) {
             </p>
           </div>
         )}
+
+        {/* Product Matches */}
+        <ProductMatchSection companyIdx={c.idx} productMatches={productMatches} />
 
         {/* Employee sources */}
         {c.employees.length > 0 && (
@@ -1187,6 +1190,115 @@ export default function DetailPanel({ company, onClose, onDelete }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/* ── Product match section for detail panel ── */
+function ProductMatchSection({ companyIdx, productMatches }) {
+  const matches = productMatches?.get(companyIdx) || [];
+  const relevant = matches.filter(m => m.score >= 10);
+
+  if (relevant.length === 0) return null;
+
+  const SIGNAL_LABELS = {
+    keyword_high: "Keyword fuerte",
+    keyword_med: "Keyword medio",
+    keyword_low: "Keyword débil",
+    sector: "Sector",
+    relType: "Tipo relación",
+    role: "Rol contacto",
+    activity: "Actividad reciente",
+  };
+
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 20,
+      border: "1px solid #2A4A6C",
+    }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
+      }}>
+        <span style={{ fontSize: 20 }}>🎯</span>
+        <DarkSectionTitle style={{ marginBottom: 0, color: "#94A3B8" }}>
+          Productos potenciales
+        </DarkSectionTitle>
+        <span style={{
+          marginLeft: "auto", fontSize: 11, color: "#6B7F94", fontWeight: 600,
+        }}>
+          {relevant.length} match{relevant.length !== 1 ? "es" : ""}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {relevant.map((match) => (
+          <div key={match.id} style={{
+            background: "#0A1628",
+            borderRadius: 10,
+            padding: 16,
+            border: `1px solid ${match.color}40`,
+          }}>
+            <div style={{
+              display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{
+                  width: 10, height: 10, borderRadius: "50%", background: match.color,
+                }} />
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF" }}>
+                  {match.name}
+                </span>
+              </div>
+              <div style={{
+                background: match.color + "25",
+                padding: "4px 12px",
+                borderRadius: 6,
+                display: "flex", alignItems: "baseline", gap: 3,
+              }}>
+                <span style={{ fontSize: 18, fontWeight: 800, color: match.color }}>
+                  {match.score}
+                </span>
+                <span style={{ fontSize: 10, color: match.color, opacity: 0.7 }}>/100</span>
+              </div>
+            </div>
+
+            {/* Score bar */}
+            <div style={{
+              height: 6, background: "#132238", borderRadius: 3, overflow: "hidden", marginBottom: 12,
+            }}>
+              <div style={{
+                height: "100%", width: `${match.score}%`, borderRadius: 3,
+                background: `linear-gradient(90deg, ${match.color}, ${match.color}99)`,
+                transition: "width 0.3s ease",
+              }} />
+            </div>
+
+            {/* Signals */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {match.signals.slice(0, 8).map((sig, i) => (
+                <span key={i} style={{
+                  fontSize: 10, fontWeight: 600,
+                  padding: "3px 7px", borderRadius: 4,
+                  background: sig.type.startsWith("keyword_high") ? match.color + "20"
+                    : sig.type === "relType" ? "#3B82F620"
+                    : sig.type === "role" ? "#10B98120"
+                    : "#6B7F9415",
+                  color: sig.type.startsWith("keyword_high") ? match.color
+                    : sig.type === "relType" ? "#60A5FA"
+                    : sig.type === "role" ? "#34D399"
+                    : "#94A3B8",
+                  whiteSpace: "nowrap",
+                }}>
+                  {SIGNAL_LABELS[sig.type] || sig.type}: {sig.value}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

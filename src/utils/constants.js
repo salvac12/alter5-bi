@@ -42,6 +42,135 @@ export const BLUE_SECTORS = ["Fintech", "Tecnología", "Consultoría"];
 export const REF_DATE = new Date("2026-02-14");
 export const PER_PAGE = 50;
 
+/* ── Productos Alter5 — taxonomía para matching ── */
+export const PRODUCTS = [
+  {
+    id: "construction_loan",
+    name: "Préstamo Construcción",
+    short: "Constr.",
+    color: "#F59E0B",
+    description: "Project finance para construcción de proyectos utility-scale (solar, eólico, BESS)",
+    keywords: {
+      high: [
+        "term sheet", "term-sheet", "préstamo construcción", "construction loan",
+        "deuda senior", "financiación de proyecto", "project finance",
+        "préstamo puente", "bridge loan", "bridge financing", "EPC",
+        "cierre financiero", "financial close", "closing",
+      ],
+      medium: [
+        "fotovoltaic", "eólic", "parque solar", "parque eólico", "wind farm",
+        "solar farm", "utility-scale", "utility scale", "greenfield",
+        "RTB", "ready to build", "ready-to-build", "BESS", "baterías",
+        "almacenamiento", "storage", "COD", "GEB", "FEI",
+        "construcción", "construction",
+      ],
+      low: [
+        "renovable", "energía", "solar", "eólico", "eolico", "wind",
+        "MW", "MWp", "MWh", "GW", "pipeline", "cartera de proyectos",
+        "portfolio", "merchant", "PPA",
+      ],
+    },
+    sectors: ["Renovables", "Energía", "Energia"],
+    relTypes: ["Potencial Prestatario"],
+    roles: [
+      "structured finance", "project finance", "financiación estructurada",
+      "cfo", "chief financial officer", "director financiero",
+      "head of finance", "tesorero", "treasurer",
+    ],
+  },
+  {
+    id: "refinancing",
+    name: "Refinanciación",
+    short: "Refin.",
+    color: "#3B82F6",
+    description: "Refinanciación de deuda existente en proyectos operativos renewables",
+    keywords: {
+      high: [
+        "refinanciación", "refinancing", "refinanciar", "reestructuración",
+        "restructuring", "deuda existente", "existing debt", "amortización",
+        "swap", "cobertura", "hedging",
+      ],
+      medium: [
+        "operativo", "operating", "COD", "en operación", "operational",
+        "parque operativo", "deuda senior", "senior debt",
+        "bonista", "bondholder", "bono verde", "green bond",
+      ],
+      low: [
+        "renovable", "energía", "solar", "eólico", "MW", "MWp",
+        "fotovoltaic", "eólic", "merchant", "PPA",
+      ],
+    },
+    sectors: ["Renovables", "Energía", "Energia"],
+    relTypes: ["Potencial Prestatario"],
+    roles: [
+      "structured finance", "project finance", "financiación estructurada",
+      "cfo", "chief financial officer", "director financiero",
+      "head of finance", "asset management",
+    ],
+  },
+  {
+    id: "investor_placement",
+    name: "Colocación Inversores",
+    short: "Inv.",
+    color: "#8B5CF6",
+    description: "Colocación de deuda/equity a inversores institucionales para proyectos renovables",
+    keywords: {
+      high: [
+        "inversor", "investor", "colocación", "placement", "fondo",
+        "fund", "family office", "asset manager", "gestora",
+        "mandato", "mandate", "co-inversión", "co-investment",
+      ],
+      medium: [
+        "rentabilidad", "yield", "retorno", "return", "TIR", "IRR",
+        "cupón", "coupon", "bono", "bond", "nota", "note",
+        "tramo", "tranche", "mezzanine",
+      ],
+      low: [
+        "renovable", "energía", "solar", "eólico", "MW",
+        "fotovoltaic", "portfolio", "cartera",
+      ],
+    },
+    sectors: ["Inversor/Fondo", "Inversión", "Banca"],
+    relTypes: ["Inversor/Fondo", "Banco"],
+    roles: [
+      "portfolio manager", "fund manager", "investment director",
+      "cio", "chief investment officer", "analyst",
+      "gestor de fondos", "director de inversiones",
+    ],
+  },
+  {
+    id: "advisory",
+    name: "Advisory / M&A",
+    short: "M&A",
+    color: "#10B981",
+    description: "Asesoramiento en compraventa de proyectos y activos renovables",
+    keywords: {
+      high: [
+        "m&a", "compraventa", "adquisición", "acquisition", "venta",
+        "sale", "due diligence", "valoración", "valuation",
+        "mandate", "mandato", "sell-side", "buy-side",
+        "marketplace", "teaser",
+      ],
+      medium: [
+        "transacción", "transaction", "deal", "pipeline de ventas",
+        "asset rotation", "rotación de activos", "SPV",
+        "cambio de titularidad", "SPA",
+      ],
+      low: [
+        "renovable", "energía", "solar", "eólico", "MW",
+        "fotovoltaic", "portfolio", "cartera", "proyecto",
+      ],
+    },
+    sectors: ["Renovables", "Energía", "Energia", "Asesor Financiero", "Consultoría"],
+    relTypes: ["Potencial Prestatario", "Asesor Financiero", "Partnership"],
+    roles: [
+      "m&a", "corporate finance", "business development",
+      "desarrollo de negocio", "director comercial",
+      "investment banking", "origination",
+    ],
+  },
+];
+
 /* ── Tamaño de empresa (rangos de empleados) ── */
 export const COMPANY_SIZES = [
   { id: "micro", label: "Micro (1-10)", min: 1, max: 10 },

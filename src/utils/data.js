@@ -1,5 +1,5 @@
 import rawData from '../data/companies.json';
-import { TYPE_WEIGHTS, REF_DATE } from './constants';
+import { TYPE_WEIGHTS, REF_DATE, PRODUCTS } from './constants';
 
 /**
  * Record: [empresa, dominio, sector, nContactos, totalInteracciones,
@@ -29,6 +29,7 @@ export function parseCompanies() {
       timeline: det[1].map(t => ({ quarter: t[0], emails: t[1] })),
       context: det[2],
       sources: det[3] ? det[3].map(s => ({ employee: s[0], interactions: s[1] })) : [],
+      subjects: det[4] || [],
     } : null;
 
     return {
@@ -52,6 +53,115 @@ export function getEmployees(companies) {
     }
   }
   return Array.from(map.values()).sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Score every company against each product definition from PRODUCTS.
+ * Returns a Map<companyIdx, productMatch[]> where each match has:
+ *   { id, name, score (0-100), signals[] }
+ */
+export function calculateProductMatches(companies) {
+  const results = new Map();
+
+  for (const c of companies) {
+    const ctx = (c.detail?.context || "").toLowerCase();
+    const subjectsText = (c.detail?.subjects || []).join(" ").toLowerCase();
+    const searchText = ctx + " " + subjectsText;
+    const sectorList = c.sectors.toLowerCase();
+    const relList = c.relType.toLowerCase();
+    const contactRoles = (c.detail?.contacts || []).map(ct => (ct.role || "").toLowerCase());
+
+    const matches = [];
+
+    for (const product of PRODUCTS) {
+      let score = 0;
+      const signals = [];
+
+      // --- Keyword scoring on context + subjects (max 40) ---
+      let kwScore = 0;
+      const seenKw = new Set();
+      for (const kw of product.keywords.high) {
+        if (searchText.includes(kw.toLowerCase()) && !seenKw.has(kw)) {
+          kwScore += 10;
+          seenKw.add(kw);
+          signals.push({ type: "keyword_high", value: kw });
+        }
+      }
+      for (const kw of product.keywords.medium) {
+        if (searchText.includes(kw.toLowerCase()) && !seenKw.has(kw)) {
+          kwScore += 4;
+          seenKw.add(kw);
+          signals.push({ type: "keyword_med", value: kw });
+        }
+      }
+      for (const kw of product.keywords.low) {
+        if (searchText.includes(kw.toLowerCase()) && !seenKw.has(kw)) {
+          kwScore += 1;
+          seenKw.add(kw);
+          signals.push({ type: "keyword_low", value: kw });
+        }
+      }
+      score += Math.min(40, kwScore);
+
+      // --- Sector match (max 15) ---
+      const sectorMatch = product.sectors.some(s => sectorList.includes(s.toLowerCase()));
+      if (sectorMatch) {
+        score += 15;
+        signals.push({ type: "sector", value: product.sectors.filter(s => sectorList.includes(s.toLowerCase())).join(", ") });
+      }
+
+      // --- RelType match (max 20) ---
+      const relMatch = product.relTypes.some(r => relList.includes(r.toLowerCase()));
+      if (relMatch) {
+        score += 20;
+        signals.push({ type: "relType", value: product.relTypes.filter(r => relList.includes(r.toLowerCase())).join(", ") });
+      }
+
+      // --- Contact role match (max 15) ---
+      let roleScore = 0;
+      for (const role of contactRoles) {
+        for (const pRole of product.roles) {
+          if (role.includes(pRole.toLowerCase())) {
+            roleScore += 5;
+            signals.push({ type: "role", value: role });
+            break;
+          }
+        }
+      }
+      score += Math.min(15, roleScore);
+
+      // --- Activity bonus: recent + high volume (max 10) ---
+      if (c.monthsAgo <= 6 && c.interactions > 100) {
+        score += 10;
+        signals.push({ type: "activity", value: `${c.interactions} emails, ${c.monthsAgo}m ago` });
+      } else if (c.monthsAgo <= 12 && c.interactions > 50) {
+        score += 5;
+      }
+
+      if (score > 0) {
+        matches.push({
+          id: product.id,
+          name: product.name,
+          short: product.short,
+          color: product.color,
+          score: Math.min(100, score),
+          signals,
+        });
+      }
+    }
+
+    matches.sort((a, b) => b.score - a.score);
+    results.set(c.idx, matches);
+  }
+
+  return results;
+}
+
+/** Get the best product match for a company (or null) */
+export function getBestProductMatch(productMatches, companyIdx) {
+  const matches = productMatches.get(companyIdx);
+  if (!matches || matches.length === 0) return null;
+  return matches[0];
 }
 
 /**
@@ -83,12 +193,13 @@ function splitName(fullName) {
  *  Contacts are sorted by priority (CEO/CFO > Fin.Estructurada > M&A > Otros > Desconocido)
  *  and exported as semicolon-separated columns: Nombre · Apellidos · Email · Cargo · Prioridad
  */
-export function downloadCSV(companies) {
+export function downloadCSV(companies, productMatches) {
   const headers = [
     "Empresa", "Dominio", "Sector", "Nº Contactos", "Total Interacciones",
     "Tipo Relación", "Primera Interacción", "Última Interacción",
     "Estado", "Score", "Score Volumen", "Score Recencia", "Score Red", "Score Tipo",
     "Buzones",
+    "Producto Match", "Producto Score",
     "Contactos - Nombre", "Contactos - Apellidos", "Contactos - Email",
     "Contactos - Cargo", "Contactos - Prioridad",
     "Contexto",
@@ -108,12 +219,15 @@ export function downloadCSV(companies) {
     const cargos     = sorted.map(ct => ct.role || "Cargo desconocido").join("; ");
     const prioridades = sorted.map(ct => contactPriority(ct.role).label).join("; ");
 
+    const bestProduct = productMatches ? getBestProductMatch(productMatches, c.idx) : null;
+
     return [
       c.name, c.domain, c.sectors, c.nContacts, c.interactions,
       c.relType, c.firstDate, c.lastDate,
       { active: "Activa", dormant: "Dormida", lost: "Perdida" }[c.status],
       c.score, c.volScore, c.recScore, c.netScore, c.typeScore,
       c.employees.join(", "),
+      bestProduct?.name || "", bestProduct?.score || 0,
       nombres, apellidos, emails, cargos, prioridades,
       c.detail?.context || "",
     ];

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { parseCompanies, getEmployees, downloadCSV } from './utils/data';
-import { PER_PAGE } from './utils/constants';
+import alter5Logo from './assets/alter5-logo.svg';
+import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch } from './utils/data';
+import { PER_PAGE, PRODUCTS } from './utils/constants';
 import { KPI } from './components/UI';
 import Sidebar from './components/Sidebar';
 import CompanyTable from './components/CompanyTable';
@@ -25,10 +26,13 @@ export default function App() {
   const [selSectors, setSelSectors] = useState([]);
   const [selTipos, setSelTipos] = useState([]);
   const [selStatus, setSelStatus] = useState([]);
+  const [selProduct, setSelProduct] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [sortDir, setSortDir] = useState("asc");
   const [selected, setSelected] = useState(null);
   const [page, setPage] = useState(0);
+
+  const productMatches = useMemo(() => calculateProductMatches(companies), [companies]);
 
   const filtered = useMemo(() => {
     let list = companies;
@@ -51,13 +55,24 @@ export default function App() {
     if (selSectors.length) list = list.filter(c => selSectors.some(s => c.sectors.includes(s)));
     if (selTipos.length) list = list.filter(c => selTipos.some(t => c.relType.includes(t)));
     if (selStatus.length) list = list.filter(c => selStatus.includes(c.status));
+    if (selProduct) {
+      list = list.filter(c => {
+        const matches = productMatches.get(c.idx) || [];
+        return matches.some(m => m.id === selProduct && m.score >= 15);
+      });
+    }
 
     return [...list].sort((a, b) => {
       const m = sortDir === "desc" ? -1 : 1;
       if (sortBy === "name") return m * a.name.localeCompare(b.name);
+      if (sortBy === "productScore") {
+        const aMatch = getBestProductMatch(productMatches, a.idx);
+        const bMatch = getBestProductMatch(productMatches, b.idx);
+        return m * ((aMatch?.score || 0) - (bMatch?.score || 0));
+      }
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selSectors, selTipos, selStatus, sortBy, sortDir]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selSectors, selTipos, selStatus, selProduct, productMatches, sortBy, sortDir]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -110,14 +125,8 @@ export default function App() {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: 16, flexWrap: "wrap",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Logo mark with gradient */}
-          <div style={{
-            width: 34, height: 34, borderRadius: 8,
-            background: "linear-gradient(135deg, #3B82F6, #10B981)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 800, fontSize: 13, color: "#FFFFFF", letterSpacing: "-0.5px",
-          }}>A5</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <img src={alter5Logo} alt="Alter5" style={{ height: 32 }} />
           <div>
             <h1 style={{
               fontSize: 15, fontWeight: 800, margin: 0,
@@ -145,7 +154,7 @@ export default function App() {
           />
           {/* CTA with gradient */}
           <button
-            onClick={() => downloadCSV(filtered)}
+            onClick={() => downloadCSV(filtered, productMatches)}
             style={{
               padding: "7px 16px", borderRadius: 6, border: "none",
               background: "linear-gradient(135deg, #3B82F6, #10B981)",
@@ -167,6 +176,8 @@ export default function App() {
           selSectors={selSectors} setSelSectors={setSelSectors}
           selTipos={selTipos} setSelTipos={setSelTipos}
           selStatus={selStatus} setSelStatus={setSelStatus}
+          selProduct={selProduct} setSelProduct={setSelProduct}
+          productMatches={productMatches}
           setPage={setPage}
         />
 
@@ -204,6 +215,7 @@ export default function App() {
             sortBy={sortBy} sortDir={sortDir} onSort={handleSort}
             onSelect={setSelected} selected={selected}
             page={page} totalPages={totalPages} setPage={setPage}
+            productMatches={productMatches}
           />
         </div>
       </div>
@@ -218,6 +230,7 @@ export default function App() {
         company={selected}
         onClose={() => setSelected(null)}
         onDelete={handleDeleteCompany}
+        productMatches={productMatches}
       />
     </div>
   );

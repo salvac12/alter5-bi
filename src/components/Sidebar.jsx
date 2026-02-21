@@ -1,4 +1,4 @@
-import { SECTORS, TIPOS, STATUS_LABELS, COMPANY_SIZES, COUNTRIES } from '../utils/constants';
+import { SECTORS, TIPOS, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS } from '../utils/constants';
 import { FilterChip, SectionLabel, ComingSoonBadge, Tooltip } from './UI';
 
 export default function Sidebar({
@@ -7,6 +7,8 @@ export default function Sidebar({
   selSectors, setSelSectors,
   selTipos, setSelTipos,
   selStatus, setSelStatus,
+  selProduct, setSelProduct,
+  productMatches,
   setPage,
 }) {
   const toggle = (arr, setArr, val) => {
@@ -14,7 +16,7 @@ export default function Sidebar({
     setPage(0);
   };
 
-  const hasFilters = selSectors.length > 0 || selTipos.length > 0 || selStatus.length > 0 || selEmployees.length > 0;
+  const hasFilters = selSectors.length > 0 || selTipos.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || !!selProduct;
 
   const statusCounts = {
     active: companies.filter(c => c.status === "active").length,
@@ -22,7 +24,17 @@ export default function Sidebar({
     lost: companies.filter(c => c.status === "lost").length,
   };
 
-  const totalActiveFilters = selEmployees.length + selSectors.length + selTipos.length + selStatus.length;
+  const totalActiveFilters = selEmployees.length + selSectors.length + selTipos.length + selStatus.length + (selProduct ? 1 : 0);
+
+  const productCounts = {};
+  for (const product of PRODUCTS) {
+    let count = 0;
+    for (const c of companies) {
+      const matches = productMatches?.get(c.idx) || [];
+      if (matches.some(m => m.id === product.id && m.score >= 15)) count++;
+    }
+    productCounts[product.id] = count;
+  }
 
   return (
     <div style={{
@@ -61,6 +73,33 @@ export default function Sidebar({
           </div>
         )}
       </div>
+
+      {/* Producto target */}
+      <FilterSection title="Producto Alter5">
+        {PRODUCTS.map(p => (
+          <FilterChip key={p.id}
+            label={
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: p.color, display: "inline-block", flexShrink: 0,
+                }} />
+                {p.name}
+                <span style={{
+                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                }}>
+                  {productCounts[p.id]}
+                </span>
+              </span>
+            }
+            active={selProduct === p.id}
+            onClick={() => {
+              setSelProduct(prev => prev === p.id ? "" : p.id);
+              setPage(0);
+            }}
+          />
+        ))}
+      </FilterSection>
 
       {/* Status (más usado, arriba) */}
       <FilterSection title="Estado de Empresa">
@@ -159,7 +198,7 @@ export default function Sidebar({
       {hasFilters && (
         <button
           onClick={() => {
-            setSelEmployees([]); setSelSectors([]); setSelTipos([]); setSelStatus([]); setPage(0);
+            setSelEmployees([]); setSelSectors([]); setSelTipos([]); setSelStatus([]); setSelProduct(""); setPage(0);
           }}
           style={{
             marginTop: 20,

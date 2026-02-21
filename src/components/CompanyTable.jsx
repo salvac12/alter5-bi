@@ -1,19 +1,21 @@
 import { Badge, StatusBadge } from './UI';
+import { getBestProductMatch } from '../utils/data';
 
 const COLUMNS = [
-  { key: "score", label: "Score", w: 64, sortable: true },
-  { key: "name", label: "Empresa", w: 200, sortable: true },
-  { key: null, label: "Sector", w: 150, sortable: false },
-  { key: null, label: "Tipo", w: 120, sortable: false },
-  { key: null, label: "Estado", w: 80, sortable: false },
-  { key: "interactions", label: "Emails", w: 80, sortable: true },
-  { key: "nContacts", label: "Contactos", w: 76, sortable: true },
-  { key: "monthsAgo", label: "Último", w: 86, sortable: true },
+  { key: "score", label: "Score", w: 58, sortable: true },
+  { key: "name", label: "Empresa", w: 190, sortable: true },
+  { key: null, label: "Sector", w: 140, sortable: false },
+  { key: null, label: "Tipo", w: 110, sortable: false },
+  { key: "productScore", label: "Producto", w: 120, sortable: true },
+  { key: null, label: "Estado", w: 76, sortable: false },
+  { key: "interactions", label: "Emails", w: 72, sortable: true },
+  { key: "nContacts", label: "Cont.", w: 60, sortable: true },
+  { key: "monthsAgo", label: "Último", w: 80, sortable: true },
 ];
 
 export default function CompanyTable({
   companies, sortBy, sortDir, onSort, onSelect, selected,
-  page, totalPages, setPage,
+  page, totalPages, setPage, productMatches,
 }) {
   const SortIcon = ({ col }) => {
     if (sortBy !== col) {
@@ -145,6 +147,11 @@ export default function CompanyTable({
                 </div>
               </td>
 
+              {/* Product Match */}
+              <td style={{ padding: "10px" }}>
+                <ProductMatchCell companyIdx={c.idx} productMatches={productMatches} />
+              </td>
+
               {/* Status */}
               <td style={{ padding: "10px" }}><StatusBadge status={c.status} /></td>
 
@@ -205,6 +212,43 @@ function ScoreChip({ score }) {
           : "#F1F5F9",
     }}>
       {score}
+    </div>
+  );
+}
+
+/* ── Product match badge for table rows ── */
+function ProductMatchCell({ companyIdx, productMatches }) {
+  const best = getBestProductMatch(productMatches, companyIdx);
+  if (!best || best.score < 15) {
+    return <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>;
+  }
+
+  const opacity = best.score >= 50 ? 1 : best.score >= 30 ? 0.8 : 0.6;
+
+  return (
+    <div style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "4px 8px", borderRadius: 6,
+      background: best.color + "15",
+      border: `1px solid ${best.color}30`,
+      opacity,
+    }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: best.color, flexShrink: 0,
+      }} />
+      <span style={{
+        fontSize: 11, fontWeight: 600, color: best.color,
+        whiteSpace: "nowrap",
+      }}>
+        {best.short}
+      </span>
+      <span style={{
+        fontSize: 10, fontWeight: 700, color: best.color,
+        opacity: 0.7,
+      }}>
+        {best.score}
+      </span>
     </div>
   );
 }
