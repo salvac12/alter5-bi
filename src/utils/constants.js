@@ -51,16 +51,11 @@ export const PRODUCTS = [
     color: "#3B82F6",
     description: "Financiación de deuda para proyectos renovables: project finance, corporate loans, refinanciación",
     subcategories: [
-      {
-        id: "project_finance",
-        name: "Project Finance",
-        children: ["Short Term", "Medium Term", "Long Term", "Development Debt", "AssetCo Debt"],
-      },
-      {
-        id: "corporate_loan",
-        name: "Corporate Loan",
-        children: ["Corporate Debt", "HoldCo Debt", "Project Finance Guaranteed"],
-      },
+      { id: "project_finance", name: "Project Finance" },
+      { id: "asset_backed", name: "Asset Backed" },
+      { id: "development_debt", name: "Development Debt" },
+      { id: "corporate_loan", name: "Corporate Loan" },
+      { id: "pf_guaranteed", name: "Project Finance Guaranteed" },
     ],
     keywords: {
       high: [

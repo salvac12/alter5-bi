@@ -1611,28 +1611,15 @@ function ProductMatchSection({ companyIdx, productMatches }) {
                     fontSize: 9, color: "#6B7F94", fontWeight: 700,
                     textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6,
                   }}>Subcategorías</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                     {productDef.subcategories.map(sub => (
-                      <div key={sub.id}>
-                        <div style={{
-                          fontSize: 11, color: match.color, fontWeight: 700,
-                          display: "flex", alignItems: "center", gap: 4,
-                        }}>
-                          <span style={{ fontSize: 8 }}>▸</span>
-                          {sub.name}
-                        </div>
-                        {sub.children && (
-                          <div style={{ marginLeft: 14, display: "flex", flexWrap: "wrap", gap: 3, marginTop: 2 }}>
-                            {sub.children.map(child => (
-                              <span key={child} style={{
-                                fontSize: 9, color: "#94A3B8", fontWeight: 500,
-                                padding: "1px 6px", borderRadius: 3,
-                                background: "#0A1628", border: "1px solid #1B3A5C",
-                              }}>{child}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <span key={sub.id} style={{
+                        fontSize: 10, color: match.color, fontWeight: 600,
+                        padding: "2px 8px", borderRadius: 4,
+                        background: match.color + "10", border: `1px solid ${match.color}25`,
+                      }}>
+                        {sub.name}
+                      </span>
                     ))}
                   </div>
                 </div>
