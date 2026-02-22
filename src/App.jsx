@@ -26,6 +26,8 @@ export default function App() {
           marketRoles: ov.mr !== undefined ? ov.mr : c.marketRoles,
           subtipo: ov.st !== undefined ? ov.st : c.subtipo,
           fase: ov.fc !== undefined ? ov.fc : c.fase,
+          sectors: ov.sector !== undefined ? ov.sector : c.sectors,
+          relType: ov.relType !== undefined ? ov.relType : c.relType,
         };
       });
   }, [allCompanies, hiddenCompanies, enrichmentOverrides]);

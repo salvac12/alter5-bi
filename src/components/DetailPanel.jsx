@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides } from '../utils/companyData';
-import { COUNTRIES, COMPANY_SIZES, SECTORS, MARKET_ROLES, SUBTIPOS_EMPRESA, FASES_COMERCIALES } from '../utils/constants';
+import { COUNTRIES, COMPANY_SIZES, SECTORS, TIPOS, MARKET_ROLES, SUBTIPOS_EMPRESA, FASES_COMERCIALES } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -49,6 +49,8 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   const [editedMR, setEditedMR] = useState([]);
   const [editedSubtipo, setEditedSubtipo] = useState('');
   const [editedFase, setEditedFase] = useState('');
+  const [editedSector, setEditedSector] = useState('');
+  const [editedRelType, setEditedRelType] = useState('');
 
   // Cargar datos manuales al abrir el panel
   useEffect(() => {
@@ -65,9 +67,11 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
       setEditedMR(c.marketRoles || []);
       setEditedSubtipo(c.subtipo || '');
       setEditedFase(c.fase || '');
+      setEditedSector(c.sectors || '');
+      setEditedRelType(c.relType || '');
       setIsEditingEnrichment(false);
     }
-  }, [c.domain, det?.contacts, c.marketRoles, c.subtipo, c.fase]);
+  }, [c.domain, det?.contacts, c.marketRoles, c.subtipo, c.fase, c.sectors, c.relType]);
 
   // Datos cualificados
   const qualifiedCountry = qualifyCountry(c);
@@ -134,6 +138,8 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
         mr: editedMR,
         st: editedSubtipo,
         fc: editedFase,
+        sector: editedSector,
+        relType: editedRelType,
       });
       if (success) setIsEditingEnrichment(false);
     }
@@ -143,6 +149,8 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
     setEditedMR(c.marketRoles || []);
     setEditedSubtipo(c.subtipo || '');
     setEditedFase(c.fase || '');
+    setEditedSector(c.sectors || '');
+    setEditedRelType(c.relType || '');
     setIsEditingEnrichment(false);
   };
 
@@ -189,8 +197,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
         {/* Tags */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
           <StatusBadge status={c.status} />
-          {/* Mostrar sector editado si existe, sino el original */}
-          {(manualData.sector ? [manualData.sector] : c.sectors.split(", ")).map((s, i) => (
+          {c.sectors && c.sectors.split(", ").map((s, i) => (
             <Badge key={i} variant="sector">{s}</Badge>
           ))}
           {c.relType.split(", ").map((t, i) => (
@@ -273,6 +280,68 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Sector & Tipo */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            <div>
+              <div style={{
+                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
+              }}>Sector</div>
+              {isEditingEnrichment ? (
+                <select
+                  value={editedSector}
+                  onChange={(e) => setEditedSector(e.target.value)}
+                  style={{
+                    width: "100%", background: "#0A1628",
+                    border: "1px solid #8B5CF640", borderRadius: 4,
+                    padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
+                    fontFamily: "inherit", outline: "none", cursor: "pointer",
+                  }}
+                >
+                  <option value="">Sin clasificar</option>
+                  {SECTORS.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              ) : (
+                <span style={{
+                  fontSize: 13, fontWeight: 600,
+                  color: c.sectors ? "#34D399" : "#475569",
+                  fontStyle: c.sectors ? "normal" : "italic",
+                }}>{c.sectors || "Sin clasificar"}</span>
+              )}
+            </div>
+            <div>
+              <div style={{
+                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
+              }}>Tipo relación</div>
+              {isEditingEnrichment ? (
+                <select
+                  value={editedRelType}
+                  onChange={(e) => setEditedRelType(e.target.value)}
+                  style={{
+                    width: "100%", background: "#0A1628",
+                    border: "1px solid #8B5CF640", borderRadius: 4,
+                    padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
+                    fontFamily: "inherit", outline: "none", cursor: "pointer",
+                  }}
+                >
+                  <option value="">Sin clasificar</option>
+                  {TIPOS.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              ) : (
+                <span style={{
+                  fontSize: 13, fontWeight: 600,
+                  color: c.relType ? "#60A5FA" : "#475569",
+                  fontStyle: c.relType ? "normal" : "italic",
+                }}>{c.relType || "Sin clasificar"}</span>
+              )}
+            </div>
           </div>
 
           {/* Market Roles */}
@@ -1224,16 +1293,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               isEditing={isEditing}
               type="number"
               onChange={(v) => updateField('employeesCount', v)}
-            />
-
-            {/* Sector */}
-            <SelectField
-              label="Sector"
-              value={isEditing ? editedData.sector : manualData.sector}
-              options={SECTORS.map(s => ({ id: s, label: s }))}
-              placeholder={c.sectors || "Seleccionar sector..."}
-              isEditing={isEditing}
-              onChange={(v) => updateField('sector', v)}
             />
 
             {/* País (manual override) */}

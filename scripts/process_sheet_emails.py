@@ -44,15 +44,31 @@ from import_mailbox import merge_company, export_to_compact, get_data_paths
 # Config
 # ---------------------------------------------------------------------------
 SECTORS = [
-    "Tecnología", "Fintech", "Banca", "Consultoría", "Legal",
-    "Medios", "Inmobiliaria", "Energía", "Salud", "Educación",
-    "Retail", "Seguros", "Administración Pública", "Otro",
+    "Asesor Financiero", "Asociación", "Banca", "Construcción", "Consultoría",
+    "Energía", "Fintech", "Institucional", "Inversión", "Inversor/Fondo",
+    "Legal", "Otro", "Renovables", "Tecnología",
 ]
 
 REL_TYPES = [
-    "Cliente", "Partner", "Proveedor", "Inversor", "Prospect",
-    "Competidor", "Regulador", "Acelerador", "Evento/Conferencia",
-    "Recruiting", "Media/PR", "Comunidad", "Otro",
+    "Asesor Financiero", "Asesor Legal", "Asesor Técnico", "Banco", "Consultoría",
+    "Institucional", "Inversor/Fondo", "Networking", "No identificado", "Otro",
+    "Partnership", "Potencial Prestatario", "Proveedor",
+]
+
+SUBTIPOS_EMPRESA = [
+    "Desarrollador", "IPP", "Fondo Renovable", "Utility", "EPC/Proveedor",
+    "Asesor", "Inversor Institucional", "Banco/Entidad Financiera",
+    "Family Office", "Administracion Publica", "Plataforma Crowdfunding", "Otro",
+]
+
+FASES_COMERCIALES = [
+    "Primer contacto", "Exploracion", "Negociacion",
+    "Cliente activo", "Dormido", "Descartado",
+]
+
+MARKET_ROLES_LIST = [
+    "Borrower", "Seller (M&A)", "Buyer Investor (M&A)",
+    "Debt Investor", "Equity Investor", "Partner & Services",
 ]
 
 PERSONAL_DOMAINS = {
@@ -207,19 +223,20 @@ Los números son los índices de cada email. Todos los emails deben aparecer en 
     return relevant, ignored
 
 
-def classify_domains_with_gemini(domains_with_subjects):
-    """Classify a list of domains into sector + relType using Gemini.
+def classify_domains_with_gemini(domains_with_context):
+    """Classify a list of domains into sector + relType + enrichment using Gemini.
 
     Args:
-        domains_with_subjects: list of (domain, [subjects]) tuples
+        domains_with_context: list of (domain, [subjects], [snippets]) tuples
 
     Returns:
-        dict of domain -> {"sector": str, "relType": str}
+        dict of domain -> {"sector": str, "relType": str, "enrichment": {"st","fc","mr"} | None}
     """
+    default = {"sector": "Otro", "relType": "Otro", "enrichment": None}
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("  [warn] GEMINI_API_KEY not set — using defaults")
-        return {d: {"sector": "Otro", "relType": "Otro"} for d, _ in domains_with_subjects}
+        return {d: dict(default) for d, _, _ in domains_with_context}
 
     try:
         import google.generativeai as genai
@@ -227,32 +244,36 @@ def classify_domains_with_gemini(domains_with_subjects):
         model = genai.GenerativeModel("gemini-1.5-flash")
     except Exception as e:
         print(f"  [warn] Gemini init failed: {e} — using defaults")
-        return {d: {"sector": "Otro", "relType": "Otro"} for d, _ in domains_with_subjects}
+        return {d: dict(default) for d, _, _ in domains_with_context}
 
     results = {}
 
     # Process in batches
-    for batch_start in range(0, len(domains_with_subjects), GEMINI_BATCH_SIZE):
-        batch = domains_with_subjects[batch_start:batch_start + GEMINI_BATCH_SIZE]
+    for batch_start in range(0, len(domains_with_context), GEMINI_BATCH_SIZE):
+        batch = domains_with_context[batch_start:batch_start + GEMINI_BATCH_SIZE]
 
         lines = []
-        for domain, subjects in batch:
+        for domain, subjects, snippets in batch:
             subj_text = " | ".join(subjects[:5])
-            lines.append(f"- {domain}: {subj_text}")
+            snip_text = " // ".join(snippets[:3])[:300]
+            lines.append(f"- {domain}: subjects=[{subj_text}] snippets=[{snip_text}]")
 
-        prompt = f"""Clasifica estas empresas por su dominio web y los asuntos de email.
+        prompt = f"""Eres un analista de Alter-5, empresa de consultoría especializada en financiación de proyectos de energía renovable.
 
-Para cada empresa devuelve EXACTAMENTE un JSON con este formato:
-{{"domain": "sector", "relType"}}
+Clasifica estas empresas por su dominio web, los asuntos de email y los fragmentos de conversación.
 
-Opciones de sector (elige UNA): {", ".join(SECTORS)}
-Opciones de relType (elige UNA): {", ".join(REL_TYPES)}
+Para cada empresa determina:
+1. sector: una de [{", ".join(SECTORS)}]
+2. relType (tipo de relación con Alter-5): una de [{", ".join(REL_TYPES)}]
+3. subtipo (subtipo de empresa): una de [{", ".join(SUBTIPOS_EMPRESA)}]
+4. fase (fase comercial): una de [{", ".join(FASES_COMERCIALES)}]
+5. market_roles (roles de mercado, puede ser MÁS DE UNO): subconjunto de [{", ".join(MARKET_ROLES_LIST)}]
 
 Empresas:
 {chr(10).join(lines)}
 
-Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato:
-{{"dominio1.com": {{"sector": "...", "relType": "..."}}, "dominio2.com": {{"sector": "...", "relType": "..."}}}}"""
+Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato exacto:
+{{"dominio1.com": {{"sector": "...", "relType": "...", "subtipo": "...", "fase": "...", "market_roles": ["..."]}}, "dominio2.com": {{...}}}}"""
 
         try:
             response = model.generate_content(prompt)
@@ -265,24 +286,47 @@ Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato:
                 text = text.strip()
 
             parsed = json.loads(text)
-            for domain, _ in batch:
+            for domain, _, _ in batch:
                 if domain in parsed:
-                    sector = parsed[domain].get("sector", "Otro")
-                    rel_type = parsed[domain].get("relType", "Otro")
-                    # Validate against allowed values
+                    entry = parsed[domain]
+                    sector = entry.get("sector", "Otro")
+                    rel_type = entry.get("relType", "Otro")
                     if sector not in SECTORS:
                         sector = "Otro"
                     if rel_type not in REL_TYPES:
                         rel_type = "Otro"
-                    results[domain] = {"sector": sector, "relType": rel_type}
+
+                    # Parse enrichment fields
+                    subtipo = entry.get("subtipo", "")
+                    fase = entry.get("fase", "")
+                    market_roles = entry.get("market_roles", [])
+
+                    # Validate
+                    if subtipo not in SUBTIPOS_EMPRESA:
+                        subtipo = "Otro"
+                    if fase not in FASES_COMERCIALES:
+                        fase = "Primer contacto"
+                    valid_mr = [r for r in market_roles if r in MARKET_ROLES_LIST]
+
+                    enrichment = {
+                        "st": subtipo,
+                        "fc": fase,
+                        "mr": valid_mr if valid_mr else [],
+                    }
+
+                    results[domain] = {
+                        "sector": sector,
+                        "relType": rel_type,
+                        "enrichment": enrichment,
+                    }
                 else:
-                    results[domain] = {"sector": "Otro", "relType": "Otro"}
+                    results[domain] = dict(default)
         except Exception as e:
             print(f"  [warn] Gemini batch failed: {e}")
-            for domain, _ in batch:
-                results[domain] = {"sector": "Otro", "relType": "Otro"}
+            for domain, _, _ in batch:
+                results[domain] = dict(default)
 
-        if batch_start + GEMINI_BATCH_SIZE < len(domains_with_subjects):
+        if batch_start + GEMINI_BATCH_SIZE < len(domains_with_context):
             time.sleep(GEMINI_RPM_DELAY)
 
     return results
@@ -470,7 +514,10 @@ def process_pipeline():
 
     # 5. Classify NEW domains with Gemini
     print("  [5/7] Clasificando empresas nuevas con IA...")
-    new_domains = [(d, grouped[d]["subjects"]) for d in grouped if d not in all_companies]
+    new_domains = [
+        (d, grouped[d]["subjects"], grouped[d]["snippets"])
+        for d in grouped if d not in all_companies
+    ]
     if new_domains:
         print(f"  → {len(new_domains)} dominios nuevos a clasificar")
         classifications = classify_domains_with_gemini(new_domains)
@@ -541,7 +588,11 @@ def process_pipeline():
                 emp_id,
             )
 
+            # Assign enrichment for NEW companies only (don't overwrite existing)
             if is_new:
+                enr = cls.get("enrichment")
+                if enr:
+                    all_companies[domain]["enrichment"] = enr
                 new_count += 1
                 # Only count once per domain
                 break
