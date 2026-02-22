@@ -34,24 +34,14 @@ from import_mailbox import get_data_paths, export_to_compact
 
 PRODUCTS = [
     {
-        "id": "construction_loan",
-        "name": "Préstamo Construcción",
-        "description": "Project finance para construcción de proyectos utility-scale: solar FV, eólico, BESS, biomasa",
+        "id": "debt",
+        "name": "Debt",
+        "description": "Financiación de deuda para proyectos renovables: project finance (short/medium/long term, development debt, AssetCo debt), corporate loans (corporate debt, HoldCo debt, PF guaranteed), refinanciación",
     },
     {
-        "id": "refinancing",
-        "name": "Refinanciación",
-        "description": "Refinanciación de deuda existente en proyectos renovables operativos",
-    },
-    {
-        "id": "investor_placement",
-        "name": "Colocación Inversores",
-        "description": "Colocación de deuda o equity a inversores institucionales, fondos, family offices para proyectos renewables",
-    },
-    {
-        "id": "advisory",
-        "name": "Advisory / M&A",
-        "description": "Asesoramiento en compraventa, valoración y due diligence de proyectos y activos renovables",
+        "id": "equity",
+        "name": "Equity",
+        "description": "Inversión en equity, M&A, co-development y colocación a inversores institucionales para proyectos y activos renovables",
     },
 ]
 

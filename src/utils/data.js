@@ -80,22 +80,41 @@ export function calculateProductMatches(companies) {
     const contactRoles = (c.detail?.contacts || []).map(ct => (ct.role || "").toLowerCase());
 
     // If company has IA-classified products, use those directly
+    // Map old product names to new ones (Debt / Equity)
     if (c.productosIA && c.productosIA.length > 0) {
-      const iaMatches = [];
       const confScores = { alta: 90, media: 60, baja: 30 };
+      const IA_NAME_MAP = {
+        "Prestamo Construccion": "Debt",
+        "Refinanciacion": "Debt",
+        "Colocacion Inversores": "Equity",
+        "Advisory / M&A": "Equity",
+        "Debt": "Debt",
+        "Equity": "Equity",
+      };
+      // Deduplicate: keep highest confidence per mapped product
+      const bestByProduct = new Map();
       for (const pia of c.productosIA) {
-        const product = PRODUCTS.find(p => normalize(p.name) === normalize(pia.p));
+        const normalizedName = normalize(pia.p);
+        const mappedName = IA_NAME_MAP[normalizedName];
+        const product = mappedName
+          ? PRODUCTS.find(p => p.name === mappedName)
+          : PRODUCTS.find(p => normalize(p.name) === normalizedName);
         if (product) {
-          iaMatches.push({
-            id: product.id,
-            name: product.name,
-            short: product.short,
-            color: product.color,
-            score: confScores[pia.c] || 60,
-            signals: [{ type: "ia_classification", value: `Gemini: ${pia.c}` }],
-          });
+          const score = confScores[pia.c] || 60;
+          const existing = bestByProduct.get(product.id);
+          if (!existing || score > existing.score) {
+            bestByProduct.set(product.id, {
+              id: product.id,
+              name: product.name,
+              short: product.short,
+              color: product.color,
+              score,
+              signals: [{ type: "ia_classification", value: `Gemini: ${pia.c}` }],
+            });
+          }
         }
       }
+      const iaMatches = Array.from(bestByProduct.values());
       if (iaMatches.length > 0) {
         iaMatches.sort((a, b) => b.score - a.score);
         results.set(c.idx, iaMatches);
