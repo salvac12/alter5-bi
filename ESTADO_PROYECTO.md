@@ -1,6 +1,6 @@
 # Estado del Proyecto - Alter5 BI
-**Fecha actualización:** 20 de febrero de 2026
-**Última modificación:** Sistema de eliminación, edición de contactos y sector editable implementados
+**Fecha actualización:** 22 de febrero de 2026
+**Última modificación:** Pipeline automático Gmail → Dashboard con filtro de relevancia IA
 
 ---
 
@@ -57,13 +57,30 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
 
    - Exportación CSV (compatible Airtable)
 
-4. **Sistema de importación**
+4. **Sistema de importación manual**
    - Script Python `scripts/import_mailbox.py`
    - Fusión automática de empresas duplicadas entre buzones
    - Generación de `companies.json` (compacto) y `companies_full.json` (completo)
    - Registro en `employees.json`
 
-5. **Deploy y versioning**
+5. **Pipeline automático Gmail → Dashboard (NUEVO v1.3.0)**
+   - **Google Apps Script** (`scanMailboxes`) escanea buzones de Salvador y Leticia diariamente (trigger 03:00-04:00)
+   - Autenticación via Service Account + OAuth2 library + delegación de dominio
+   - Emails nuevos se escriben en Google Sheet (tab `raw_emails`) con status `pending`
+   - **GitHub Actions** se dispara automáticamente cuando hay emails nuevos
+   - **Filtro de relevancia con IA**: Gemini analiza cada email y descarta los no relacionados con negocio (newsletters, notificaciones, facturas, etc.) → marcados como `ignored`
+   - Solo emails relevantes se clasifican (sector + tipo de relación + roles de contacto) y se fusionan en el dashboard
+   - Vercel auto-despliega al detectar cambios en `main`
+   - **Flujo completo**: GAS (daily) → Google Sheet → GitHub Actions → Python + Gemini → commit → Vercel auto-deploy
+
+   **Infraestructura configurada:**
+   - Google Cloud project: `alter5-ai-crm`
+   - Service Account con delegación de dominio (scopes: gmail.readonly + spreadsheets)
+   - Google Sheet con 3 tabs: `raw_emails`, `config`, `ai_classifications`
+   - GitHub Secrets: `GOOGLE_SERVICE_ACCOUNT_JSON`, `GEMINI_API_KEY`, `GOOGLE_SHEET_ID`, `GH_PAT_WORKFLOW`
+   - GAS Script Properties: `SHEET_ID`, `SA_EMAIL`, `SA_PRIVATE_KEY`, `GITHUB_PAT`, `GITHUB_REPO`
+
+6. **Deploy y versioning**
    - Git repository: `https://github.com/salvac12/alter5-bi.git`
    - Branch actual: `main`
    - Commit actual: `0df2730` - "fix: badges muestran sector editado en lugar del original"
@@ -77,9 +94,20 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
 
 ```
 alter5-bi/
+├── .github/
+│   └── workflows/
+│       └── process-emails.yml # Workflow GitHub Actions (pipeline automático)
 ├── data_sources/              # Archivos Excel originales (.gitignore)
+├── docs/
+│   ├── plan-mejora-clasificacion.md  # Plan futuro de enriquecimiento con IA
+│   └── product-matching-methodology.md
 ├── scripts/
-│   └── import_mailbox.py      # Importador Python (pandas + openpyxl)
+│   ├── import_mailbox.py      # Importador Python manual (pandas + openpyxl)
+│   ├── process_sheet_emails.py # Pipeline automático (Sheet → JSON + filtro IA)
+│   ├── reclassify_products.py # Script de reclasificación de productos
+│   └── gas/
+│       ├── scanMailboxes.gs   # Google Apps Script (escaneo diario de Gmail)
+│       └── README.md          # Guía de setup del GAS
 ├── src/
 │   ├── App.jsx                # Componente raíz con estado global
 │   ├── main.jsx               # Entry point React
@@ -317,6 +345,18 @@ Ninguno reportado hasta la fecha.
 
 ## 🔄 Historial de Versiones
 
+### v1.3.0 (22/02/2026) - Pipeline automático Gmail → Dashboard
+- ✅ Google Apps Script escanea buzones de Salvador y Leticia via Gmail API + OAuth2
+- ✅ Service Account con delegación de dominio (ambos buzones)
+- ✅ Google Sheet como intermediario (raw_emails, config, ai_classifications)
+- ✅ GitHub Actions workflow `process-emails.yml` se dispara automáticamente
+- ✅ Filtro de relevancia con IA: Gemini descarta emails no comerciales (newsletters, notificaciones, facturas)
+- ✅ Emails irrelevantes marcados como `ignored` en la Sheet
+- ✅ Clasificación automática de sector, tipo de relación y roles de contacto con Gemini
+- ✅ Fusión incremental con datos existentes del dashboard
+- ✅ Trigger diario configurado en GAS (03:00-04:00 Europe/Madrid)
+- ✅ Deploy automático via Vercel al hacer push a main
+
 ### v1.2.0 (20/02/2026) - Gestión avanzada de empresas y contactos
 - ✅ Sistema de eliminación de empresas con modal de confirmación
 - ✅ Empresas ocultas almacenadas en localStorage (reversible)
@@ -374,5 +414,5 @@ Ninguno reportado hasta la fecha.
 
 ---
 
-**Última actualización:** 20 de febrero de 2026, 11:30 AM
+**Última actualización:** 22 de febrero de 2026
 **Actualizado por:** Claude Code (Anthropic)
