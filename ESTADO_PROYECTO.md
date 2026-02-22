@@ -1,20 +1,20 @@
 # Estado del Proyecto - Alter5 BI
 **Fecha actualización:** 22 de febrero de 2026
-**Última modificación:** Pipeline automático Gmail → Dashboard con filtro de relevancia IA
+**Ultima modificacion:** Datos enriquecidos v2 (Guillermo + Leticia) con scoring IA
 
 ---
 
-## 📊 Resumen Ejecutivo
+## Resumen Ejecutivo
 
-Dashboard de Business Intelligence para análisis y clasificación de la red de contactos empresariales de Alter5, con sistema de scoring multi-dimensional y gestión multi-buzón.
+Dashboard de Business Intelligence para analisis y clasificacion de la red de contactos empresariales de Alter5, con sistema de scoring multi-dimensional, gestion multi-buzon y enriquecimiento de datos con Gemini.
 
 ---
 
-## 🎯 Estado Actual
+## Estado Actual
 
-### ✅ Completado
+### Completado
 
-1. **Configuración del proyecto**
+1. **Configuracion del proyecto**
    - React 18.3.1 + Vite 5.4
    - Lodash para utilidades de datos
    - Node >= 18.0.0
@@ -22,397 +22,239 @@ Dashboard de Business Intelligence para análisis y clasificación de la red de 
 2. **Datos importados**
    - Salvador Carrillo: 2,202 empresas (18/02/2026)
    - Guillermo Souto: 1,511 empresas (18/02/2026)
-   - Leticia Menéndez: 681 empresas (18/02/2026)
-   - **Total:** ~4,394 empresas únicas tras fusión
+   - Leticia Menendez: 681 empresas (18/02/2026)
+   - **Total tras fusion:** 3,272 empresas unicas
+   - **Con datos enriquecidos IA:** 1,882 empresas (Guillermo + Leticia v2)
 
-3. **Funcionalidades core**
+3. **Enriquecimiento IA v2 (NUEVO)**
+   - Analisis con Gemini de los buzones de Guillermo (1,503 empresas) y Leticia (682 empresas)
+   - Campos nuevos por empresa: subtipo empresa, fase comercial, productos potenciales IA, senales clave
+   - Contexto ampliado de 150 a 500 caracteres
+   - Script `import_enriched.py` para merge sin sobreescribir datos de otros buzones
+   - Scoring de productos usa clasificacion IA directa cuando existe (alta=90, media=60, baja=30), fallback a keyword scoring
+
+4. **Funcionalidades core**
    - Sistema de scoring 0-100 (Volumen 35% + Recencia 30% + Red 15% + Tipo 20%)
-   - Estados de relación: Activa (<6m), Dormida (6-18m), Perdida (>18m)
-   - Sistema de tabs por empleado (Todos/Salvador/Guillermo/Leticia) con contadores dinámicos
-   - Ordenamiento alfabético por defecto (A-Z) con capacidad de reordenar por columnas
-   - Indicadores visuales mejorados de ordenamiento (↑↓↕ en headers de tabla)
-   - Búsqueda libre por nombre/dominio/sector/tipo
-   - Filtros combinables por estado, sector (incluye "Asociación") y tipo
-   - Filtros preparados para futuro (Tamaño Empresa y País) con estado disabled
+   - Estados de relacion: Activa (<6m), Dormida (6-18m), Perdida (>18m)
+   - Sistema de tabs por empleado (Todos/Salvador/Guillermo/Leticia)
+   - **Ordenamiento por score descendente por defecto** (empresas mas relevantes primero)
+   - Busqueda libre por nombre/dominio/sector/tipo/subtipo/fase
+   - Filtros combinables: estado, sector, tipo relacion, **subtipo empresa**, **fase comercial**, producto Alter5
+   - Filtros preparados para futuro (Tamano Empresa y Pais) con estado disabled
    - Badge contador de filtros activos en sidebar
-   - Tooltips explicativos en filtros disabled
-   - Tabla ordenable y paginada con mejoras visuales (hover effects, estado selected)
+   - Tabla ordenable y paginada
+   - Exportacion CSV (compatible Airtable)
 
    **Ficha de empresa detallada:**
-   - **NUEVO:** Sistema de eliminación de empresas con confirmación modal
-   - **NUEVO:** Edición completa de contactos (añadir, editar, eliminar con cargo)
-   - **NUEVO:** Sector editable con desplegable (refleja cambios en badges)
-   - **NUEVO:** Website clickable con valor por defecto desde dominio
-   - Sistema completo de edición de campos manuales
-   - Cualificación automática de país (por extensión de dominio)
-   - Cualificación automática de tamaño de empresa
-   - Campos editables: facturación, empleados, sector, país, prioridad, web, LinkedIn, notas
+   - Badges de subtipo empresa (morado) y fase comercial (coloreado por estado)
+   - Productos potenciales IA con nivel de confianza (alta/media/baja)
+   - Senales clave como chips
+   - Contexto completo (500 chars en vez de 150)
+   - Sistema de eliminacion de empresas con confirmacion modal
+   - Edicion completa de contactos (anadir, editar, eliminar)
+   - Sector editable con desplegable
+   - Website clickable con valor por defecto desde dominio
+   - Campos editables: facturacion, empleados, sector, pais, prioridad, web, LinkedIn, notas
    - Almacenamiento persistente en localStorage
-   - Modo edición con feedback visual (bordes azules)
    - Panel de detalle con desglose por empleado
-   - Timeline de interacciones ampliada y visual
-   - Contactos clave priorizados con edición
-   - Resumen de relación destacado
-   - Información de contexto
+   - Timeline de interacciones visual
+   - Contactos clave priorizados
 
-   - Exportación CSV (compatible Airtable)
+5. **Sistema de importacion**
+   - `scripts/import_mailbox.py` — Importacion manual de buzones Excel
+   - `scripts/import_enriched.py` — Importacion de analisis enriquecido v2 (Gemini)
+   - `scripts/import_campaign.py` — Importacion de datos de campana
+   - Todos los exportadores preservan campo enrichment (indice 5 en details)
+   - Fusion automatica de empresas duplicadas entre buzones
 
-4. **Sistema de importación manual**
-   - Script Python `scripts/import_mailbox.py`
-   - Fusión automática de empresas duplicadas entre buzones
-   - Generación de `companies.json` (compacto) y `companies_full.json` (completo)
-   - Registro en `employees.json`
-
-5. **Pipeline automático Gmail → Dashboard (NUEVO v1.3.0)**
-   - **Google Apps Script** (`scanMailboxes`) escanea buzones de Salvador y Leticia diariamente (trigger 03:00-04:00)
-   - Autenticación via Service Account + OAuth2 library + delegación de dominio
-   - Emails nuevos se escriben en Google Sheet (tab `raw_emails`) con status `pending`
-   - **GitHub Actions** se dispara automáticamente cuando hay emails nuevos
-   - **Filtro de relevancia con IA**: Gemini analiza cada email y descarta los no relacionados con negocio (newsletters, notificaciones, facturas, etc.) → marcados como `ignored`
-   - Solo emails relevantes se clasifican (sector + tipo de relación + roles de contacto) y se fusionan en el dashboard
+6. **Pipeline automatico Gmail → Dashboard (v1.3.0)**
+   - Google Apps Script escanea buzones de Salvador y Leticia diariamente (trigger 03:00-04:00)
+   - Autenticacion via Service Account + OAuth2 + delegacion de dominio
+   - Emails nuevos en Google Sheet (tab `raw_emails`) con status `pending`
+   - GitHub Actions se dispara automaticamente
+   - Filtro de relevancia con IA: Gemini descarta emails no comerciales
+   - Clasificacion automatica y fusion incremental
    - Vercel auto-despliega al detectar cambios en `main`
-   - **Flujo completo**: GAS (daily) → Google Sheet → GitHub Actions → Python + Gemini → commit → Vercel auto-deploy
 
    **Infraestructura configurada:**
    - Google Cloud project: `alter5-ai-crm`
-   - Service Account con delegación de dominio (scopes: gmail.readonly + spreadsheets)
+   - Service Account con delegacion de dominio (scopes: gmail.readonly + spreadsheets)
    - Google Sheet con 3 tabs: `raw_emails`, `config`, `ai_classifications`
    - GitHub Secrets: `GOOGLE_SERVICE_ACCOUNT_JSON`, `GEMINI_API_KEY`, `GOOGLE_SHEET_ID`, `GH_PAT_WORKFLOW`
-   - GAS Script Properties: `SHEET_ID`, `SA_EMAIL`, `SA_PRIVATE_KEY`, `GITHUB_PAT`, `GITHUB_REPO`
 
-6. **Deploy y versioning**
+7. **Deploy y versioning**
    - Git repository: `https://github.com/salvac12/alter5-bi.git`
-   - Branch actual: `main`
-   - Commit actual: `0df2730` - "fix: badges muestran sector editado en lugar del original"
-   - Deploy en Vercel: `https://alter5-c9hf7iora-salvas-workspaces-projects.vercel.app`
-   - Deploy ID: `HMecHBUr8UcSoyxMoUNWECmNKELs`
+   - Branch: `main`
+   - Deploy en Vercel (auto-deploy on push)
    - Panel Vercel: `https://vercel.com/salvas-workspaces-projects/alter5-bi`
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 alter5-bi/
 ├── .github/
 │   └── workflows/
-│       └── process-emails.yml # Workflow GitHub Actions (pipeline automático)
-├── data_sources/              # Archivos Excel originales (.gitignore)
+│       └── process-emails.yml    # Pipeline automatico Gmail
+├── data_sources/                  # Excel originales (.gitignore)
 ├── docs/
-│   ├── plan-mejora-clasificacion.md  # Plan futuro de enriquecimiento con IA
+│   ├── plan-mejora-clasificacion.md
 │   └── product-matching-methodology.md
 ├── scripts/
-│   ├── import_mailbox.py      # Importador Python manual (pandas + openpyxl)
-│   ├── process_sheet_emails.py # Pipeline automático (Sheet → JSON + filtro IA)
-│   ├── reclassify_products.py # Script de reclasificación de productos
+│   ├── import_mailbox.py          # Importador manual de buzones
+│   ├── import_enriched.py         # Importador de datos enriquecidos v2 (Gemini)
+│   ├── import_campaign.py         # Importador de datos de campana
+│   ├── process_sheet_emails.py    # Pipeline automatico (Sheet → JSON)
+│   ├── reclassify_products.py     # Reclasificacion de productos
 │   └── gas/
-│       ├── scanMailboxes.gs   # Google Apps Script (escaneo diario de Gmail)
-│       └── README.md          # Guía de setup del GAS
+│       ├── scanMailboxes.gs       # Google Apps Script
+│       └── README.md
 ├── src/
-│   ├── App.jsx                # Componente raíz con estado global
-│   ├── main.jsx               # Entry point React
-│   ├── index.css              # Estilos globales + Tailwind-like
+│   ├── App.jsx                    # Estado global, filtros, layout
+│   ├── main.jsx
+│   ├── index.css
 │   ├── components/
-│   │   ├── UI.jsx             # Badge, KPI, FilterChip, ScoreBar
-│   │   ├── Sidebar.jsx        # Panel de filtros lateral
-│   │   ├── CompanyTable.jsx   # Tabla con ordenación y paginación
-│   │   └── DetailPanel.jsx    # Ficha detallada de empresa
+│   │   ├── UI.jsx                 # Badge, KPI, FilterChip, ScoreBar
+│   │   ├── Sidebar.jsx            # Filtros (sector, tipo, subtipo, fase, producto)
+│   │   ├── CompanyTable.jsx       # Tabla ordenable y paginada
+│   │   ├── DetailPanel.jsx        # Ficha detallada + enrichment IA
+│   │   └── EmployeeTabs.jsx       # Tabs por buzon
 │   ├── utils/
-│   │   ├── constants.js       # SECTORS, TYPES, SCORE_WEIGHTS
-│   │   ├── data.js            # loadCompanies(), exportToCSV()
-│   │   └── companyData.js     # localStorage management, qualifications
+│   │   ├── constants.js           # SECTORS, TIPOS, SUBTIPOS_EMPRESA, FASES_COMERCIALES, PRODUCTS
+│   │   ├── data.js                # parseCompanies(), calculateProductMatches() con IA
+│   │   └── companyData.js         # localStorage management
 │   └── data/
-│       ├── companies.json     # Datos compactos (auto-generado)
-│       ├── companies_full.json # Datos completos con sources (auto-generado)
-│       └── employees.json     # Registro de empleados importados
-├── package.json               # Dependencias y scripts npm
-├── vite.config.js             # Configuración Vite
-├── vercel.json                # Configuración deploy Vercel
-├── deploy-vercel.sh           # Script automatizado de deploy
-├── README.md                  # Documentación principal
-├── DEPLOY.md                  # Guía completa de deploy
-└── ESTADO_PROYECTO.md         # Este archivo
+│       ├── companies.json         # Datos compactos con enrichment (auto-generado)
+│       ├── companies_full.json    # Datos completos con sources (auto-generado)
+│       └── employees.json         # Registro de empleados
+├── package.json
+├── vite.config.js
+├── vercel.json
+└── ESTADO_PROYECTO.md
 ```
 
 ---
 
-## 🔧 Comandos Principales
+## Formato de Datos Enriquecidos
+
+### Enrichment en companies.json (detail index 5)
+```json
+{
+  "st": "IPP",                                          // subtipo empresa
+  "fc": "Negociacion",                                  // fase comercial
+  "pp": [{"p": "Prestamo Construccion", "c": "alta"}],  // productos potenciales
+  "sc": ["Term sheet enviado", "NDA firmado"]            // senales clave
+}
+```
+
+### Scoring de productos con IA
+- Si la empresa tiene `productosIA` (clasificacion Gemini): alta=90, media=60, baja=30
+- Si no tiene: fallback al keyword scoring existente (sin cambios)
+
+---
+
+## Comandos Principales
 
 ### Desarrollo
 ```bash
-npm install                    # Instalar dependencias
-npm run dev                    # Dev server → http://localhost:5173
-npm run build                  # Build producción → dist/
-npm run preview                # Preview del build
+npm install
+npm run dev           # Dev server → localhost:5173
+npm run build         # Build produccion → dist/
+npm run preview       # Preview del build (evita CSP issues)
 ```
 
-### Importación de buzones
+### Importacion
 ```bash
-# Requisitos: pip install pandas openpyxl
-python scripts/import_mailbox.py data_sources/analisis_contactos_NOMBRE.xlsx "Nombre Apellido"
+# Buzon nuevo
+python scripts/import_mailbox.py data_sources/analisis.xlsx "Nombre Apellido"
+
+# Datos enriquecidos v2 (Gemini)
+python scripts/import_enriched.py ~/Downloads/analisis_contactos_NAME_v2.xlsx
+
+# Datos de campana
+python scripts/import_campaign.py campaign_export.csv
 ```
 
 ### Deploy
 ```bash
-# Push a GitHub
-git push origin main
-
-# Deploy a Vercel (método rápido)
-./deploy-vercel.sh
-
-# Deploy manual
-vercel --prod --yes
+git push origin main   # Vercel auto-deploy
 ```
 
 ---
 
-## 📊 Sistema de Scoring (0-100)
+## Sistema de Scoring (0-100)
 
-| Dimensión | Peso | Cálculo | Qué mide |
+| Dimension | Peso | Calculo | Que mide |
 |-----------|------|---------|----------|
-| **Volumen** | 35 pts | `min(35, log10(emails+1) * 10)` | Intensidad de comunicación |
-| **Recencia** | 30 pts | `30 - (meses_desde_ultimo * 1.67)` | Frescura de la relación |
+| **Volumen** | 35 pts | `min(35, log(emails+1) / log(max) * 35)` | Intensidad de comunicacion |
+| **Recencia** | 30 pts | `30 - (meses * 1.5)` | Frescura de la relacion |
 | **Red** | 15 pts | `min(15, contactos * 3)` | Amplitud de la red |
-| **Tipo** | 20 pts | Según `SCORE_WEIGHTS` | Relevancia estratégica |
-
-### Estados de Relación
-- **Activa:** < 6 meses desde último contacto (verde)
-- **Dormida:** 6-18 meses (amarillo)
-- **Perdida:** > 18 meses (rojo)
+| **Tipo** | 20 pts | Segun TYPE_WEIGHTS | Relevancia estrategica |
 
 ---
 
-## 🎨 Componentes React
+## Historial de Versiones
 
-### App.jsx
-- Estado global: filtros, búsqueda, empresa seleccionada, ordenación, paginación
-- Carga de datos desde `companies.json`
-- Lógica de filtrado y ordenación
-- Layout principal (Sidebar + Tabla + DetailPanel)
+### v1.4.0 (22/02/2026) - Datos enriquecidos v2 con IA
+- Script `import_enriched.py` para importar analisis Gemini v2
+- 1,882 empresas enriquecidas (1,503 Guillermo + 682 Leticia, con solapamiento)
+- Campos nuevos: subtipo empresa, fase comercial, productos potenciales IA, senales clave
+- Filtros de subtipo y fase comercial en sidebar
+- Badges de subtipo (morado) y fase (coloreado) en panel de detalle
+- Productos IA con nivel de confianza y senales clave como chips
+- Scoring de productos usa clasificacion IA directa (alta=90, media=60, baja=30)
+- Contexto ampliado de 150 a 500 caracteres
+- Ordenamiento por score descendente por defecto
+- Busqueda incluye subtipo y fase
+- Todos los exportadores (mailbox, campaign, enriched) preservan enrichment
 
-### Sidebar.jsx
-- Filtros por buzón (multi-select)
-- Filtros por estado (Activa/Dormida/Perdida)
-- Filtros por sector (basados en `SECTORS`)
-- Filtros por tipo de relación (`TYPES`)
-- Barra de búsqueda
-- Botón de exportación CSV
-- Contador de resultados
+### v1.3.0 (22/02/2026) - Pipeline automatico Gmail → Dashboard
+- Google Apps Script escanea buzones via Gmail API + OAuth2
+- Service Account con delegacion de dominio
+- Google Sheet como intermediario
+- GitHub Actions workflow con filtro de relevancia IA (Gemini)
+- Clasificacion automatica y fusion incremental
+- Deploy automatico via Vercel
 
-### CompanyTable.jsx
-- Tabla responsive con 5 columnas: Empresa, Score, Emails, Contactos, Última interacción
-- Ordenación clickable por cualquier columna
-- Paginación (20 empresas por página)
-- Indicadores visuales (badges de estado)
-- Click en fila → abre DetailPanel
+### v1.2.0 (20/02/2026) - Gestion avanzada de empresas y contactos
+- Sistema de eliminacion de empresas con modal de confirmacion
+- Edicion completa de contactos
+- Sector editable con desplegable
+- Website clickable
 
-### DetailPanel.jsx
-- Panel lateral deslizable
-- Información básica (dominio, sector, tipo, estado)
-- Desglose de score por dimensión (barras visuales)
-- Lista de contactos clave
-- Timeline de interacciones (últimos 10)
-- Desglose por buzón (si múltiples fuentes)
-- Campos preparados para enriquecimiento manual
+### v1.1.0 (20/02/2026) - Sistema de edicion y cualificacion
+- Campos editables manuales
+- Cualificacion automatica de pais y tamano
+- Almacenamiento persistente en localStorage
 
-### UI.jsx
-- **Badge:** Indicadores de estado/tipo con colores
-- **KPI:** Métricas con label y valor destacado
-- **FilterChip:** Chips de filtro clickeables
-- **ScoreBar:** Barra de progreso para dimensiones de score
-
----
-
-## 📦 Archivos de Datos
-
-### companies.json
-Versión compacta para carga rápida en producción. Campos:
-```json
-{
-  "id": "example.com",
-  "name": "Example Corp",
-  "domain": "example.com",
-  "sector": "Tecnología",
-  "type": "Cliente",
-  "totalEmails": 42,
-  "lastInteraction": "2025-12-15",
-  "status": "Activa",
-  "score": 78,
-  "scoreBreakdown": { "volume": 28, "recency": 30, "network": 9, "type": 15 },
-  "contacts": [...],
-  "timeline": [...],
-  "sources": { "salvador_carrillo": {...}, "guillermo_souto": {...} }
-}
-```
-
-### companies_full.json
-Versión completa con todos los metadatos de importación.
-
-### employees.json
-Registro de empleados importados:
-```json
-{
-  "id": "nombre_apellido",
-  "name": "Nombre Apellido",
-  "importedAt": "2026-02-18T09:13:37.739999",
-  "companiesCount": 2202
-}
-```
+### v1.0.0 (20/02/2026) - Dashboard inicial
+- Sistema de scoring multi-dimensional
+- Soporte multi-buzon (3 buzones)
+- Filtros, tabla ordenable, panel de detalle
+- Deploy en Vercel
 
 ---
 
-## 🌐 URLs del Proyecto
-
-- **Repositorio GitHub:** https://github.com/salvac12/alter5-bi.git
-- **Deploy Vercel (producción):** https://alter5-ld9bt3m7f-salvas-workspaces-projects.vercel.app
-- **Panel Vercel:** https://vercel.com/salvas-workspaces-projects/alter5-bi
-- **Inspect último deploy:** https://vercel.com/salvas-workspaces-projects/alter5-bi/6UnAiu5oAjXfTWEfSfVRLZ4NXLHs
-
----
-
-## 📋 Próximos Pasos (Roadmap)
-
-### Prioridad Alta
-- [ ] **Campos editables:** Hacer editables facturación estimada, nº empleados, notas y tipo de relación
-- [ ] **Persistencia de datos:** Guardar ediciones en localStorage o backend
-- [ ] **Filtro por fecha:** Añadir filtro por rango de fechas de última interacción
-
-### Prioridad Media
-- [ ] **Gráficos y analytics:**
-  - Distribución de empresas por sector (pie chart)
-  - Distribución por tipo de relación (bar chart)
-  - Evolución temporal de interacciones (line chart)
-- [ ] **Integración Airtable:** Conectar exportación con API de Airtable
-- [ ] **Mejoras UX:**
-  - Tooltips explicativos en score breakdown
-  - Búsqueda avanzada con operadores
-  - Destacado de términos de búsqueda
-
-### Prioridad Baja
-- [ ] **Enriquecimiento automático:** Integración con APIs públicas (LinkedIn, Clearbit, etc.)
-- [ ] **Notificaciones:** Alertas de relaciones "en riesgo" (próximas a pasar de Dormida a Perdida)
-- [ ] **Exportación avanzada:** Excel con múltiples hojas, PDF de reportes
-- [ ] **Multi-idioma:** i18n para inglés/español
-
----
-
-## 🔒 Seguridad y Privacidad
-
-- **Archivos sensibles en .gitignore:**
-  - `data_sources/` (Excel originales)
-  - `.env*`
-  - `node_modules/`
-- **No hay autenticación implementada** → Si se requiere privacidad, añadir Vercel Password Protection o auth (Auth0, Clerk, etc.)
-- **Datos en repositorio público:** `companies.json` está en GitHub público → revisar política de privacidad
-
----
-
-## 🐛 Problemas Conocidos
-
-Ninguno reportado hasta la fecha.
-
----
-
-## 📝 Notas Técnicas
-
-### Requisitos del Sistema
-- Node.js >= 18.0.0
-- npm >= 8.0.0
-- Python 3.8+ (para importador)
-  - pandas
-  - openpyxl
-
-### Limitaciones Actuales
-- Scoring logarítmico puede no escalar bien con >10,000 emails por empresa
-- Timeline muestra máximo 10 interacciones en DetailPanel
-- Paginación fija a 20 items (no configurable por usuario)
-- Sin lazy loading de datos (carga completa al inicio)
-
-### Performance
-- `companies.json` actual: ~7.4MB
-- Tiempo de carga inicial: <2s en conexión estándar
-- Renderizado: optimizado con React keys y componentes puros
-
----
-
-## 📚 Recursos y Documentación
-
-- **README.md:** Guía de inicio rápido y uso básico
-- **DEPLOY.md:** Guía completa de deploy en Vercel
-- **deploy-vercel.sh:** Script automatizado con checks de pre-deploy
-
----
-
-## 🔄 Historial de Versiones
-
-### v1.3.0 (22/02/2026) - Pipeline automático Gmail → Dashboard
-- ✅ Google Apps Script escanea buzones de Salvador y Leticia via Gmail API + OAuth2
-- ✅ Service Account con delegación de dominio (ambos buzones)
-- ✅ Google Sheet como intermediario (raw_emails, config, ai_classifications)
-- ✅ GitHub Actions workflow `process-emails.yml` se dispara automáticamente
-- ✅ Filtro de relevancia con IA: Gemini descarta emails no comerciales (newsletters, notificaciones, facturas)
-- ✅ Emails irrelevantes marcados como `ignored` en la Sheet
-- ✅ Clasificación automática de sector, tipo de relación y roles de contacto con Gemini
-- ✅ Fusión incremental con datos existentes del dashboard
-- ✅ Trigger diario configurado en GAS (03:00-04:00 Europe/Madrid)
-- ✅ Deploy automático via Vercel al hacer push a main
-
-### v1.2.0 (20/02/2026) - Gestión avanzada de empresas y contactos
-- ✅ Sistema de eliminación de empresas con modal de confirmación
-- ✅ Empresas ocultas almacenadas en localStorage (reversible)
-- ✅ Edición completa de contactos (añadir, editar, eliminar)
-- ✅ Asignación y edición de cargos en contactos
-- ✅ Sector editable con desplegable (todos los sectores disponibles)
-- ✅ Badges superiores reflejan sector editado en tiempo real
-- ✅ Campo website clickable con valor por defecto automático (https://{domain})
-- ✅ Link website abre en nueva ventana con seguridad
-- ✅ Funciones saveCompanyContacts() y getCompanyContacts() en companyData.js
-- ✅ Funciones hideCompany(), unhideCompany(), isCompanyHidden() en companyData.js
-
-### v1.1.0 (20/02/2026) - Sistema de edición y cualificación
-- ✅ Sistema completo de edición de campos manuales
-- ✅ Cualificación automática de país por extensión de dominio
-- ✅ Cualificación automática de tamaño de empresa
-- ✅ Almacenamiento persistente en localStorage
-- ✅ Campos editables: facturación, empleados, país, prioridad, web, LinkedIn, notas
-- ✅ Componentes EditableField, SelectField, InfoField
-- ✅ Modo edición con feedback visual
-- ✅ Nueva categoría "Asociación" en sectores
-- ✅ Archivo companyData.js para gestión de datos manuales
-
-### v1.0.0 (20/02/2026) - Rediseño del panel principal
-- Commit inicial con dashboard completo
-- Sistema de scoring implementado
-- Soporte multi-buzón
-- Deploy en Vercel configurado
-- Sistema de tabs por empleado
-- Ordenamiento alfabético por defecto
-- Indicadores visuales de ordenamiento
-- Filtros ampliados (tamaño y país preparados)
-
----
-
-## 📋 Próximos Pasos Sugeridos
+## Proximos Pasos
 
 ### Alta Prioridad
-- [ ] Integración con LinkedIn para cualificación automática de tamaño
-- [ ] Implementar cualificación de país por idioma de correos
-- [ ] Exportar datos editados junto con el CSV
-- [ ] Sincronización bidireccional con Airtable
+- [ ] Analisis enriquecido v2 para Salvador (completar los 3 buzones)
+- [ ] Integrar historico_trimestral enriquecido en el timeline del detalle
+- [ ] Exportar campos enriquecidos en el CSV
 
 ### Media Prioridad
-- [ ] Gráficos de distribución (sector, tipo, estado)
+- [ ] Graficos de distribucion (sector, subtipo, fase)
 - [ ] Filtro por rango de fechas
-- [ ] Sistema de notificaciones para relaciones en riesgo
-- [ ] Búsqueda avanzada con operadores
+- [ ] Integracion con LinkedIn para cualificacion de tamano
+- [ ] Sincronizacion bidireccional con Airtable
 
 ### Baja Prioridad
-- [ ] Enriquecimiento automático con APIs públicas
-- [ ] Sistema de tareas y recordatorios
+- [ ] Sistema de notificaciones para relaciones en riesgo
 - [ ] Multi-idioma (i18n)
-- [ ] Modo oscuro/claro
+- [ ] Autenticacion (Auth0/Clerk) para privacidad
 
 ---
 
-**Última actualización:** 22 de febrero de 2026
+**Ultima actualizacion:** 22 de febrero de 2026
 **Actualizado por:** Claude Code (Anthropic)
