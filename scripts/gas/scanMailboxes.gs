@@ -112,22 +112,68 @@ function scanDelegatedGmail_(emp, afterDate, existingThreadIds) {
     pageToken = data.nextPageToken || '';
   } while (pageToken && messageIds.length < 500);
 
-  // Fetch each message
-  messageIds.forEach(function(msgId) {
-    var url = 'https://gmail.googleapis.com/gmail/v1/users/' + emp.email + '/messages/' + msgId + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date';
-    var response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + accessToken },
-      muteHttpExceptions: true,
-    });
+  Logger.log(emp.id + ': ' + messageIds.length + ' message IDs to fetch');
 
-    if (response.getResponseCode() !== 200) return;
+  // Fetch messages in batches of 100 using Gmail batch API
+  var BATCH_SIZE = 100;
+  for (var batchStart = 0; batchStart < messageIds.length; batchStart += BATCH_SIZE) {
+    var batchIds = messageIds.slice(batchStart, batchStart + BATCH_SIZE);
+    var batchRows = fetchMessageBatch_(emp.email, accessToken, batchIds, emp.id, existingThreadIds);
+    rows = rows.concat(batchRows);
+  }
 
-    var msg = JSON.parse(response.getContentText());
-    var threadId = msg.threadId;
-    if (existingThreadIds[threadId]) return;
+  return rows;
+}
+
+/**
+ * Fetch up to 100 messages in a single HTTP call using Gmail batch API.
+ * Reduces ~100 UrlFetchApp calls to 1, solving the daily quota issue.
+ */
+function fetchMessageBatch_(userEmail, accessToken, msgIds, empId, existingThreadIds) {
+  var boundary = 'batch_alter5_' + Date.now();
+  var batchBody = '';
+
+  msgIds.forEach(function(msgId, i) {
+    batchBody += '--' + boundary + '\r\n';
+    batchBody += 'Content-Type: application/http\r\n';
+    batchBody += 'Content-ID: <msg' + i + '>\r\n\r\n';
+    batchBody += 'GET /gmail/v1/users/' + userEmail + '/messages/' + msgId + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date\r\n\r\n';
+  });
+  batchBody += '--' + boundary + '--';
+
+  var response = UrlFetchApp.fetch('https://gmail.googleapis.com/batch/gmail/v1', {
+    method: 'post',
+    headers: { 'Authorization': 'Bearer ' + accessToken },
+    contentType: 'multipart/mixed; boundary=' + boundary,
+    payload: batchBody,
+    muteHttpExceptions: true,
+  });
+
+  if (response.getResponseCode() !== 200) {
+    Logger.log('Batch API error: ' + response.getResponseCode());
+    return [];
+  }
+
+  var rows = [];
+  var respText = response.getContentText();
+  var respBoundary = respText.match(/^--([^\r\n]+)/);
+  if (!respBoundary) return [];
+
+  var parts = respText.split('--' + respBoundary[1]);
+  parts.forEach(function(part) {
+    // Each part has HTTP headers, blank line, then the JSON body
+    var jsonMatch = part.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return;
+
+    try {
+      var msg = JSON.parse(jsonMatch[0]);
+    } catch(e) { return; }
+
+    if (!msg.id || !msg.threadId) return;
+    if (existingThreadIds[msg.threadId]) return;
 
     var headers = {};
-    (msg.payload.headers || []).forEach(function(h) {
+    (msg.payload && msg.payload.headers || []).forEach(function(h) {
       headers[h.name.toLowerCase()] = h.value;
     });
 
@@ -143,17 +189,17 @@ function scanDelegatedGmail_(emp, afterDate, existingThreadIds) {
 
     rows.push([
       'pending',
-      emp.id,
+      empId,
       dateStr,
       parsed.email,
       parsed.name,
       parsed.domain,
       (headers['subject'] || '').substring(0, 200),
       (msg.snippet || '').substring(0, 300),
-      threadId,
+      msg.threadId,
     ]);
 
-    existingThreadIds[threadId] = true;
+    existingThreadIds[msg.threadId] = true;
   });
 
   return rows;
