@@ -25,10 +25,12 @@ export default function App() {
   const [selEmployees, setSelEmployees] = useState([]);
   const [selSectors, setSelSectors] = useState([]);
   const [selTipos, setSelTipos] = useState([]);
+  const [selSubtipos, setSelSubtipos] = useState([]);
+  const [selFases, setSelFases] = useState([]);
   const [selStatus, setSelStatus] = useState([]);
   const [selProduct, setSelProduct] = useState("");
-  const [sortBy, setSortBy] = useState("name");
-  const [sortDir, setSortDir] = useState("asc");
+  const [sortBy, setSortBy] = useState("score");
+  const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
   const [page, setPage] = useState(0);
 
@@ -48,12 +50,16 @@ export default function App() {
         c.name.toLowerCase().includes(q) ||
         c.domain.toLowerCase().includes(q) ||
         c.sectors.toLowerCase().includes(q) ||
-        c.relType.toLowerCase().includes(q)
+        c.relType.toLowerCase().includes(q) ||
+        c.subtipo.toLowerCase().includes(q) ||
+        c.fase.toLowerCase().includes(q)
       );
     }
     if (selEmployees.length) list = list.filter(c => selEmployees.some(e => c.employees.includes(e)));
     if (selSectors.length) list = list.filter(c => selSectors.some(s => c.sectors.includes(s)));
     if (selTipos.length) list = list.filter(c => selTipos.some(t => c.relType.includes(t)));
+    if (selSubtipos.length) list = list.filter(c => selSubtipos.some(s => c.subtipo.includes(s)));
+    if (selFases.length) list = list.filter(c => selFases.some(f => c.fase.includes(f)));
     if (selStatus.length) list = list.filter(c => selStatus.includes(c.status));
     if (selProduct) {
       list = list.filter(c => {
@@ -72,7 +78,7 @@ export default function App() {
       }
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selSectors, selTipos, selStatus, selProduct, productMatches, sortBy, sortDir]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selSectors, selTipos, selSubtipos, selFases, selStatus, selProduct, productMatches, sortBy, sortDir]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -175,6 +181,8 @@ export default function App() {
           selEmployees={selEmployees} setSelEmployees={setSelEmployees}
           selSectors={selSectors} setSelSectors={setSelSectors}
           selTipos={selTipos} setSelTipos={setSelTipos}
+          selSubtipos={selSubtipos} setSelSubtipos={setSelSubtipos}
+          selFases={selFases} setSelFases={setSelFases}
           selStatus={selStatus} setSelStatus={setSelStatus}
           selProduct={selProduct} setSelProduct={setSelProduct}
           productMatches={productMatches}

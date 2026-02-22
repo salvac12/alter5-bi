@@ -30,6 +30,7 @@ export function parseCompanies() {
       context: det[2],
       sources: det[3] ? det[3].map(s => ({ employee: s[0], interactions: s[1] })) : [],
       subjects: det[4] || [],
+      enrichment: det[5] || null,
     } : null;
 
     return {
@@ -37,6 +38,10 @@ export function parseCompanies() {
       interactions: r[4], relType: r[5], firstDate: r[6], lastDate: r[7],
       employees, status, score, volScore, recScore, netScore, typeScore,
       monthsAgo: Math.round(monthsAgo), detail,
+      subtipo: detail?.enrichment?.st || "",
+      fase: detail?.enrichment?.fc || "",
+      productosIA: detail?.enrichment?.pp || [],
+      senales: detail?.enrichment?.sc || [],
     };
   });
 }
@@ -70,6 +75,30 @@ export function calculateProductMatches(companies) {
     const sectorList = c.sectors.toLowerCase();
     const relList = c.relType.toLowerCase();
     const contactRoles = (c.detail?.contacts || []).map(ct => (ct.role || "").toLowerCase());
+
+    // If company has IA-classified products, use those directly
+    if (c.productosIA && c.productosIA.length > 0) {
+      const iaMatches = [];
+      const confScores = { alta: 90, media: 60, baja: 30 };
+      for (const pia of c.productosIA) {
+        const product = PRODUCTS.find(p => p.name === pia.p);
+        if (product) {
+          iaMatches.push({
+            id: product.id,
+            name: product.name,
+            short: product.short,
+            color: product.color,
+            score: confScores[pia.c] || 60,
+            signals: [{ type: "ia_classification", value: `Gemini: ${pia.c}` }],
+          });
+        }
+      }
+      if (iaMatches.length > 0) {
+        iaMatches.sort((a, b) => b.score - a.score);
+        results.set(c.idx, iaMatches);
+        continue;
+      }
+    }
 
     const matches = [];
 

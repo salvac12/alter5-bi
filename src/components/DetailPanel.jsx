@@ -159,7 +159,73 @@ export default function DetailPanel({ company, onClose, onDelete, productMatches
           {c.relType.split(", ").map((t, i) => (
             <Badge key={`t${i}`} variant="type">{t}</Badge>
           ))}
+          {c.subtipo && (
+            <span style={{
+              padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+              background: "#8B5CF620", color: "#A78BFA", border: "1px solid #8B5CF640",
+            }}>{c.subtipo}</span>
+          )}
+          {c.fase && (
+            <span style={{
+              padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+              background: c.fase.includes("activo") ? "#10B98120" : c.fase.includes("Negociacion") ? "#F59E0B20" : c.fase.includes("Descartado") ? "#EF444420" : "#3B82F620",
+              color: c.fase.includes("activo") ? "#34D399" : c.fase.includes("Negociacion") ? "#FBBF24" : c.fase.includes("Descartado") ? "#F87171" : "#60A5FA",
+              border: `1px solid ${c.fase.includes("activo") ? "#10B98140" : c.fase.includes("Negociacion") ? "#F59E0B40" : c.fase.includes("Descartado") ? "#EF444440" : "#3B82F640"}`,
+            }}>{c.fase}</span>
+          )}
         </div>
+
+        {/* Enrichment: Productos IA & Senales */}
+        {(c.productosIA?.length > 0 || c.senales?.length > 0) && (
+          <div style={{
+            background: "#132238", borderRadius: 12, padding: 18,
+            marginBottom: 20, border: "1px solid #8B5CF640",
+          }}>
+            {c.productosIA?.length > 0 && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 16 }}>🤖</span>
+                  <DarkSectionTitle style={{ marginBottom: 0 }}>Productos IA (Gemini)</DarkSectionTitle>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: c.senales?.length ? 16 : 0 }}>
+                  {c.productosIA.map((p, i) => {
+                    const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7F94" };
+                    const col = confColors[p.c] || "#6B7F94";
+                    return (
+                      <span key={i} style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "5px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                        background: col + "15", color: "#FFFFFF", border: `1px solid ${col}40`,
+                      }}>
+                        {p.p}
+                        <span style={{
+                          fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
+                          background: col + "30", color: col, textTransform: "uppercase",
+                        }}>{p.c}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {c.senales?.length > 0 && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 16 }}>📡</span>
+                  <DarkSectionTitle style={{ marginBottom: 0 }}>Senales clave</DarkSectionTitle>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {c.senales.map((s, i) => (
+                    <span key={i} style={{
+                      padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                    }}>{s}</span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Context/Summary - HIGHLIGHTED */}
         {det?.context && (

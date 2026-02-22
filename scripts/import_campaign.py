@@ -202,8 +202,10 @@ def export_to_compact_with_campaign(all_companies):
             details[str(i)] = [
                 [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
                 [[t["quarter"], t["emails"]] for t in timeline[:8]],
-                context[:150],
+                context[:500],
                 source_breakdown,
+                c.get("subjects", [])[:20],
+                c.get("enrichment", None),
             ]
 
     return {"r": records, "d": details}

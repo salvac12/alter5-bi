@@ -171,6 +171,18 @@ export const PRODUCTS = [
   },
 ];
 
+/* ── Subtipos de empresa (enrichment IA) ── */
+export const SUBTIPOS_EMPRESA = [
+  "Desarrollador", "IPP", "Fondo Renovable", "Utility", "EPC/Proveedor",
+  "Asesor", "Inversor Institucional", "Banco/Entidad Financiera",
+  "Family Office", "Administracion Publica", "Otro"
+];
+
+export const FASES_COMERCIALES = [
+  "Primer contacto", "Exploracion", "Negociacion",
+  "Cliente activo", "Dormido", "Descartado"
+];
+
 /* ── Tamaño de empresa (rangos de empleados) ── */
 export const COMPANY_SIZES = [
   { id: "micro", label: "Micro (1-10)", min: 1, max: 10 },
