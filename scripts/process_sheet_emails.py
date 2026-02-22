@@ -107,6 +107,15 @@ def mark_rows_done(ws, row_indices):
         time.sleep(0.2)  # avoid rate limits
 
 
+def mark_rows_ignored(ws, row_indices):
+    """Mark irrelevant rows as 'ignored' in the sheet."""
+    if not row_indices:
+        return
+    for row_num in row_indices:
+        ws.update_cell(row_num, 1, "ignored")
+        time.sleep(0.2)
+
+
 def log_classification(sheet, domain, sector, rel_type, source):
     """Log AI classification to ai_classifications tab."""
     try:
@@ -125,6 +134,79 @@ def log_classification(sheet, domain, sector, rel_type, source):
 # ---------------------------------------------------------------------------
 # Gemini classification
 # ---------------------------------------------------------------------------
+def filter_relevant_emails(pending_emails):
+    """Filter emails using Gemini to keep only business-relevant ones.
+
+    Returns:
+        (relevant, ignored) — two lists of email rows
+    """
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("  [warn] GEMINI_API_KEY not set — skipping relevance filter")
+        return pending_emails, []
+
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+    except Exception as e:
+        print(f"  [warn] Gemini init failed: {e} — skipping relevance filter")
+        return pending_emails, []
+
+    relevant = []
+    ignored = []
+    batch_size = 20
+
+    for batch_start in range(0, len(pending_emails), batch_size):
+        batch = pending_emails[batch_start:batch_start + batch_size]
+
+        lines = []
+        for i, row in enumerate(batch):
+            from_email = str(row.get("from_email", ""))
+            subject = str(row.get("subject", ""))
+            snippet = str(row.get("body_snippet", ""))[:150]
+            lines.append(f"{i}: from={from_email} | subject={subject} | snippet={snippet}")
+
+        prompt = f"""Eres un filtro de emails para Alter-5, una empresa de consultoría tecnológica y soluciones digitales.
+
+Analiza estos emails y decide cuáles son RELEVANTES para el negocio (oportunidades comerciales, comunicación con clientes, partners, proveedores, contactos profesionales, propuestas, reuniones de negocio) y cuáles NO son relevantes (newsletters, notificaciones automáticas de herramientas/apps, marketing masivo, facturas/recibos, spam, suscripciones, alertas de sistemas, emails personales no profesionales).
+
+Emails:
+{chr(10).join(lines)}
+
+Responde SOLO con un JSON válido con este formato exacto:
+{{"relevant": [0, 2, 5], "ignored": [1, 3, 4]}}
+
+Los números son los índices de cada email. Todos los emails deben aparecer en una de las dos listas."""
+
+        try:
+            response = model.generate_content(prompt)
+            text = response.text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1]
+                if text.endswith("```"):
+                    text = text.rsplit("```", 1)[0]
+                text = text.strip()
+
+            parsed = json.loads(text)
+            relevant_indices = set(parsed.get("relevant", []))
+            ignored_indices = set(parsed.get("ignored", []))
+
+            for i, row in enumerate(batch):
+                if i in ignored_indices:
+                    ignored.append(row)
+                else:
+                    relevant.append(row)
+        except Exception as e:
+            print(f"  [warn] Relevance filter batch failed: {e} — keeping all")
+            relevant.extend(batch)
+
+        if batch_start + batch_size < len(pending_emails):
+            time.sleep(GEMINI_RPM_DELAY)
+
+    return relevant, ignored
+
+
 def classify_domains_with_gemini(domains_with_subjects):
     """Classify a list of domains into sector + relType using Gemini.
 
@@ -352,6 +434,21 @@ def process_pipeline():
         return False
 
     print(f"  → {len(pending)} emails pendientes encontrados")
+
+    # 2b. Filter relevant emails with AI
+    print("  [2b/7] Filtrando emails relevantes con IA...")
+    relevant, ignored = filter_relevant_emails(pending)
+    print(f"  → {len(relevant)} relevantes, {len(ignored)} ignorados")
+
+    if ignored:
+        ignored_rows = [row["_sheet_row"] for row in ignored]
+        mark_rows_ignored(ws, ignored_rows)
+
+    if not relevant:
+        print("  → Ningún email relevante. Nada que hacer.")
+        return False
+
+    pending = relevant
 
     # 3. Group by company domain
     print("  [3/7] Agrupando por empresa...")
