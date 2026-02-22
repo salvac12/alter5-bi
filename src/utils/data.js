@@ -42,6 +42,7 @@ export function parseCompanies() {
       fase: detail?.enrichment?.fc || "",
       productosIA: detail?.enrichment?.pp || [],
       senales: detail?.enrichment?.sc || [],
+      marketRoles: detail?.enrichment?.mr || [],
     };
   });
 }

@@ -1,6 +1,6 @@
 # Estado del Proyecto - Alter5 BI
 **Fecha actualización:** 22 de febrero de 2026
-**Ultima modificacion:** Datos enriquecidos v2 (Guillermo + Leticia) con scoring IA
+**Ultima modificacion:** Market Roles - clasificacion de rol de mercado por empresa (Gemini)
 
 ---
 
@@ -25,10 +25,11 @@ Dashboard de Business Intelligence para analisis y clasificacion de la red de co
    - Leticia Menendez: 681 empresas (18/02/2026)
    - **Total tras fusion:** 3,272 empresas unicas
    - **Con datos enriquecidos IA:** 1,882 empresas (Guillermo + Leticia v2)
+   - **Market Roles:** Preparado, pendiente de datos (procesando en Colab con Gemini)
 
 3. **Enriquecimiento IA v2 (NUEVO)**
    - Analisis con Gemini de los buzones de Guillermo (1,503 empresas) y Leticia (682 empresas)
-   - Campos nuevos por empresa: subtipo empresa, fase comercial, productos potenciales IA, senales clave
+   - Campos nuevos por empresa: subtipo empresa, fase comercial, productos potenciales IA, senales clave, **market roles**
    - Contexto ampliado de 150 a 500 caracteres
    - Script `import_enriched.py` para merge sin sobreescribir datos de otros buzones
    - Scoring de productos usa clasificacion IA directa cuando existe (alta=90, media=60, baja=30), fallback a keyword scoring
@@ -38,17 +39,18 @@ Dashboard de Business Intelligence para analisis y clasificacion de la red de co
    - Estados de relacion: Activa (<6m), Dormida (6-18m), Perdida (>18m)
    - Sistema de tabs por empleado (Todos/Salvador/Guillermo/Leticia)
    - **Ordenamiento por score descendente por defecto** (empresas mas relevantes primero)
-   - Busqueda libre por nombre/dominio/sector/tipo/subtipo/fase
-   - Filtros combinables: estado, sector, tipo relacion, **subtipo empresa**, **fase comercial**, producto Alter5
+   - Busqueda libre por nombre/dominio/sector/tipo/subtipo/fase/market role
+   - Filtros combinables: estado, sector, tipo relacion, **subtipo empresa**, **fase comercial**, **market role**, producto Alter5
    - Filtros preparados para futuro (Tamano Empresa y Pais) con estado disabled
    - Badge contador de filtros activos en sidebar
    - Tabla ordenable y paginada
    - Exportacion CSV (compatible Airtable)
 
    **Ficha de empresa detallada:**
-   - Badges de subtipo empresa (morado) y fase comercial (coloreado por estado)
+   - Badges de subtipo empresa (morado), fase comercial (coloreado) y **market roles** (coloreados)
    - Productos potenciales IA con nivel de confianza (alta/media/baja)
    - Senales clave como chips
+   - Market Roles como badges coloreados (6 roles posibles)
    - Contexto completo (500 chars en vez de 150)
    - Sistema de eliminacion de empresas con confirmacion modal
    - Edicion completa de contactos (anadir, editar, eliminar)
@@ -121,7 +123,7 @@ alter5-bi/
 │   │   ├── DetailPanel.jsx        # Ficha detallada + enrichment IA
 │   │   └── EmployeeTabs.jsx       # Tabs por buzon
 │   ├── utils/
-│   │   ├── constants.js           # SECTORS, TIPOS, SUBTIPOS_EMPRESA, FASES_COMERCIALES, PRODUCTS
+│   │   ├── constants.js           # SECTORS, TIPOS, SUBTIPOS_EMPRESA, FASES_COMERCIALES, MARKET_ROLES, PRODUCTS
 │   │   ├── data.js                # parseCompanies(), calculateProductMatches() con IA
 │   │   └── companyData.js         # localStorage management
 │   └── data/
@@ -144,9 +146,20 @@ alter5-bi/
   "st": "IPP",                                          // subtipo empresa
   "fc": "Negociacion",                                  // fase comercial
   "pp": [{"p": "Prestamo Construccion", "c": "alta"}],  // productos potenciales
-  "sc": ["Term sheet enviado", "NDA firmado"]            // senales clave
+  "sc": ["Term sheet enviado", "NDA firmado"],           // senales clave
+  "mr": ["Borrower", "Debt Investor"]                   // market roles
 }
 ```
+
+### Market Roles (6 categorias)
+| Role | Color | Descripcion |
+|------|-------|-------------|
+| Borrower | #F59E0B (amber) | Prestatario potencial |
+| Seller (M&A) | #EF4444 (red) | Vendedor de activos/proyectos |
+| Buyer Investor (M&A) | #8B5CF6 (purple) | Comprador de activos |
+| Debt Investor | #3B82F6 (blue) | Inversor en deuda |
+| Equity Investor | #10B981 (green) | Inversor en equity |
+| Partner & Services | #6B7F94 (gray) | Proveedor/asesor/partner |
 
 ### Scoring de productos con IA
 - Si la empresa tiene `productosIA` (clasificacion Gemini): alta=90, media=60, baja=30
@@ -196,6 +209,16 @@ git push origin main   # Vercel auto-deploy
 
 ## Historial de Versiones
 
+### v1.5.0 (22/02/2026) - Market Roles
+- Soporte completo para Market Roles (6 categorias: Borrower, Seller M&A, Buyer Investor M&A, Debt Investor, Equity Investor, Partner & Services)
+- `import_enriched.py` lee columna "Market Roles" del Excel y guarda como `enrichment.mr` (retrocompatible)
+- Constante `MARKET_ROLES` con 6 roles, cada uno con color asignado
+- Nuevo filtro "Market Role" en sidebar con chips coloreados y contadores
+- Badges de market roles en DetailPanel (zona de tags junto a subtipo y fase)
+- Busqueda incluye market roles
+- Filtrado multi-select: empresas con AL MENOS uno de los roles seleccionados
+- Preparado para recibir datos: cuando lleguen los Excel con columna "Market Roles", solo hay que correr `import_enriched.py`
+
 ### v1.4.0 (22/02/2026) - Datos enriquecidos v2 con IA
 - Script `import_enriched.py` para importar analisis Gemini v2
 - 1,882 empresas enriquecidas (1,503 Guillermo + 682 Leticia, con solapamiento)
@@ -239,9 +262,10 @@ git push origin main   # Vercel auto-deploy
 ## Proximos Pasos
 
 ### Alta Prioridad
+- [ ] Procesar Market Roles en Colab con Gemini y correr `import_enriched.py` con los Excel resultantes
 - [ ] Analisis enriquecido v2 para Salvador (completar los 3 buzones)
 - [ ] Integrar historico_trimestral enriquecido en el timeline del detalle
-- [ ] Exportar campos enriquecidos en el CSV
+- [ ] Exportar campos enriquecidos (incl. market roles) en el CSV
 
 ### Media Prioridad
 - [ ] Graficos de distribucion (sector, subtipo, fase)

@@ -29,6 +29,7 @@ export default function App() {
   const [selFases, setSelFases] = useState([]);
   const [selStatus, setSelStatus] = useState([]);
   const [selProduct, setSelProduct] = useState("");
+  const [selMarketRoles, setSelMarketRoles] = useState([]);
   const [sortBy, setSortBy] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
@@ -52,7 +53,8 @@ export default function App() {
         c.sectors.toLowerCase().includes(q) ||
         c.relType.toLowerCase().includes(q) ||
         c.subtipo.toLowerCase().includes(q) ||
-        c.fase.toLowerCase().includes(q)
+        c.fase.toLowerCase().includes(q) ||
+        c.marketRoles.some(mr => mr.toLowerCase().includes(q))
       );
     }
     if (selEmployees.length) list = list.filter(c => selEmployees.some(e => c.employees.includes(e)));
@@ -61,6 +63,7 @@ export default function App() {
     if (selSubtipos.length) list = list.filter(c => selSubtipos.some(s => c.subtipo.includes(s)));
     if (selFases.length) list = list.filter(c => selFases.some(f => c.fase.includes(f)));
     if (selStatus.length) list = list.filter(c => selStatus.includes(c.status));
+    if (selMarketRoles.length) list = list.filter(c => selMarketRoles.some(mr => c.marketRoles.includes(mr)));
     if (selProduct) {
       list = list.filter(c => {
         const matches = productMatches.get(c.idx) || [];
@@ -78,7 +81,7 @@ export default function App() {
       }
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selSectors, selTipos, selSubtipos, selFases, selStatus, selProduct, productMatches, sortBy, sortDir]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selSectors, selTipos, selSubtipos, selFases, selStatus, selMarketRoles, selProduct, productMatches, sortBy, sortDir]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -185,6 +188,7 @@ export default function App() {
           selFases={selFases} setSelFases={setSelFases}
           selStatus={selStatus} setSelStatus={setSelStatus}
           selProduct={selProduct} setSelProduct={setSelProduct}
+          selMarketRoles={selMarketRoles} setSelMarketRoles={setSelMarketRoles}
           productMatches={productMatches}
           setPage={setPage}
         />

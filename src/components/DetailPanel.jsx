@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts } from '../utils/companyData';
-import { COUNTRIES, COMPANY_SIZES, SECTORS } from '../utils/constants';
+import { COUNTRIES, COMPANY_SIZES, SECTORS, MARKET_ROLES } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -173,6 +173,16 @@ export default function DetailPanel({ company, onClose, onDelete, productMatches
               border: `1px solid ${c.fase.includes("activo") ? "#10B98140" : c.fase.includes("Negociacion") ? "#F59E0B40" : c.fase.includes("Descartado") ? "#EF444440" : "#3B82F640"}`,
             }}>{c.fase}</span>
           )}
+          {c.marketRoles?.map((role, i) => {
+            const mrDef = MARKET_ROLES.find(m => m.id === role);
+            const col = mrDef?.color || "#6B7F94";
+            return (
+              <span key={`mr${i}`} style={{
+                padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                background: col + "20", color: col, border: `1px solid ${col}40`,
+              }}>{role}</span>
+            );
+          })}
         </div>
 
         {/* Enrichment: Productos IA & Senales */}

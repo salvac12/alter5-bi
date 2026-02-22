@@ -171,6 +171,16 @@ export const PRODUCTS = [
   },
 ];
 
+/* ── Market Roles (clasificación Gemini) ── */
+export const MARKET_ROLES = [
+  { id: "Borrower", label: "Borrower", color: "#F59E0B" },
+  { id: "Seller (M&A)", label: "Seller (M&A)", color: "#EF4444" },
+  { id: "Buyer Investor (M&A)", label: "Buyer Investor (M&A)", color: "#8B5CF6" },
+  { id: "Debt Investor", label: "Debt Investor", color: "#3B82F6" },
+  { id: "Equity Investor", label: "Equity Investor", color: "#10B981" },
+  { id: "Partner & Services", label: "Partner & Services", color: "#6B7F94" },
+];
+
 /* ── Subtipos de empresa (enrichment IA) ── */
 export const SUBTIPOS_EMPRESA = [
   "Desarrollador", "IPP", "Fondo Renovable", "Utility", "EPC/Proveedor",

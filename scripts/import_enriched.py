@@ -39,6 +39,13 @@ def parse_senales(raw):
     return [s.strip() for s in str(raw).split("|") if s.strip()]
 
 
+def parse_market_roles(raw):
+    """Parse 'Borrower | Debt Investor' into list of strings."""
+    if not raw or pd.isna(raw):
+        return []
+    return [r.strip() for r in str(raw).split("|") if r.strip()]
+
+
 def read_enriched_excel(filepath):
     """Read 'Resumen por Empresa' tab and return dict keyed by domain."""
     df = pd.read_excel(filepath, sheet_name="Resumen por Empresa")
@@ -55,6 +62,7 @@ def read_enriched_excel(filepath):
         senales = parse_senales(row.get("Senales Clave"))
         contexto = str(row.get("Contexto General", "")).strip() if pd.notna(row.get("Contexto General")) else ""
         historico = str(row.get("Historico Trimestral", "")).strip() if pd.notna(row.get("Historico Trimestral")) else ""
+        market_roles = parse_market_roles(row.get("Market Roles"))
 
         # Also read basic fields for new companies
         companies[domain] = {
@@ -73,6 +81,7 @@ def read_enriched_excel(filepath):
             "senales": senales,
             "contexto": contexto,
             "historico": historico,
+            "market_roles": market_roles,
         }
 
     return companies
@@ -89,6 +98,8 @@ def build_enrichment(enriched):
         e["sc"] = enriched["senales"]
     if enriched.get("fase"):
         e["fc"] = enriched["fase"]
+    if enriched.get("market_roles"):
+        e["mr"] = enriched["market_roles"]
     return e if e else None
 
 
