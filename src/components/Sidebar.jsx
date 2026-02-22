@@ -82,7 +82,42 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Producto target */}
+      {/* Market Role (primero — clasificación principal) */}
+      <FilterSection title="Market Role">
+        {MARKET_ROLES.map(mr => (
+          <FilterChip key={mr.id}
+            label={
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: mr.color, display: "inline-block", flexShrink: 0,
+                }} />
+                {mr.label}
+                <span style={{
+                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                }}>
+                  {marketRoleCounts[mr.id]}
+                </span>
+              </span>
+            }
+            active={selMarketRoles.includes(mr.id)}
+            onClick={() => toggle(selMarketRoles, setSelMarketRoles, mr.id)}
+          />
+        ))}
+      </FilterSection>
+
+      {/* Status */}
+      <FilterSection title="Estado de Empresa">
+        {["active", "dormant", "lost"].map(s => (
+          <FilterChip key={s}
+            label={`${STATUS_LABELS[s]} (${statusCounts[s]})`}
+            active={selStatus.includes(s)}
+            onClick={() => toggle(selStatus, setSelStatus, s)}
+          />
+        ))}
+      </FilterSection>
+
+      {/* Producto Alter5 */}
       <FilterSection title="Producto Alter5">
         {PRODUCTS.map(p => (
           <FilterChip key={p.id}
@@ -105,17 +140,6 @@ export default function Sidebar({
               setSelProduct(prev => prev === p.id ? "" : p.id);
               setPage(0);
             }}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Status (más usado, arriba) */}
-      <FilterSection title="Estado de Empresa">
-        {["active", "dormant", "lost"].map(s => (
-          <FilterChip key={s}
-            label={`${STATUS_LABELS[s]} (${statusCounts[s]})`}
-            active={selStatus.includes(s)}
-            onClick={() => toggle(selStatus, setSelStatus, s)}
           />
         ))}
       </FilterSection>
@@ -156,30 +180,6 @@ export default function Sidebar({
           <FilterChip key={f} label={f}
             active={selFases.includes(f)}
             onClick={() => toggle(selFases, setSelFases, f)}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Market Role */}
-      <FilterSection title="Market Role">
-        {MARKET_ROLES.map(mr => (
-          <FilterChip key={mr.id}
-            label={
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: mr.color, display: "inline-block", flexShrink: 0,
-                }} />
-                {mr.label}
-                <span style={{
-                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                }}>
-                  {marketRoleCounts[mr.id]}
-                </span>
-              </span>
-            }
-            active={selMarketRoles.includes(mr.id)}
-            onClick={() => toggle(selMarketRoles, setSelMarketRoles, mr.id)}
           />
         ))}
       </FilterSection>

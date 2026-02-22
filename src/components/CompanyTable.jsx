@@ -1,16 +1,18 @@
 import { Badge, StatusBadge } from './UI';
 import { getBestProductMatch } from '../utils/data';
+import { MARKET_ROLES } from '../utils/constants';
 
 const COLUMNS = [
   { key: "score", label: "Score", w: 58, sortable: true },
-  { key: "name", label: "Empresa", w: 190, sortable: true },
-  { key: null, label: "Sector", w: 140, sortable: false },
-  { key: null, label: "Tipo", w: 110, sortable: false },
-  { key: "productScore", label: "Producto", w: 120, sortable: true },
+  { key: "name", label: "Empresa", w: 180, sortable: true },
+  { key: null, label: "Market Role", w: 120, sortable: false },
+  { key: null, label: "Sector", w: 120, sortable: false },
+  { key: null, label: "Tipo", w: 100, sortable: false },
+  { key: "productScore", label: "Producto", w: 110, sortable: true },
   { key: null, label: "Estado", w: 76, sortable: false },
   { key: "interactions", label: "Emails", w: 72, sortable: true },
-  { key: "nContacts", label: "Cont.", w: 60, sortable: true },
-  { key: "monthsAgo", label: "Último", w: 80, sortable: true },
+  { key: "nContacts", label: "Cont.", w: 55, sortable: true },
+  { key: "monthsAgo", label: "Último", w: 70, sortable: true },
 ];
 
 export default function CompanyTable({
@@ -127,6 +129,11 @@ export default function CompanyTable({
               <td style={{ padding: "10px" }}>
                 <div style={{ fontWeight: 600, color: "#1A2B3D", fontSize: 13, lineHeight: 1.3 }}>{c.name}</div>
                 <div style={{ fontSize: 11, color: "#6B7F94", fontWeight: 400 }}>{c.domain}</div>
+              </td>
+
+              {/* Market Role */}
+              <td style={{ padding: "10px" }}>
+                <MarketRoleCell roles={c.marketRoles} />
               </td>
 
               {/* Sector */}
@@ -249,6 +256,37 @@ function ProductMatchCell({ companyIdx, productMatches }) {
       }}>
         {best.score}
       </span>
+    </div>
+  );
+}
+
+/* ── Market role badges for table rows ── */
+const MARKET_ROLE_MAP = Object.fromEntries(MARKET_ROLES.map(mr => [mr.id, mr]));
+
+function MarketRoleCell({ roles }) {
+  if (!roles || roles.length === 0) {
+    return <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>;
+  }
+  return (
+    <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+      {roles.slice(0, 2).map((r, i) => {
+        const mr = MARKET_ROLE_MAP[r];
+        const color = mr?.color || "#94A3B8";
+        return (
+          <span key={i} style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+            background: color + "15", color: color, border: `1px solid ${color}25`,
+            whiteSpace: "nowrap",
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0 }} />
+            {r.length > 14 ? r.slice(0, 12) + "…" : r}
+          </span>
+        );
+      })}
+      {roles.length > 2 && (
+        <span style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>+{roles.length - 2}</span>
+      )}
     </div>
   );
 }
