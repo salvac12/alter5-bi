@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
-import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts } from '../utils/companyData';
-import { COUNTRIES, COMPANY_SIZES, SECTORS, MARKET_ROLES } from '../utils/constants';
+import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides } from '../utils/companyData';
+import { COUNTRIES, COMPANY_SIZES, SECTORS, MARKET_ROLES, SUBTIPOS_EMPRESA, FASES_COMERCIALES } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -27,7 +27,7 @@ function contactPriorityInfo(role) {
   return { rank: 4, label: role, color: "#94A3B8" };
 }
 
-export default function DetailPanel({ company, onClose, onDelete, productMatches }) {
+export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSave, productMatches }) {
   if (!company) return null;
   const c = company;
   const det = c.detail;
@@ -44,6 +44,12 @@ export default function DetailPanel({ company, onClose, onDelete, productMatches
   const [showAddContact, setShowAddContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', role: '', email: '' });
 
+  // Estado para edición de clasificación IA (enrichment)
+  const [isEditingEnrichment, setIsEditingEnrichment] = useState(false);
+  const [editedMR, setEditedMR] = useState([]);
+  const [editedSubtipo, setEditedSubtipo] = useState('');
+  const [editedFase, setEditedFase] = useState('');
+
   // Cargar datos manuales al abrir el panel
   useEffect(() => {
     if (c.domain) {
@@ -54,8 +60,14 @@ export default function DetailPanel({ company, onClose, onDelete, productMatches
       // Cargar contactos guardados o usar los originales
       const savedContacts = getCompanyContacts(c.domain);
       setEditedContacts(savedContacts || (det?.contacts || []));
+
+      // Inicializar enrichment desde company (ya tiene overrides aplicados)
+      setEditedMR(c.marketRoles || []);
+      setEditedSubtipo(c.subtipo || '');
+      setEditedFase(c.fase || '');
+      setIsEditingEnrichment(false);
     }
-  }, [c.domain, det?.contacts]);
+  }, [c.domain, det?.contacts, c.marketRoles, c.subtipo, c.fase]);
 
   // Datos cualificados
   const qualifiedCountry = qualifyCountry(c);
@@ -113,6 +125,31 @@ export default function DetailPanel({ company, onClose, onDelete, productMatches
 
   const handleDeleteContact = (index) => {
     setEditedContacts(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Handlers para clasificación IA (enrichment)
+  const handleSaveEnrichment = () => {
+    if (onEnrichmentSave) {
+      const success = onEnrichmentSave(c.domain, {
+        mr: editedMR,
+        st: editedSubtipo,
+        fc: editedFase,
+      });
+      if (success) setIsEditingEnrichment(false);
+    }
+  };
+
+  const handleCancelEnrichment = () => {
+    setEditedMR(c.marketRoles || []);
+    setEditedSubtipo(c.subtipo || '');
+    setEditedFase(c.fase || '');
+    setIsEditingEnrichment(false);
+  };
+
+  const toggleMarketRole = (roleId) => {
+    setEditedMR(prev =>
+      prev.includes(roleId) ? prev.filter(r => r !== roleId) : [...prev, roleId]
+    );
   };
 
   return (
@@ -183,6 +220,155 @@ export default function DetailPanel({ company, onClose, onDelete, productMatches
               }}>{role}</span>
             );
           })}
+        </div>
+
+        {/* Clasificación IA - Editable */}
+        <div style={{
+          background: "#132238", borderRadius: 12, padding: 18,
+          marginBottom: 20, border: isEditingEnrichment ? "2px solid #8B5CF6" : "1px solid #1B3A5C",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginBottom: 14,
+          }}>
+            <span style={{ fontSize: 16 }}>🏷️</span>
+            <DarkSectionTitle style={{ marginBottom: 0, color: isEditingEnrichment ? "#A78BFA" : "#6B7F94" }}>
+              Clasificación IA
+            </DarkSectionTitle>
+            <span style={{ flex: 1 }} />
+            {!isEditingEnrichment ? (
+              <button
+                onClick={() => setIsEditingEnrichment(true)}
+                style={{
+                  background: "linear-gradient(135deg, #8B5CF6, #6D28D9)",
+                  border: "none", color: "#FFFFFF",
+                  padding: "5px 10px", borderRadius: 6,
+                  fontSize: 10, fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                ✏️ Editar
+              </button>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={handleCancelEnrichment}
+                  style={{
+                    background: "#1B3A5C", border: "1px solid #2A4A6C",
+                    color: "#94A3B8", padding: "5px 10px", borderRadius: 6,
+                    fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveEnrichment}
+                  style={{
+                    background: "linear-gradient(135deg, #8B5CF6, #6D28D9)",
+                    border: "none", color: "#FFFFFF",
+                    padding: "5px 10px", borderRadius: 6,
+                    fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  💾 Guardar
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Market Roles */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{
+              fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+              letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+            }}>Market Roles</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {MARKET_ROLES.map(mr => {
+                const active = isEditingEnrichment
+                  ? editedMR.includes(mr.id)
+                  : (c.marketRoles || []).includes(mr.id);
+                return (
+                  <span
+                    key={mr.id}
+                    onClick={isEditingEnrichment ? () => toggleMarketRole(mr.id) : undefined}
+                    style={{
+                      padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                      background: active ? mr.color + "20" : "#0A1628",
+                      color: active ? mr.color : "#475569",
+                      border: `1px solid ${active ? mr.color + "40" : "#1B3A5C"}`,
+                      cursor: isEditingEnrichment ? "pointer" : "default",
+                      opacity: isEditingEnrichment && !active ? 0.6 : 1,
+                      transition: "all 0.15s ease",
+                      userSelect: "none",
+                    }}
+                  >
+                    {mr.label}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Subtipo & Fase */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <div style={{
+                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
+              }}>Subtipo empresa</div>
+              {isEditingEnrichment ? (
+                <select
+                  value={editedSubtipo}
+                  onChange={(e) => setEditedSubtipo(e.target.value)}
+                  style={{
+                    width: "100%", background: "#0A1628",
+                    border: "1px solid #8B5CF640", borderRadius: 4,
+                    padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
+                    fontFamily: "inherit", outline: "none", cursor: "pointer",
+                  }}
+                >
+                  <option value="">Sin clasificar</option>
+                  {SUBTIPOS_EMPRESA.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              ) : (
+                <span style={{
+                  fontSize: 13, fontWeight: 600,
+                  color: c.subtipo ? "#A78BFA" : "#475569",
+                  fontStyle: c.subtipo ? "normal" : "italic",
+                }}>{c.subtipo || "Sin clasificar"}</span>
+              )}
+            </div>
+            <div>
+              <div style={{
+                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
+              }}>Fase comercial</div>
+              {isEditingEnrichment ? (
+                <select
+                  value={editedFase}
+                  onChange={(e) => setEditedFase(e.target.value)}
+                  style={{
+                    width: "100%", background: "#0A1628",
+                    border: "1px solid #8B5CF640", borderRadius: 4,
+                    padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
+                    fontFamily: "inherit", outline: "none", cursor: "pointer",
+                  }}
+                >
+                  <option value="">Sin clasificar</option>
+                  {FASES_COMERCIALES.map(f => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </select>
+              ) : (
+                <span style={{
+                  fontSize: 13, fontWeight: 600,
+                  color: c.fase ? "#60A5FA" : "#475569",
+                  fontStyle: c.fase ? "normal" : "italic",
+                }}>{c.fase || "Sin clasificar"}</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Enrichment: Productos IA & Senales */}

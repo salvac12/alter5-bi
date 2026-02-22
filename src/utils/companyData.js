@@ -5,6 +5,7 @@
 
 const STORAGE_KEY = 'alter5_company_data';
 const HIDDEN_COMPANIES_KEY = 'alter5_hidden_companies';
+const ENRICHMENT_OVERRIDES_KEY = 'alter5_enrichment_overrides';
 
 /**
  * Obtener todos los datos manuales de empresas
@@ -175,4 +176,38 @@ export function saveCompanyContacts(domain, contacts) {
 export function getCompanyContacts(domain) {
   const data = getCompanyDataByDomain(domain);
   return data.contacts || null;
+}
+
+/**
+ * Obtener todos los overrides de enrichment (market roles, subtipo, fase)
+ */
+export function getAllEnrichmentOverrides() {
+  try {
+    const data = localStorage.getItem(ENRICHMENT_OVERRIDES_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch (error) {
+    console.error('Error loading enrichment overrides:', error);
+    return {};
+  }
+}
+
+/**
+ * Guardar override de enrichment para una empresa
+ * @param {string} domain
+ * @param {{ mr?: string[], st?: string, fc?: string }} overrides
+ */
+export function saveEnrichmentOverride(domain, overrides) {
+  try {
+    const all = getAllEnrichmentOverrides();
+    all[domain] = {
+      ...all[domain],
+      ...overrides,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(ENRICHMENT_OVERRIDES_KEY, JSON.stringify(all));
+    return true;
+  } catch (error) {
+    console.error('Error saving enrichment override:', error);
+    return false;
+  }
 }

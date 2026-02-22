@@ -7,16 +7,28 @@ import Sidebar from './components/Sidebar';
 import CompanyTable from './components/CompanyTable';
 import DetailPanel from './components/DetailPanel';
 import EmployeeTabs from './components/EmployeeTabs';
-import { getHiddenCompanies, hideCompany } from './utils/companyData';
+import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride } from './utils/companyData';
 
 export default function App() {
   const allCompanies = useMemo(() => parseCompanies(), []);
   const [hiddenCompanies, setHiddenCompanies] = useState(() => getHiddenCompanies());
+  const [enrichmentOverrides, setEnrichmentOverrides] = useState(() => getAllEnrichmentOverrides());
 
-  // Filtrar empresas ocultas
+  // Filtrar empresas ocultas y aplicar enrichment overrides
   const companies = useMemo(() => {
-    return allCompanies.filter(c => !hiddenCompanies.includes(c.domain));
-  }, [allCompanies, hiddenCompanies]);
+    return allCompanies
+      .filter(c => !hiddenCompanies.includes(c.domain))
+      .map(c => {
+        const ov = enrichmentOverrides[c.domain];
+        if (!ov) return c;
+        return {
+          ...c,
+          marketRoles: ov.mr !== undefined ? ov.mr : c.marketRoles,
+          subtipo: ov.st !== undefined ? ov.st : c.subtipo,
+          fase: ov.fc !== undefined ? ov.fc : c.fase,
+        };
+      });
+  }, [allCompanies, hiddenCompanies, enrichmentOverrides]);
 
   const employees = useMemo(() => getEmployees(companies), [companies]);
 
@@ -110,6 +122,14 @@ export default function App() {
   const handleTabChange = (tabId) => {
     setActiveEmployeeTab(tabId);
     setPage(0); // Resetear paginación al cambiar de tab
+  };
+
+  const handleEnrichmentSave = (domain, overrides) => {
+    const success = saveEnrichmentOverride(domain, overrides);
+    if (success) {
+      setEnrichmentOverrides(getAllEnrichmentOverrides());
+    }
+    return success;
   };
 
   const handleDeleteCompany = (domain) => {
@@ -242,6 +262,7 @@ export default function App() {
         company={selected}
         onClose={() => setSelected(null)}
         onDelete={handleDeleteCompany}
+        onEnrichmentSave={handleEnrichmentSave}
         productMatches={productMatches}
       />
     </div>
