@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides } from '../utils/companyData';
-import { COUNTRIES, COMPANY_SIZES, SECTORS, TIPOS, MARKET_ROLES, SUBTIPOS_EMPRESA, FASES_COMERCIALES } from '../utils/constants';
+import { COUNTRIES, COMPANY_SIZES, SECTORS, TIPOS, MARKET_ROLES, SUBTIPOS_EMPRESA, FASES_COMERCIALES, PRODUCTS } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -1596,6 +1596,48 @@ function ProductMatchSection({ companyIdx, productMatches }) {
                 transition: "width 0.3s ease",
               }} />
             </div>
+
+            {/* Subcategories */}
+            {(() => {
+              const productDef = PRODUCTS.find(p => p.id === match.id);
+              if (!productDef?.subcategories) return null;
+              return (
+                <div style={{
+                  marginBottom: 10, padding: "8px 10px",
+                  background: "#132238", borderRadius: 6,
+                  border: `1px solid ${match.color}20`,
+                }}>
+                  <div style={{
+                    fontSize: 9, color: "#6B7F94", fontWeight: 700,
+                    textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6,
+                  }}>Subcategorías</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {productDef.subcategories.map(sub => (
+                      <div key={sub.id}>
+                        <div style={{
+                          fontSize: 11, color: match.color, fontWeight: 700,
+                          display: "flex", alignItems: "center", gap: 4,
+                        }}>
+                          <span style={{ fontSize: 8 }}>▸</span>
+                          {sub.name}
+                        </div>
+                        {sub.children && (
+                          <div style={{ marginLeft: 14, display: "flex", flexWrap: "wrap", gap: 3, marginTop: 2 }}>
+                            {sub.children.map(child => (
+                              <span key={child} style={{
+                                fontSize: 9, color: "#94A3B8", fontWeight: 500,
+                                padding: "1px 6px", borderRadius: 3,
+                                background: "#0A1628", border: "1px solid #1B3A5C",
+                              }}>{child}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Signals */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>

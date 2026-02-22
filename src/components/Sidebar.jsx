@@ -120,27 +120,58 @@ export default function Sidebar({
       {/* Producto Alter5 */}
       <FilterSection title="Producto Alter5">
         {PRODUCTS.map(p => (
-          <FilterChip key={p.id}
-            label={
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: p.color, display: "inline-block", flexShrink: 0,
-                }} />
-                {p.name}
-                <span style={{
-                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                }}>
-                  {productCounts[p.id]}
+          <div key={p.id}>
+            <FilterChip
+              label={
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: p.color, display: "inline-block", flexShrink: 0,
+                  }} />
+                  {p.name}
+                  <span style={{
+                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                  }}>
+                    {productCounts[p.id]}
+                  </span>
                 </span>
-              </span>
-            }
-            active={selProduct === p.id}
-            onClick={() => {
-              setSelProduct(prev => prev === p.id ? "" : p.id);
-              setPage(0);
-            }}
-          />
+              }
+              active={selProduct === p.id}
+              onClick={() => {
+                setSelProduct(prev => prev === p.id ? "" : p.id);
+                setPage(0);
+              }}
+            />
+            {/* Subcategories tree */}
+            {p.subcategories && (
+              <div style={{ marginLeft: 20, marginTop: 2, marginBottom: 6 }}>
+                {p.subcategories.map(sub => (
+                  <div key={sub.id} style={{ marginBottom: 2 }}>
+                    <div style={{
+                      fontSize: 10, color: "#6B7F94", fontWeight: 600,
+                      padding: "2px 0", display: "flex", alignItems: "center", gap: 4,
+                    }}>
+                      <span style={{ color: p.color, fontSize: 8 }}>├</span>
+                      {sub.name}
+                    </div>
+                    {sub.children && (
+                      <div style={{ marginLeft: 12 }}>
+                        {sub.children.map(child => (
+                          <div key={child} style={{
+                            fontSize: 9, color: "#475569", fontWeight: 500,
+                            padding: "1px 0", display: "flex", alignItems: "center", gap: 4,
+                          }}>
+                            <span style={{ color: "#475569", fontSize: 7 }}>└</span>
+                            {child}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </FilterSection>
 
