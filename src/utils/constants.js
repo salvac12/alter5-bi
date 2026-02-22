@@ -39,7 +39,7 @@ export const EMERALD_SECTORS = ["Renovables", "Energía", "Institucional"];
 /* Blue → platform, solutions, tech, AI, fintech */
 export const BLUE_SECTORS = ["Fintech", "Tecnología", "Consultoría"];
 
-export const REF_DATE = new Date("2026-02-14");
+export const REF_DATE = new Date();
 export const PER_PAGE = 50;
 
 /* ── Productos Alter5 — taxonomía para matching ── */
@@ -185,7 +185,7 @@ export const MARKET_ROLES = [
 export const SUBTIPOS_EMPRESA = [
   "Desarrollador", "IPP", "Fondo Renovable", "Utility", "EPC/Proveedor",
   "Asesor", "Inversor Institucional", "Banco/Entidad Financiera",
-  "Family Office", "Administracion Publica", "Otro"
+  "Family Office", "Administracion Publica", "Plataforma Crowdfunding", "Otro"
 ];
 
 export const FASES_COMERCIALES = [

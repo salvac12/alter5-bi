@@ -39,11 +39,24 @@ def parse_senales(raw):
     return [s.strip() for s in str(raw).split("|") if s.strip()]
 
 
+MARKET_ROLE_MAP = {
+    "IPP": "Borrower",
+    "Desarrollador": "Borrower",
+}
+
 def parse_market_roles(raw):
     """Parse 'Borrower | Debt Investor' into list of strings."""
     if not raw or pd.isna(raw):
         return []
-    return [r.strip() for r in str(raw).split("|") if r.strip()]
+    roles = []
+    for r in str(raw).split("|"):
+        r = r.strip()
+        if not r:
+            continue
+        r = MARKET_ROLE_MAP.get(r, r)
+        if r not in roles:
+            roles.append(r)
+    return roles
 
 
 def read_enriched_excel(filepath):

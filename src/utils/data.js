@@ -1,6 +1,8 @@
 import rawData from '../data/companies.json';
 import { TYPE_WEIGHTS, REF_DATE, PRODUCTS } from './constants';
 
+const normalize = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
 /**
  * Record: [empresa, dominio, sector, nContactos, totalInteracciones,
  *          tipoRelacion, primeraInteraccion, ultimaInteraccion, employeeSources]
@@ -82,7 +84,7 @@ export function calculateProductMatches(companies) {
       const iaMatches = [];
       const confScores = { alta: 90, media: 60, baja: 30 };
       for (const pia of c.productosIA) {
-        const product = PRODUCTS.find(p => p.name === pia.p);
+        const product = PRODUCTS.find(p => normalize(p.name) === normalize(pia.p));
         if (product) {
           iaMatches.push({
             id: product.id,
