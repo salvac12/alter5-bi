@@ -114,37 +114,41 @@ def read_pending_emails(sheet):
 
 
 def mark_rows_done(ws, row_indices):
-    """Mark processed rows as 'done' in the sheet."""
-    if not row_indices:
-        return
-    # Column A = "processed"
-    for row_num in row_indices:
-        ws.update_cell(row_num, 1, "done")
-        time.sleep(0.2)  # avoid rate limits
+    """Mark processed rows as 'done' in the sheet using batch update."""
+    _batch_update_status(ws, row_indices, "done")
 
 
 def mark_rows_ignored(ws, row_indices):
-    """Mark irrelevant rows as 'ignored' in the sheet."""
+    """Mark irrelevant rows as 'ignored' in the sheet using batch update."""
+    _batch_update_status(ws, row_indices, "ignored")
+
+
+def _batch_update_status(ws, row_indices, status):
+    """Batch update column A for given rows — single API call."""
     if not row_indices:
         return
-    for row_num in row_indices:
-        ws.update_cell(row_num, 1, "ignored")
-        time.sleep(0.2)
+    cells = [gspread.Cell(row=r, col=1, value=status) for r in row_indices]
+    ws.update_cells(cells)
 
 
-def log_classification(sheet, domain, sector, rel_type, source):
-    """Log AI classification to ai_classifications tab."""
+def log_classifications_batch(sheet, classifications, source):
+    """Log AI classifications to ai_classifications tab in a single batch."""
+    if not classifications:
+        return
     try:
         ws = sheet.worksheet("ai_classifications")
-        ws.append_row([
-            datetime.utcnow().isoformat(),
-            domain,
-            sector,
-            rel_type,
-            source,
-        ])
+        rows = []
+        for domain, cls in classifications.items():
+            rows.append([
+                datetime.utcnow().isoformat(),
+                domain,
+                cls.get("sector", "Otro"),
+                cls.get("relType", "Otro"),
+                source,
+            ])
+        ws.append_rows(rows)
     except Exception as e:
-        print(f"  [warn] Could not log classification for {domain}: {e}")
+        print(f"  [warn] Could not log classifications: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +168,7 @@ def filter_relevant_emails(pending_emails):
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
     except Exception as e:
         print(f"  [warn] Gemini init failed: {e} — skipping relevance filter")
         return pending_emails, []
@@ -241,7 +245,7 @@ def classify_domains_with_gemini(domains_with_context):
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
     except Exception as e:
         print(f"  [warn] Gemini init failed: {e} — using defaults")
         return {d: dict(default) for d, _, _ in domains_with_context}
@@ -348,7 +352,7 @@ def classify_roles_with_gemini(contacts_to_classify):
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
     except Exception:
         return {}
 
@@ -521,9 +525,7 @@ def process_pipeline():
     if new_domains:
         print(f"  → {len(new_domains)} dominios nuevos a clasificar")
         classifications = classify_domains_with_gemini(new_domains)
-        # Log classifications
-        for domain, cls in classifications.items():
-            log_classification(sheet, domain, cls["sector"], cls["relType"], "gemini-1.5-flash")
+        log_classifications_batch(sheet, classifications, "gemini-2.0-flash")
     else:
         print("  → No hay dominios nuevos (solo actualizaciones)")
         classifications = {}
