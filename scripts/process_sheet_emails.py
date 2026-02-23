@@ -554,9 +554,9 @@ def group_emails_by_company(pending_emails):
         if subject and len(co["subjects"]) < 20:
             co["subjects"].append(subject)
 
-        # Track dated subjects (date + subject pairs) for chronological context
+        # Track dated subjects (date + subject + extract) for chronological context
         if subject and thread_date and len(co["dated_subjects"]) < 30:
-            co["dated_subjects"].append([thread_date, subject])
+            co["dated_subjects"].append([thread_date, subject, snippet[:200] if snippet and snippet != "nan" else ""])
 
         # Track body snippets for enriched context
         if snippet and snippet != "nan" and len(co["snippets"]) < 10:

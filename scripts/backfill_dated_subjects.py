@@ -30,7 +30,7 @@ EXCEL_FILES = [
 def extract_dated_subjects(excel_path):
     """Extract dated_subjects from 'Datos Brutos' sheet.
 
-    Returns dict of domain -> [[date, subject], ...]
+    Returns dict of domain -> [[date, subject, extract], ...]
     """
     print(f"  Reading Datos Brutos from {os.path.basename(excel_path)}...")
     df = pd.read_excel(excel_path, sheet_name="Datos Brutos")
@@ -40,21 +40,24 @@ def extract_dated_subjects(excel_path):
         domain = str(row.get("Dominio", "")).strip().lower()
         fecha = str(row.get("Fecha", ""))[:10]
         asunto = str(row.get("Asunto", "")).strip()
+        extracto = str(row.get("Extracto", "")).strip()
+        if extracto == "nan":
+            extracto = ""
 
         if not domain or domain == "nan" or not fecha or fecha == "nan" or not asunto or asunto == "nan":
             continue
 
-        by_domain.setdefault(domain, []).append([fecha, asunto])
+        by_domain.setdefault(domain, []).append([fecha, asunto, extracto[:200]])
 
     # Sort by date and deduplicate by subject
     for domain in by_domain:
         entries = sorted(by_domain[domain], key=lambda x: x[0])
         seen = set()
         deduped = []
-        for date, subj in entries:
-            if subj not in seen:
-                deduped.append([date, subj])
-                seen.add(subj)
+        for entry in entries:
+            if entry[1] not in seen:
+                deduped.append(entry)
+                seen.add(entry[1])
         by_domain[domain] = deduped[:30]
 
     print(f"    -> {len(by_domain)} domains, {sum(len(v) for v in by_domain.values())} dated subjects")
@@ -119,7 +122,7 @@ def main():
         dated = extract_dated_subjects(excel_path)
         summaries = extract_quarterly_summaries(excel_path)
 
-        # Merge dated_subjects (combine across mailboxes, deduplicate)
+        # Merge dated_subjects (combine across mailboxes, deduplicate by subject)
         for domain, entries in dated.items():
             existing = all_dated.get(domain, [])
             seen = {e[1] for e in existing}
@@ -144,15 +147,9 @@ def main():
     qs_updated = 0
 
     for domain, company in all_companies.items():
-        # Merge dated_subjects
+        # Merge dated_subjects (replace with fresh data that includes extracts)
         if domain in all_dated:
-            old = company.get("dated_subjects", [])
-            seen = {e[1] for e in old}
-            for entry in all_dated[domain]:
-                if entry[1] not in seen:
-                    old.append(entry)
-                    seen.add(entry[1])
-            company["dated_subjects"] = sorted(old, key=lambda x: x[0])[:30]
+            company["dated_subjects"] = all_dated[domain][:30]
             ds_updated += 1
 
         # Merge quarterly summaries into timeline

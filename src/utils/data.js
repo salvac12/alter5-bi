@@ -30,7 +30,7 @@ export function parseCompanies() {
       sources: det[3] ? det[3].map(s => ({ employee: s[0], interactions: s[1] })) : [],
       subjects: det[4] || [],
       enrichment: det[5] || null,
-      datedSubjects: det[6] ? det[6].map(ds => ({ date: ds[0], subject: ds[1] })) : [],
+      datedSubjects: det[6] ? det[6].map(ds => ({ date: ds[0], subject: ds[1], extract: ds[2] || "" })) : [],
     } : null;
 
     // New taxonomy fields from enrichment

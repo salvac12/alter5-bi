@@ -164,7 +164,7 @@ def merge_company(existing, new_data, employee_id):
             seen.add(s)
     existing["subjects"] = old_subjects[:30]
 
-    # Merge dated_subjects (deduplicate by subject text, sort by date)
+    # Merge dated_subjects [date, subject, extract] (deduplicate by subject, sort by date)
     old_ds = existing.get("dated_subjects", [])
     new_ds = new_data.get("dated_subjects", [])
     seen_ds = {s[1] for s in old_ds}

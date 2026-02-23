@@ -34,6 +34,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
 
   // Tab state
   const [activeTab, setActiveTab] = useState('resumen');
+  const [expandedSubject, setExpandedSubject] = useState(null);
 
   // Estado para datos manuales
   const [manualData, setManualData] = useState({});
@@ -58,6 +59,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   useEffect(() => {
     if (c.domain) {
       setActiveTab('resumen');
+      setExpandedSubject(null);
 
       const data = getCompanyDataByDomain(c.domain);
       setManualData(data);
@@ -400,23 +402,57 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
                   letterSpacing: "1.5px", fontWeight: 700, marginBottom: 10,
                 }}>Resumen de la relacion</div>
                 {det.datedSubjects?.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {[...det.datedSubjects].reverse().map((ds, i) => (
-                      <div key={i} style={{
-                        display: "flex", gap: 10, alignItems: "baseline",
-                        padding: "6px 0",
-                        borderBottom: i < det.datedSubjects.length - 1 ? "1px solid #1B3A5C20" : "none",
-                      }}>
-                        <span style={{
-                          fontSize: 11, fontWeight: 700, color: "#60A5FA",
-                          whiteSpace: "nowrap", minWidth: 80,
-                          fontFamily: "'DM Sans', monospace",
-                        }}>{ds.date}</span>
-                        <span style={{
-                          fontSize: 12, color: "#FFFFFF", fontWeight: 400, lineHeight: 1.5,
-                        }}>{ds.subject}</span>
-                      </div>
-                    ))}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {[...det.datedSubjects].reverse().map((ds, i) => {
+                      const isExpanded = expandedSubject === i;
+                      const hasExtract = !!ds.extract;
+                      return (
+                        <div key={i}
+                          onClick={() => hasExtract && setExpandedSubject(isExpanded ? null : i)}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            cursor: hasExtract ? "pointer" : "default",
+                            background: isExpanded ? "#0A162840" : "transparent",
+                            transition: "background 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (hasExtract && !isExpanded) e.currentTarget.style.background = "#0A162820";
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isExpanded) e.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+                            <span style={{
+                              fontSize: 11, fontWeight: 700, color: "#60A5FA",
+                              whiteSpace: "nowrap", minWidth: 80,
+                              fontFamily: "'DM Sans', monospace",
+                            }}>{ds.date}</span>
+                            <span style={{
+                              fontSize: 12, color: "#FFFFFF", fontWeight: 400, lineHeight: 1.5,
+                              flex: 1,
+                            }}>{ds.subject}</span>
+                            {hasExtract && (
+                              <span style={{
+                                fontSize: 10, color: "#475569", flexShrink: 0,
+                                transition: "transform 0.15s ease",
+                                transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                              }}>▼</span>
+                            )}
+                          </div>
+                          {isExpanded && ds.extract && (
+                            <div style={{
+                              marginTop: 8, marginLeft: 90, padding: "10px 12px",
+                              background: "#0A1628", borderRadius: 6,
+                              border: "1px solid #1B3A5C",
+                              fontSize: 12, color: "#94A3B8", lineHeight: 1.6,
+                              fontWeight: 400,
+                            }}>{ds.extract}</div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p style={{
