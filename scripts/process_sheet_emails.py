@@ -403,6 +403,99 @@ Si no puedes estimar el cargo, usa "No identificado"."""
 
 
 # ---------------------------------------------------------------------------
+# Quarterly summary generation
+# ---------------------------------------------------------------------------
+def generate_quarterly_summaries(all_companies):
+    """Generate short quarterly summaries for companies that have timeline+subjects but lack summaries.
+
+    Calls Gemini to produce a JSON like {"Q1 2022": "short summary", ...} for each company.
+    Modifies all_companies in place.
+    Returns the number of companies updated.
+    """
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("  [warn] GEMINI_API_KEY not set — skipping quarterly summaries")
+        return 0
+
+    # Find companies needing summaries
+    candidates = []
+    for domain, co in all_companies.items():
+        timeline = co.get("timeline", [])
+        subjects = co.get("subjects", [])
+        if not timeline or not subjects:
+            continue
+        # Check if any quarter lacks a summary
+        missing = [t for t in timeline if not t.get("summary")]
+        if missing:
+            candidates.append((domain, co))
+
+    if not candidates:
+        print("  → No companies need quarterly summaries")
+        return 0
+
+    print(f"  → {len(candidates)} companies need quarterly summaries")
+
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+    except Exception as e:
+        print(f"  [warn] Gemini init failed: {e} — skipping summaries")
+        return 0
+
+    updated = 0
+    batch_size = 5  # fewer per batch since each company has more context
+
+    for batch_start in range(0, len(candidates), batch_size):
+        batch = candidates[batch_start:batch_start + batch_size]
+
+        lines = []
+        for i, (domain, co) in enumerate(batch):
+            context = co.get("context", "")[:200]
+            subjects = " | ".join(co.get("subjects", [])[:10])
+            quarters = ", ".join(t["quarter"] for t in co.get("timeline", []) if not t.get("summary"))
+            lines.append(f"{i}. {domain}: context=[{context}] subjects=[{subjects}] quarters_needed=[{quarters}]")
+
+        prompt = f"""Eres un analista de Alter-5, consultora de financiación de proyectos de energía renovable.
+
+Para cada empresa, genera un resumen corto (max 20 palabras) de la actividad en cada trimestre solicitado.
+Basa el resumen en el contexto y los asuntos de email proporcionados.
+Si no tienes info específica para un trimestre, genera un resumen genérico basado en el contexto general.
+
+Empresas:
+{chr(10).join(lines)}
+
+Responde SOLO con un JSON válido, sin markdown. Formato:
+{{"0": {{"Q1 2022": "resumen corto", "Q2 2022": "otro resumen"}}, "1": {{...}}}}
+Los keys son los índices de cada empresa."""
+
+        try:
+            response = model.generate_content(prompt)
+            text = response.text.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1]
+                if text.endswith("```"):
+                    text = text.rsplit("```", 1)[0]
+                text = text.strip()
+
+            parsed = json.loads(text)
+            for i, (domain, co) in enumerate(batch):
+                summaries = parsed.get(str(i), {})
+                if summaries:
+                    for t in co.get("timeline", []):
+                        if not t.get("summary") and t["quarter"] in summaries:
+                            t["summary"] = summaries[t["quarter"]][:100]
+                    updated += 1
+        except Exception as e:
+            print(f"  [warn] Gemini summary batch failed: {e}")
+
+        if batch_start + batch_size < len(candidates):
+            time.sleep(GEMINI_RPM_DELAY)
+
+    return updated
+
+
+# ---------------------------------------------------------------------------
 # Core pipeline
 # ---------------------------------------------------------------------------
 def group_emails_by_company(pending_emails):
@@ -634,6 +727,12 @@ def process_pipeline():
             e["companiesCount"] = emp_company_count[e["id"]]
 
     print(f"  → {new_count} empresas nuevas, {updated_count} actualizadas")
+
+    # 6b. Generate quarterly summaries for companies missing them
+    print("  [6b/7] Generando resumenes trimestrales...")
+    summary_count = generate_quarterly_summaries(all_companies)
+    if summary_count:
+        print(f"  → {summary_count} empresas con nuevos resumenes trimestrales")
 
     # 7. Write output files
     print("  [7/7] Escribiendo archivos JSON...")

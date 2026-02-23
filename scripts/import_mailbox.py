@@ -187,18 +187,22 @@ def merge_company(existing, new_data, employee_id):
                 if not all_contacts[idx].get("email") and c.get("email"):
                     all_contacts[idx]["email"] = c["email"]
     
-    # Merge timelines (sum emails for same quarter)
+    # Merge timelines (sum emails for same quarter, preserve summaries)
+    existing_summaries = {t["quarter"]: t["summary"] for t in existing.get("timeline", []) if t.get("summary")}
     quarter_totals = {}
     for s in existing["sources"].values():
         for t in s.get("timeline", []):
             quarter_totals[t["quarter"]] = quarter_totals.get(t["quarter"], 0) + t["emails"]
-    
+
     existing["interactions"] = all_interactions
     existing["firstDate"] = all_first
     existing["lastDate"] = all_last
     existing["nContacts"] = len(all_contacts)
     existing["contacts"] = all_contacts[:5]
-    existing["timeline"] = [{"quarter": q, "emails": e} for q, e in sorted(quarter_totals.items())][:8]
+    existing["timeline"] = [
+        {"quarter": q, "emails": e, **({"summary": existing_summaries[q]} if q in existing_summaries else {})}
+        for q, e in sorted(quarter_totals.items())
+    ][:8]
     
     # Keep sectors and relType from whichever has more info
     if len(new_data.get("sectors", "")) > len(existing.get("sectors", "")):
@@ -244,7 +248,7 @@ def export_to_compact(all_companies):
             
             details[str(i)] = [
                 [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
-                [[t["quarter"], t["emails"]] for t in timeline[:8]],
+                [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
                 context[:500],
                 source_breakdown,
                 subjects[:20],

@@ -32,6 +32,9 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   const c = company;
   const det = c.detail;
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState('resumen');
+
   // Estado para datos manuales
   const [manualData, setManualData] = useState({});
   const [isEditing, setIsEditing] = useState(false);
@@ -54,6 +57,8 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   // Cargar datos al abrir el panel
   useEffect(() => {
     if (c.domain) {
+      setActiveTab('resumen');
+
       const data = getCompanyDataByDomain(c.domain);
       setManualData(data);
       setEditedData(data);
@@ -230,6 +235,357 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           })}
         </div>
 
+        {/* Tab Bar */}
+        <div style={{
+          display: "flex", gap: 0, marginBottom: 20,
+          borderBottom: "1px solid #1B3A5C",
+        }}>
+          {[
+            { id: 'resumen', label: 'Resumen' },
+            { id: 'timeline', label: 'Timeline' },
+            { id: 'detalles', label: 'Detalles' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === tab.id ? "2px solid #3B82F6" : "2px solid transparent",
+                color: activeTab === tab.id ? "#FFFFFF" : "#6B7F94",
+                fontSize: 13,
+                fontWeight: activeTab === tab.id ? 700 : 600,
+                padding: "10px 18px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                if (activeTab !== tab.id) e.currentTarget.style.color = "#94A3B8";
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== tab.id) e.currentTarget.style.color = "#6B7F94";
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ═══ TAB: Resumen ═══ */}
+        {activeTab === 'resumen' && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Company Type */}
+            {c.companyType && (
+              <SummaryRow label="Tipo de empresa" value={c.companyType} />
+            )}
+
+            {/* Market Roles */}
+            {c.marketRoles?.length > 0 && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                }}>Market Roles</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {c.marketRoles.map((role, i) => {
+                    const mrDef = MARKET_ROLES.find(m => m.id === role);
+                    const col = mrDef?.color || "#6B7F94";
+                    return (
+                      <span key={i} style={{
+                        padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                        background: col + "20", color: col, border: `1px solid ${col}40`,
+                      }}>{role}</span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Contactos (solo nombres) */}
+            {editedContacts.length > 0 && (
+              <SummaryRow
+                label="Contactos"
+                value={editedContacts.map(ct => ct.name).join(", ")}
+              />
+            )}
+
+            {/* Total Interacciones */}
+            <SummaryRow label="Total interacciones" value={c.interactions.toLocaleString()} />
+
+            {/* Deal Stage (solo Capital Seeker) */}
+            {c.dealStage && c.group === "Capital Seeker" && (
+              <SummaryRow label="Fase comercial" value={c.dealStage} />
+            )}
+
+            {/* Productos IA */}
+            {c.productosIA?.length > 0 && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                }}>Productos potenciales</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {c.productosIA.map((p, i) => {
+                    const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7F94" };
+                    const col = confColors[p.c] || "#6B7F94";
+                    return (
+                      <span key={i} style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                        background: col + "15", color: "#FFFFFF", border: `1px solid ${col}40`,
+                      }}>
+                        {p.p}
+                        <span style={{
+                          fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
+                          background: col + "30", color: col, textTransform: "uppercase",
+                        }}>{p.c}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Senales */}
+            {c.senales?.length > 0 && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                }}>Senales clave</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {c.senales.map((s, i) => (
+                    <span key={i} style={{
+                      padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                    }}>{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Historico trimestral compacto */}
+            {det?.timeline?.length > 0 && (
+              <SummaryRow
+                label="Historico trimestral"
+                value={det.timeline.map(t => `${t.quarter}: ${t.emails}`).join(" | ")}
+              />
+            )}
+
+            {/* Primera / Ultima fecha */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <SummaryRow label="Primera fecha" value={c.firstDate || "—"} />
+              <SummaryRow label="Ultima fecha" value={c.lastDate || "—"} />
+            </div>
+
+            {/* Context */}
+            {det?.context && (
+              <div style={{
+                background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
+                borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #2A4A6C",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                }}>Resumen de la relacion</div>
+                <p style={{
+                  fontSize: 13, color: "#FFFFFF", lineHeight: 1.7, margin: 0, fontWeight: 400,
+                }}>{det.context}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ TAB: Timeline ═══ */}
+        {activeTab === 'timeline' && (
+          <div>
+            {/* Timeline table */}
+            {det?.timeline?.length > 0 ? (
+              <>
+                <div style={{
+                  background: "#132238", borderRadius: 12, padding: 18,
+                  marginBottom: 20, border: "1px solid #1B3A5C",
+                }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        {["Trimestre", "Emails", "Resumen"].map(h => (
+                          <th key={h} style={{
+                            textAlign: "left", fontSize: 9, color: "#6B7F94",
+                            textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
+                            padding: "8px 10px", borderBottom: "1px solid #1B3A5C",
+                          }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...det.timeline].reverse().map((t, i) => (
+                        <tr key={i} style={{
+                          borderBottom: "1px solid #0A1628",
+                        }}>
+                          <td style={{
+                            padding: "10px", fontSize: 12, fontWeight: 700,
+                            color: "#FFFFFF", whiteSpace: "nowrap", width: 80,
+                          }}>{t.quarter}</td>
+                          <td style={{
+                            padding: "10px", fontSize: 12, fontWeight: 600,
+                            color: "#60A5FA", width: 60, textAlign: "center",
+                          }}>{t.emails}</td>
+                          <td style={{
+                            padding: "10px", fontSize: 12, color: t.summary ? "#94A3B8" : "#475569",
+                            fontStyle: t.summary ? "normal" : "italic", lineHeight: 1.5,
+                          }}>{t.summary || "Sin resumen"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Bar chart (reused from existing) */}
+                <div style={{
+                  marginBottom: 20, background: "#132238", borderRadius: 12,
+                  padding: 18, border: "1px solid #1B3A5C",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                    <span style={{ fontSize: 20 }}>📈</span>
+                    <DarkSectionTitle style={{ marginBottom: 0 }}>
+                      Historico de interacciones
+                    </DarkSectionTitle>
+                    <span style={{
+                      marginLeft: "auto", fontSize: 11, color: "#6B7F94", fontWeight: 600,
+                    }}>{det.timeline.length} trimestres</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {det.timeline.map((t, i) => {
+                      const maxE = Math.max(...det.timeline.map(x => x.emails));
+                      const pct = (t.emails / maxE) * 100;
+                      const isRecent = i < 3;
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0" }}>
+                          <span style={{
+                            width: 70, fontSize: 12,
+                            color: isRecent ? "#FFFFFF" : "#6B7F94",
+                            fontFamily: "'DM Sans', monospace",
+                            fontWeight: isRecent ? 700 : 600,
+                          }}>{t.quarter}</span>
+                          <div style={{
+                            flex: 1, height: 20, background: "#0A1628",
+                            borderRadius: 6, overflow: "hidden", position: "relative",
+                          }}>
+                            <div style={{
+                              height: "100%", width: `${pct}%`,
+                              background: isRecent
+                                ? "linear-gradient(90deg, #10B981, #059669)"
+                                : "linear-gradient(90deg, #3B82F6, #2563EB)",
+                              borderRadius: 6, transition: "width 0.3s ease",
+                            }} />
+                            {t.emails > 0 && (
+                              <span style={{
+                                position: "absolute", right: 8, top: "50%",
+                                transform: "translateY(-50%)", fontSize: 10, fontWeight: 700,
+                                color: pct > 30 ? "#FFFFFF" : "#94A3B8",
+                              }}>{t.emails} emails</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{
+                    marginTop: 12, padding: 12, background: "#0A1628", borderRadius: 8,
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
+                        Total historico
+                      </div>
+                      <div style={{ fontSize: 18, color: "#FFFFFF", fontWeight: 800, marginTop: 2 }}>
+                        {det.timeline.reduce((sum, t) => sum + t.emails, 0).toLocaleString()} emails
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
+                        Promedio trimestral
+                      </div>
+                      <div style={{ fontSize: 18, color: "#10B981", fontWeight: 800, marginTop: 2 }}>
+                        {Math.round(det.timeline.reduce((sum, t) => sum + t.emails, 0) / det.timeline.length)} emails
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{
+                background: "#132238", borderRadius: 12, padding: 30,
+                border: "1px solid #1B3A5C", textAlign: "center",
+              }}>
+                <span style={{ fontSize: 11, color: "#6B7F94", fontWeight: 600 }}>
+                  Sin datos de timeline para esta empresa
+                </span>
+              </div>
+            )}
+
+            {/* Per-employee breakdown */}
+            {det?.sources?.length > 1 && (
+              <div style={{
+                background: "#132238", borderRadius: 12, padding: 18, border: "1px solid #1B3A5C",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                  <span style={{ fontSize: 20 }}>📊</span>
+                  <DarkSectionTitle style={{ marginBottom: 0 }}>
+                    Interacciones por buzon
+                  </DarkSectionTitle>
+                </div>
+                {det.sources.map((s, i) => {
+                  const maxS = Math.max(...det.sources.map(x => x.interactions));
+                  const empName = s.employee.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                  const pct = (s.interactions / maxS) * 100;
+                  return (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "8px 0",
+                    }}>
+                      <span style={{
+                        width: 140, fontSize: 12, color: "#FFFFFF", fontWeight: 600,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{empName}</span>
+                      <div style={{
+                        flex: 1, height: 18, background: "#0A1628",
+                        borderRadius: 6, overflow: "hidden", position: "relative",
+                      }}>
+                        <div style={{
+                          height: "100%", width: `${pct}%`,
+                          background: "linear-gradient(90deg, #3B82F6, #10B981)",
+                          borderRadius: 6, transition: "width 0.3s ease",
+                        }} />
+                        {s.interactions > 0 && (
+                          <span style={{
+                            position: "absolute", right: 8, top: "50%",
+                            transform: "translateY(-50%)", fontSize: 10, fontWeight: 700,
+                            color: pct > 30 ? "#FFFFFF" : "#94A3B8",
+                          }}>{s.interactions.toLocaleString()} emails</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ TAB: Detalles ═══ */}
+        {activeTab === 'detalles' && (<>
         {/* Clasificación — Editable */}
         <div style={{
           background: "#132238", borderRadius: 12, padding: 18,
@@ -1364,6 +1720,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
             </p>
           )}
         </div>
+        </>)}
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -1671,6 +2028,24 @@ function ScoreBarDark({ score, max, label }) {
           fontWeight: 600,
         }}>/{max}</span>
       </div>
+    </div>
+  );
+}
+
+/* ── Summary row for Resumen tab ── */
+function SummaryRow({ label, value }) {
+  return (
+    <div style={{
+      background: "#132238", borderRadius: 10, padding: "12px 16px",
+      border: "1px solid #1B3A5C",
+    }}>
+      <div style={{
+        fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+        letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
+      }}>{label}</div>
+      <div style={{
+        fontSize: 13, color: "#FFFFFF", fontWeight: 500, lineHeight: 1.5,
+      }}>{value}</div>
     </div>
   );
 }

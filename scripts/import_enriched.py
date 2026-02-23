@@ -255,7 +255,7 @@ def export_to_compact_enriched(all_companies):
 
             details[str(i)] = [
                 [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
-                [[t["quarter"], t["emails"]] for t in timeline[:8]],
+                [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
                 context[:500],  # Extended from 150 to 500
                 source_breakdown,
                 subjects[:20],
