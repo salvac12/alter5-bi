@@ -21,7 +21,6 @@
 ═══════════════════════════════════════════════════════════════
 """
 
-import pandas as pd
 import json
 import sys
 import os
@@ -50,6 +49,7 @@ EMPLOYEES_FILE = _paths["employees"]
 
 def read_excel(filepath):
     """Parse an employee mailbox Excel into structured data."""
+    import pandas as pd
     xls = pd.ExcelFile(filepath)
     
     # Read sheets
