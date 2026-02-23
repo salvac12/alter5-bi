@@ -253,6 +253,8 @@ def export_to_compact_enriched(all_companies):
             for emp_id, s in sorted(c.get("sources", {}).items()):
                 source_breakdown.append([emp_id, s["interactions"]])
 
+            dated_subjects = c.get("dated_subjects", [])
+
             details[str(i)] = [
                 [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
                 [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
@@ -260,6 +262,7 @@ def export_to_compact_enriched(all_companies):
                 source_breakdown,
                 subjects[:20],
                 enrichment,  # index 5 - null if no enrichment
+                dated_subjects[:30] if dated_subjects else None,
             ]
 
     return {"r": records, "d": details}

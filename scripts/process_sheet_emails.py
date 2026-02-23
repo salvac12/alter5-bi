@@ -516,6 +516,7 @@ def group_emails_by_company(pending_emails):
         }),
         "contacts": {},
         "subjects": [],
+        "dated_subjects": [],
         "snippets": [],
     })
 
@@ -552,6 +553,10 @@ def group_emails_by_company(pending_emails):
         # Track subjects for classification and product matching
         if subject and len(co["subjects"]) < 20:
             co["subjects"].append(subject)
+
+        # Track dated subjects (date + subject pairs) for chronological context
+        if subject and thread_date and len(co["dated_subjects"]) < 30:
+            co["dated_subjects"].append([thread_date, subject])
 
         # Track body snippets for enriched context
         if snippet and snippet != "nan" and len(co["snippets"]) < 10:
@@ -679,6 +684,7 @@ def process_pipeline():
                 "contacts": contacts_list[:5],
                 "timeline": [],  # Will be calculated by merge
                 "subjects": subjects[:20],
+                "dated_subjects": sorted(data.get("dated_subjects", []), key=lambda x: x[0])[:30],
                 "snippets": snippets[:10],
             }
 

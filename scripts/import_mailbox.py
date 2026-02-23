@@ -164,6 +164,16 @@ def merge_company(existing, new_data, employee_id):
             seen.add(s)
     existing["subjects"] = old_subjects[:30]
 
+    # Merge dated_subjects (deduplicate by subject text, sort by date)
+    old_ds = existing.get("dated_subjects", [])
+    new_ds = new_data.get("dated_subjects", [])
+    seen_ds = {s[1] for s in old_ds}
+    for ds in new_ds:
+        if ds[1] not in seen_ds:
+            old_ds.append(ds)
+            seen_ds.add(ds[1])
+    existing["dated_subjects"] = sorted(old_ds, key=lambda x: x[0])[:30]
+
     old_snippets = existing.get("snippets", [])
     new_snippets = new_data.get("snippets", [])
     existing["snippets"] = list({s: None for s in old_snippets + new_snippets}.keys())[:15]
@@ -246,6 +256,8 @@ def export_to_compact(all_companies):
             for emp_id, s in sorted(c.get("sources", {}).items()):
                 source_breakdown.append([emp_id, s["interactions"]])
             
+            dated_subjects = c.get("dated_subjects", [])
+
             details[str(i)] = [
                 [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
                 [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
@@ -253,6 +265,7 @@ def export_to_compact(all_companies):
                 source_breakdown,
                 subjects[:20],
                 c.get("enrichment", None),
+                dated_subjects[:30] if dated_subjects else None,
             ]
     
     return {"r": records, "d": details}

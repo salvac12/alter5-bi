@@ -388,8 +388,8 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               <SummaryRow label="Ultima fecha" value={c.lastDate || "—"} />
             </div>
 
-            {/* Context */}
-            {det?.context && (
+            {/* Resumen de la relacion — cronologico con fechas */}
+            {(det?.datedSubjects?.length > 0 || det?.context) && (
               <div style={{
                 background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
                 borderRadius: 10, padding: "12px 16px",
@@ -397,11 +397,32 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               }}>
                 <div style={{
                   fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
-                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 10,
                 }}>Resumen de la relacion</div>
-                <p style={{
-                  fontSize: 13, color: "#FFFFFF", lineHeight: 1.7, margin: 0, fontWeight: 400,
-                }}>{det.context}</p>
+                {det.datedSubjects?.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {[...det.datedSubjects].reverse().map((ds, i) => (
+                      <div key={i} style={{
+                        display: "flex", gap: 10, alignItems: "baseline",
+                        padding: "6px 0",
+                        borderBottom: i < det.datedSubjects.length - 1 ? "1px solid #1B3A5C20" : "none",
+                      }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, color: "#60A5FA",
+                          whiteSpace: "nowrap", minWidth: 80,
+                          fontFamily: "'DM Sans', monospace",
+                        }}>{ds.date}</span>
+                        <span style={{
+                          fontSize: 12, color: "#FFFFFF", fontWeight: 400, lineHeight: 1.5,
+                        }}>{ds.subject}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{
+                    fontSize: 13, color: "#FFFFFF", lineHeight: 1.7, margin: 0, fontWeight: 400,
+                  }}>{det.context}</p>
+                )}
               </div>
             )}
           </div>
