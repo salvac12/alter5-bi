@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides } from '../utils/companyData';
-import { COUNTRIES, COMPANY_SIZES, SECTORS, TIPOS, MARKET_ROLES, SUBTIPOS_EMPRESA, FASES_COMERCIALES, PRODUCTS } from '../utils/constants';
+import { COUNTRIES, COMPANY_SIZES, COMPANY_GROUPS, COMPANY_TYPES, DEAL_STAGES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -44,36 +44,31 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   const [showAddContact, setShowAddContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', role: '', email: '' });
 
-  // Estado para edición de clasificación IA (enrichment)
+  // Estado para edición de clasificación (new taxonomy)
   const [isEditingEnrichment, setIsEditingEnrichment] = useState(false);
   const [editedMR, setEditedMR] = useState([]);
-  const [editedSubtipo, setEditedSubtipo] = useState('');
-  const [editedFase, setEditedFase] = useState('');
-  const [editedSector, setEditedSector] = useState('');
-  const [editedRelType, setEditedRelType] = useState('');
+  const [editedGroup, setEditedGroup] = useState('');
+  const [editedType, setEditedType] = useState('');
+  const [editedStage, setEditedStage] = useState('');
 
-  // Cargar datos manuales al abrir el panel
+  // Cargar datos al abrir el panel
   useEffect(() => {
     if (c.domain) {
       const data = getCompanyDataByDomain(c.domain);
       setManualData(data);
       setEditedData(data);
 
-      // Cargar contactos guardados o usar los originales
       const savedContacts = getCompanyContacts(c.domain);
       setEditedContacts(savedContacts || (det?.contacts || []));
 
-      // Inicializar enrichment desde company (ya tiene overrides aplicados)
       setEditedMR(c.marketRoles || []);
-      setEditedSubtipo(c.subtipo || '');
-      setEditedFase(c.fase || '');
-      setEditedSector(c.sectors || '');
-      setEditedRelType(c.relType || '');
+      setEditedGroup(c.group || '');
+      setEditedType(c.companyType || '');
+      setEditedStage(c.dealStage || '');
       setIsEditingEnrichment(false);
     }
-  }, [c.domain, det?.contacts, c.marketRoles, c.subtipo, c.fase, c.sectors, c.relType]);
+  }, [c.domain, det?.contacts, c.marketRoles, c.group, c.companyType, c.dealStage]);
 
-  // Datos cualificados
   const qualifiedCountry = qualifyCountry(c);
   const qualifiedSize = qualifyCompanySize(c);
 
@@ -105,7 +100,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   };
 
   const handleCancelContactsEdit = () => {
-    // Recargar contactos guardados o usar originales
     const savedContacts = getCompanyContacts(c.domain);
     setEditedContacts(savedContacts || (det?.contacts || []));
     setIsEditingContacts(false);
@@ -131,15 +125,14 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
     setEditedContacts(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Handlers para clasificación IA (enrichment)
+  // Handlers para clasificación (new taxonomy)
   const handleSaveEnrichment = () => {
     if (onEnrichmentSave) {
       const success = onEnrichmentSave(c.domain, {
         mr: editedMR,
-        st: editedSubtipo,
-        fc: editedFase,
-        sector: editedSector,
-        relType: editedRelType,
+        grp: editedGroup,
+        tp: editedType,
+        ds: editedGroup === "Capital Seeker" ? editedStage : "",
       });
       if (success) setIsEditingEnrichment(false);
     }
@@ -147,10 +140,9 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
 
   const handleCancelEnrichment = () => {
     setEditedMR(c.marketRoles || []);
-    setEditedSubtipo(c.subtipo || '');
-    setEditedFase(c.fase || '');
-    setEditedSector(c.sectors || '');
-    setEditedRelType(c.relType || '');
+    setEditedGroup(c.group || '');
+    setEditedType(c.companyType || '');
+    setEditedStage(c.dealStage || '');
     setIsEditingEnrichment(false);
   };
 
@@ -159,6 +151,13 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
       prev.includes(roleId) ? prev.filter(r => r !== roleId) : [...prev, roleId]
     );
   };
+
+  // Types available for the selected group
+  const availableTypes = COMPANY_TYPES[editedGroup] || [];
+
+  // Get group color
+  const groupDef = COMPANY_GROUPS.find(g => g.id === c.group);
+  const groupColor = groupDef?.color || "#94A3B8";
 
   return (
     <div className="slide-in" style={{
@@ -197,26 +196,28 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
         {/* Tags */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
           <StatusBadge status={c.status} />
-          {c.sectors && c.sectors.split(", ").map((s, i) => (
-            <Badge key={i} variant="sector">{s}</Badge>
-          ))}
-          {c.relType.split(", ").map((t, i) => (
-            <Badge key={`t${i}`} variant="type">{t}</Badge>
-          ))}
-          {c.subtipo && (
+          {/* Group badge */}
+          <span style={{
+            padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+            background: groupColor + "20", color: groupColor, border: `1px solid ${groupColor}40`,
+          }}>{c.group}</span>
+          {/* Type badge */}
+          {c.companyType && (
             <span style={{
               padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
               background: "#8B5CF620", color: "#A78BFA", border: "1px solid #8B5CF640",
-            }}>{c.subtipo}</span>
+            }}>{c.companyType}</span>
           )}
-          {c.fase && (
+          {/* Deal Stage badge (only Capital Seekers) */}
+          {c.dealStage && c.group === "Capital Seeker" && (
             <span style={{
               padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-              background: c.fase.includes("activo") ? "#10B98120" : c.fase.includes("Negociacion") ? "#F59E0B20" : c.fase.includes("Descartado") ? "#EF444420" : "#3B82F620",
-              color: c.fase.includes("activo") ? "#34D399" : c.fase.includes("Negociacion") ? "#FBBF24" : c.fase.includes("Descartado") ? "#F87171" : "#60A5FA",
-              border: `1px solid ${c.fase.includes("activo") ? "#10B98140" : c.fase.includes("Negociacion") ? "#F59E0B40" : c.fase.includes("Descartado") ? "#EF444440" : "#3B82F640"}`,
-            }}>{c.fase}</span>
+              background: c.dealStage === "Signing" ? "#10B98120" : c.dealStage.includes("TS") ? "#F59E0B20" : "#3B82F620",
+              color: c.dealStage === "Signing" ? "#34D399" : c.dealStage.includes("TS") ? "#FBBF24" : "#60A5FA",
+              border: `1px solid ${c.dealStage === "Signing" ? "#10B98140" : c.dealStage.includes("TS") ? "#F59E0B40" : "#3B82F640"}`,
+            }}>{c.dealStage}</span>
           )}
+          {/* Market role badges */}
           {c.marketRoles?.map((role, i) => {
             const mrDef = MARKET_ROLES.find(m => m.id === role);
             const col = mrDef?.color || "#6B7F94";
@@ -229,7 +230,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           })}
         </div>
 
-        {/* Clasificación IA - Editable */}
+        {/* Clasificación — Editable */}
         <div style={{
           background: "#132238", borderRadius: 12, padding: 18,
           marginBottom: 20, border: isEditingEnrichment ? "2px solid #8B5CF6" : "1px solid #1B3A5C",
@@ -239,7 +240,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           }}>
             <span style={{ fontSize: 16 }}>🏷️</span>
             <DarkSectionTitle style={{ marginBottom: 0, color: isEditingEnrichment ? "#A78BFA" : "#6B7F94" }}>
-              Clasificación IA
+              Clasificación
             </DarkSectionTitle>
             <span style={{ flex: 1 }} />
             {!isEditingEnrichment ? (
@@ -282,17 +283,23 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
             )}
           </div>
 
-          {/* Sector & Tipo */}
+          {/* Group & Type */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
             <div>
               <div style={{
                 fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
                 letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
-              }}>Sector</div>
+              }}>Group</div>
               {isEditingEnrichment ? (
                 <select
-                  value={editedSector}
-                  onChange={(e) => setEditedSector(e.target.value)}
+                  value={editedGroup}
+                  onChange={(e) => {
+                    setEditedGroup(e.target.value);
+                    // Reset type when group changes
+                    setEditedType('');
+                    // Clear deal stage if not Capital Seeker
+                    if (e.target.value !== "Capital Seeker") setEditedStage('');
+                  }}
                   style={{
                     width: "100%", background: "#0A1628",
                     border: "1px solid #8B5CF640", borderRadius: 4,
@@ -301,27 +308,27 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
                   }}
                 >
                   <option value="">Sin clasificar</option>
-                  {SECTORS.map(s => (
-                    <option key={s} value={s}>{s}</option>
+                  {COMPANY_GROUPS.map(g => (
+                    <option key={g.id} value={g.id}>{g.label}</option>
                   ))}
                 </select>
               ) : (
                 <span style={{
                   fontSize: 13, fontWeight: 600,
-                  color: c.sectors ? "#34D399" : "#475569",
-                  fontStyle: c.sectors ? "normal" : "italic",
-                }}>{c.sectors || "Sin clasificar"}</span>
+                  color: c.group ? groupColor : "#475569",
+                  fontStyle: c.group ? "normal" : "italic",
+                }}>{c.group || "Sin clasificar"}</span>
               )}
             </div>
             <div>
               <div style={{
                 fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
                 letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
-              }}>Tipo relación</div>
+              }}>Type</div>
               {isEditingEnrichment ? (
                 <select
-                  value={editedRelType}
-                  onChange={(e) => setEditedRelType(e.target.value)}
+                  value={editedType}
+                  onChange={(e) => setEditedType(e.target.value)}
                   style={{
                     width: "100%", background: "#0A1628",
                     border: "1px solid #8B5CF640", borderRadius: 4,
@@ -330,16 +337,16 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
                   }}
                 >
                   <option value="">Sin clasificar</option>
-                  {TIPOS.map(t => (
+                  {availableTypes.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
               ) : (
                 <span style={{
                   fontSize: 13, fontWeight: 600,
-                  color: c.relType ? "#60A5FA" : "#475569",
-                  fontStyle: c.relType ? "normal" : "italic",
-                }}>{c.relType || "Sin clasificar"}</span>
+                  color: c.companyType ? "#A78BFA" : "#475569",
+                  fontStyle: c.companyType ? "normal" : "italic",
+                }}>{c.companyType || "Sin clasificar"}</span>
               )}
             </div>
           </div>
@@ -377,17 +384,17 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
             </div>
           </div>
 
-          {/* Subtipo & Fase */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {/* Deal Stage (only for Capital Seekers) */}
+          {(isEditingEnrichment ? editedGroup === "Capital Seeker" : c.group === "Capital Seeker") && (
             <div>
               <div style={{
                 fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
                 letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
-              }}>Subtipo empresa</div>
+              }}>Deal Stage</div>
               {isEditingEnrichment ? (
                 <select
-                  value={editedSubtipo}
-                  onChange={(e) => setEditedSubtipo(e.target.value)}
+                  value={editedStage}
+                  onChange={(e) => setEditedStage(e.target.value)}
                   style={{
                     width: "100%", background: "#0A1628",
                     border: "1px solid #8B5CF640", borderRadius: 4,
@@ -395,49 +402,20 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
                     fontFamily: "inherit", outline: "none", cursor: "pointer",
                   }}
                 >
-                  <option value="">Sin clasificar</option>
-                  {SUBTIPOS_EMPRESA.map(s => (
+                  <option value="">Sin asignar</option>
+                  {DEAL_STAGES.map(s => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               ) : (
                 <span style={{
                   fontSize: 13, fontWeight: 600,
-                  color: c.subtipo ? "#A78BFA" : "#475569",
-                  fontStyle: c.subtipo ? "normal" : "italic",
-                }}>{c.subtipo || "Sin clasificar"}</span>
+                  color: c.dealStage ? "#60A5FA" : "#475569",
+                  fontStyle: c.dealStage ? "normal" : "italic",
+                }}>{c.dealStage || "Sin asignar"}</span>
               )}
             </div>
-            <div>
-              <div style={{
-                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
-                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
-              }}>Fase comercial</div>
-              {isEditingEnrichment ? (
-                <select
-                  value={editedFase}
-                  onChange={(e) => setEditedFase(e.target.value)}
-                  style={{
-                    width: "100%", background: "#0A1628",
-                    border: "1px solid #8B5CF640", borderRadius: 4,
-                    padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
-                    fontFamily: "inherit", outline: "none", cursor: "pointer",
-                  }}
-                >
-                  <option value="">Sin clasificar</option>
-                  {FASES_COMERCIALES.map(f => (
-                    <option key={f} value={f}>{f}</option>
-                  ))}
-                </select>
-              ) : (
-                <span style={{
-                  fontSize: 13, fontWeight: 600,
-                  color: c.fase ? "#60A5FA" : "#475569",
-                  fontStyle: c.fase ? "normal" : "italic",
-                }}>{c.fase || "Sin clasificar"}</span>
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Enrichment: Productos IA & Senales */}
@@ -492,7 +470,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           </div>
         )}
 
-        {/* Context/Summary - HIGHLIGHTED */}
+        {/* Context/Summary */}
         {det?.context && (
           <div style={{
             background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
@@ -543,7 +521,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           </div>
         )}
 
-        {/* Score - MEJORADO */}
+        {/* Score */}
         <div style={{
           background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
           borderRadius: 12,
@@ -592,11 +570,11 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
             <ScoreBarDark score={c.volScore} max={35} label="Volumen" />
             <ScoreBarDark score={c.recScore} max={30} label="Recencia" />
             <ScoreBarDark score={c.netScore} max={15} label="Red" />
-            <ScoreBarDark score={c.typeScore} max={20} label="Tipo" />
+            <ScoreBarDark score={c.groupScore} max={20} label="Grupo" />
           </div>
         </div>
 
-        {/* Metrics - Grid ampliado */}
+        {/* Metrics */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
           {[
             { label: "Interacciones", value: c.interactions.toLocaleString(), big: true, icon: "📊" },
@@ -635,7 +613,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           ))}
         </div>
 
-        {/* Per-employee breakdown - MEJORADO */}
+        {/* Per-employee breakdown */}
         {det?.sources?.length > 1 && (
           <div style={{
             marginBottom: 20,
@@ -711,7 +689,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
             })}
           </div>
         )}
-
 
         {/* Contacts - EDITABLE */}
         {(editedContacts.length > 0 || isEditingContacts) && (
@@ -1081,7 +1058,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           </div>
         )}
 
-        {/* Timeline - MEJORADO */}
+        {/* Timeline */}
         {det?.timeline?.length > 0 && (
           <div style={{
             marginBottom: 20,
@@ -1113,7 +1090,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               {det.timeline.map((t, i) => {
                 const maxE = Math.max(...det.timeline.map(x => x.emails));
                 const pct = (t.emails / maxE) * 100;
-                const isRecent = i < 3; // Los 3 trimestres más recientes
+                const isRecent = i < 3;
 
                 return (
                   <div key={i} style={{
@@ -1276,7 +1253,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {/* Facturación */}
             <EditableField
               label="Facturación anual"
               value={isEditing ? editedData.revenue : manualData.revenue}
@@ -1284,8 +1260,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               isEditing={isEditing}
               onChange={(v) => updateField('revenue', v)}
             />
-
-            {/* Empleados */}
             <EditableField
               label="Número de empleados"
               value={isEditing ? editedData.employeesCount : manualData.employeesCount}
@@ -1294,8 +1268,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               type="number"
               onChange={(v) => updateField('employeesCount', v)}
             />
-
-            {/* País (manual override) */}
             <SelectField
               label="País (manual)"
               value={isEditing ? editedData.country : manualData.country}
@@ -1304,8 +1276,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               isEditing={isEditing}
               onChange={(v) => updateField('country', v)}
             />
-
-            {/* Importancia/Prioridad */}
             <SelectField
               label="Importancia"
               value={isEditing ? editedData.priority : manualData.priority}
@@ -1318,8 +1288,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               isEditing={isEditing}
               onChange={(v) => updateField('priority', v)}
             />
-
-            {/* Sitio web */}
             <EditableField
               label="Sitio web"
               value={isEditing ? editedData.website : manualData.website}
@@ -1328,8 +1296,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               isLink={true}
               onChange={(v) => updateField('website', v)}
             />
-
-            {/* LinkedIn */}
             <EditableField
               label="LinkedIn"
               value={isEditing ? editedData.linkedin : manualData.linkedin}
@@ -1337,8 +1303,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               isEditing={isEditing}
               onChange={(v) => updateField('linkedin', v)}
             />
-
-            {/* Notas */}
             <EditableField
               label="Notas"
               value={isEditing ? editedData.notes : manualData.notes}
@@ -1526,8 +1490,8 @@ function ProductMatchSection({ companyIdx, productMatches }) {
     keyword_high: "Keyword fuerte",
     keyword_med: "Keyword medio",
     keyword_low: "Keyword débil",
-    sector: "Sector",
-    relType: "Tipo relación",
+    marketRole: "Market Role",
+    group: "Grupo",
     role: "Rol contacto",
     activity: "Actividad reciente",
   };
@@ -1633,11 +1597,13 @@ function ProductMatchSection({ companyIdx, productMatches }) {
                   fontSize: 10, fontWeight: 600,
                   padding: "3px 7px", borderRadius: 4,
                   background: sig.type.startsWith("keyword_high") ? match.color + "20"
-                    : sig.type === "relType" ? "#3B82F620"
+                    : sig.type === "marketRole" ? "#3B82F620"
+                    : sig.type === "group" ? "#F59E0B20"
                     : sig.type === "role" ? "#10B98120"
                     : "#6B7F9415",
                   color: sig.type.startsWith("keyword_high") ? match.color
-                    : sig.type === "relType" ? "#60A5FA"
+                    : sig.type === "marketRole" ? "#60A5FA"
+                    : sig.type === "group" ? "#FBBF24"
                     : sig.type === "role" ? "#34D399"
                     : "#94A3B8",
                   whiteSpace: "nowrap",
@@ -1653,7 +1619,7 @@ function ProductMatchSection({ companyIdx, productMatches }) {
   );
 }
 
-/* ── Dark theme score bar - MEJORADO ── */
+/* ── Dark theme score bar ── */
 function ScoreBarDark({ score, max, label }) {
   const pct = (score / max) * 100;
   return (
@@ -1800,7 +1766,6 @@ function EditableField({ label, value, placeholder, isEditing, onChange, type = 
     );
   }
 
-  // Modo edición
   const InputComponent = multiline ? "textarea" : "input";
 
   return (
@@ -1877,7 +1842,6 @@ function SelectField({ label, value, options, placeholder, isEditing, onChange }
     );
   }
 
-  // Modo edición
   return (
     <div style={{
       background: "#0A1628", borderRadius: 6, padding: "10px 12px",

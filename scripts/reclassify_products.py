@@ -62,17 +62,20 @@ def build_prompt(batch):
         context = co.get("context", "")
         subjects = co.get("subjects", [])
         contacts = co.get("contacts", [])
-        sectors = co.get("sectors", "")
-        rel_type = co.get("relType", "")
+        enrichment = co.get("enrichment", {}) or {}
+        group = enrichment.get("grp", "Other")
+        comp_type = enrichment.get("tp", "Other")
+        market_roles = enrichment.get("mr", [])
 
         subj_text = " | ".join(subjects[:8]) if subjects else "(sin subjects)"
         roles_text = ", ".join(
             f'{c.get("name", "")} ({c.get("role", "N/A")})'
             for c in contacts[:4]
         )
+        mr_text = ", ".join(market_roles) if market_roles else "none"
 
         companies_block.append(
-            f'- domain="{co["domain"]}" sector="{sectors}" relType="{rel_type}"\n'
+            f'- domain="{co["domain"]}" group="{group}" type="{comp_type}" marketRoles=[{mr_text}]\n'
             f'  contexto: {context}\n'
             f'  subjects: {subj_text}\n'
             f'  contactos: {roles_text}'
@@ -134,7 +137,7 @@ def main():
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
     except Exception as e:
         print(f"  Error inicializando Gemini: {e}")
         sys.exit(1)
@@ -159,16 +162,24 @@ def main():
     employees = data.get("employees", [])
     print(f"  → {len(all_companies)} empresas cargadas")
 
-    # Filter: only process companies with Renovables/Energía sector or Potencial Prestatario
+    # Filter: process companies with relevant groups or market roles
     candidates = []
     for domain, co in all_companies.items():
-        sectors = (co.get("sectors", "") or "").lower()
-        rel_type = (co.get("relType", "") or "").lower()
-        is_energy = any(s in sectors for s in ["renovable", "energía", "energia", "solar", "eólic"])
-        is_finance = any(r in rel_type for r in ["potencial prestatario", "inversor", "banco", "partnership"])
-        is_advisor = any(r in rel_type for r in ["asesor financiero", "asesor legal"])
+        enrichment = co.get("enrichment", {}) or {}
+        group = enrichment.get("grp", "Other")
+        market_roles = enrichment.get("mr", [])
 
-        if is_energy or is_finance or is_advisor:
+        # Capital Seekers and Investors are always relevant for product matching
+        is_capital_or_investor = group in ("Capital Seeker", "Investor")
+        # Companies with financial market roles
+        has_financial_role = any(r in market_roles for r in [
+            "Borrower", "Debt Investor", "Equity Investor",
+            "Buyer Investor (M&A)", "Seller (M&A)",
+        ])
+        # Financial advisors (Services group)
+        is_financial_advisor = group == "Services" and enrichment.get("tp") in ("Financial Advisor", "Legal Advisor")
+
+        if is_capital_or_investor or has_financial_role or is_financial_advisor:
             candidates.append(co)
 
     if args.limit:

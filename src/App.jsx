@@ -24,10 +24,9 @@ export default function App() {
         return {
           ...c,
           marketRoles: ov.mr !== undefined ? ov.mr : c.marketRoles,
-          subtipo: ov.st !== undefined ? ov.st : c.subtipo,
-          fase: ov.fc !== undefined ? ov.fc : c.fase,
-          sectors: ov.sector !== undefined ? ov.sector : c.sectors,
-          relType: ov.relType !== undefined ? ov.relType : c.relType,
+          group: ov.grp !== undefined ? ov.grp : c.group,
+          companyType: ov.tp !== undefined ? ov.tp : c.companyType,
+          dealStage: ov.ds !== undefined ? ov.ds : c.dealStage,
         };
       });
   }, [allCompanies, hiddenCompanies, enrichmentOverrides]);
@@ -37,10 +36,9 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [activeEmployeeTab, setActiveEmployeeTab] = useState("all");
   const [selEmployees, setSelEmployees] = useState([]);
-  const [selSectors, setSelSectors] = useState([]);
-  const [selTipos, setSelTipos] = useState([]);
-  const [selSubtipos, setSelSubtipos] = useState([]);
-  const [selFases, setSelFases] = useState([]);
+  const [selGroups, setSelGroups] = useState([]);
+  const [selTypes, setSelTypes] = useState([]);
+  const [selStages, setSelStages] = useState([]);
   const [selStatus, setSelStatus] = useState([]);
   const [selProduct, setSelProduct] = useState("");
   const [selMarketRoles, setSelMarketRoles] = useState([]);
@@ -64,18 +62,16 @@ export default function App() {
       list = list.filter(c =>
         c.name.toLowerCase().includes(q) ||
         c.domain.toLowerCase().includes(q) ||
-        c.sectors.toLowerCase().includes(q) ||
-        c.relType.toLowerCase().includes(q) ||
-        c.subtipo.toLowerCase().includes(q) ||
-        c.fase.toLowerCase().includes(q) ||
+        c.group.toLowerCase().includes(q) ||
+        c.companyType.toLowerCase().includes(q) ||
+        (c.dealStage || "").toLowerCase().includes(q) ||
         c.marketRoles.some(mr => mr.toLowerCase().includes(q))
       );
     }
     if (selEmployees.length) list = list.filter(c => selEmployees.some(e => c.employees.includes(e)));
-    if (selSectors.length) list = list.filter(c => selSectors.some(s => c.sectors.includes(s)));
-    if (selTipos.length) list = list.filter(c => selTipos.some(t => c.relType.includes(t)));
-    if (selSubtipos.length) list = list.filter(c => selSubtipos.some(s => c.subtipo.includes(s)));
-    if (selFases.length) list = list.filter(c => selFases.some(f => c.fase.includes(f)));
+    if (selGroups.length) list = list.filter(c => selGroups.includes(c.group));
+    if (selTypes.length) list = list.filter(c => selTypes.includes(c.companyType));
+    if (selStages.length) list = list.filter(c => selStages.includes(c.dealStage));
     if (selStatus.length) list = list.filter(c => selStatus.includes(c.status));
     if (selMarketRoles.length) list = list.filter(c => selMarketRoles.some(mr => c.marketRoles.includes(mr)));
     if (selProduct) {
@@ -95,7 +91,7 @@ export default function App() {
       }
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selSectors, selTipos, selSubtipos, selFases, selStatus, selMarketRoles, selProduct, productMatches, sortBy, sortDir]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selTypes, selStages, selStatus, selMarketRoles, selProduct, productMatches, sortBy, sortDir]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -123,7 +119,7 @@ export default function App() {
 
   const handleTabChange = (tabId) => {
     setActiveEmployeeTab(tabId);
-    setPage(0); // Resetear paginación al cambiar de tab
+    setPage(0);
   };
 
   const handleEnrichmentSave = (domain, overrides) => {
@@ -138,7 +134,7 @@ export default function App() {
     const success = hideCompany(domain);
     if (success) {
       setHiddenCompanies(getHiddenCompanies());
-      setSelected(null); // Cerrar panel de detalle
+      setSelected(null);
     }
     return success;
   };
@@ -175,7 +171,7 @@ export default function App() {
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Buscar empresa, dominio, sector..."
+            placeholder="Buscar empresa, grupo, tipo..."
             style={{
               width: 260, padding: "7px 14px", borderRadius: 6,
               border: "1px solid #E2E8F0", background: "#F7F9FC",
@@ -183,7 +179,6 @@ export default function App() {
               fontFamily: "inherit", fontWeight: 400,
             }}
           />
-          {/* CTA with gradient */}
           <button
             onClick={() => downloadCSV(filtered, productMatches)}
             style={{
@@ -204,10 +199,9 @@ export default function App() {
         <Sidebar
           companies={companies} employees={employees}
           selEmployees={selEmployees} setSelEmployees={setSelEmployees}
-          selSectors={selSectors} setSelSectors={setSelSectors}
-          selTipos={selTipos} setSelTipos={setSelTipos}
-          selSubtipos={selSubtipos} setSelSubtipos={setSelSubtipos}
-          selFases={selFases} setSelFases={setSelFases}
+          selGroups={selGroups} setSelGroups={setSelGroups}
+          selTypes={selTypes} setSelTypes={setSelTypes}
+          selStages={selStages} setSelStages={setSelStages}
           selStatus={selStatus} setSelStatus={setSelStatus}
           selProduct={selProduct} setSelProduct={setSelProduct}
           selMarketRoles={selMarketRoles} setSelMarketRoles={setSelMarketRoles}

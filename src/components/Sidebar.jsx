@@ -1,13 +1,12 @@
-import { SECTORS, TIPOS, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS, SUBTIPOS_EMPRESA, FASES_COMERCIALES, MARKET_ROLES } from '../utils/constants';
-import { FilterChip, SectionLabel, ComingSoonBadge, Tooltip } from './UI';
+import { COMPANY_GROUPS, COMPANY_TYPES, ALL_COMPANY_TYPES, DEAL_STAGES, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS, MARKET_ROLES } from '../utils/constants';
+import { FilterChip, ComingSoonBadge, Tooltip } from './UI';
 
 export default function Sidebar({
   companies, employees,
   selEmployees, setSelEmployees,
-  selSectors, setSelSectors,
-  selTipos, setSelTipos,
-  selSubtipos, setSelSubtipos,
-  selFases, setSelFases,
+  selGroups, setSelGroups,
+  selTypes, setSelTypes,
+  selStages, setSelStages,
   selStatus, setSelStatus,
   selProduct, setSelProduct,
   selMarketRoles, setSelMarketRoles,
@@ -19,7 +18,7 @@ export default function Sidebar({
     setPage(0);
   };
 
-  const hasFilters = selSectors.length > 0 || selTipos.length > 0 || selSubtipos.length > 0 || selFases.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct;
+  const hasFilters = selGroups.length > 0 || selTypes.length > 0 || selStages.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct;
 
   const statusCounts = {
     active: companies.filter(c => c.status === "active").length,
@@ -27,7 +26,12 @@ export default function Sidebar({
     lost: companies.filter(c => c.status === "lost").length,
   };
 
-  const totalActiveFilters = selEmployees.length + selSectors.length + selTipos.length + selSubtipos.length + selFases.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0);
+  const totalActiveFilters = selEmployees.length + selGroups.length + selTypes.length + selStages.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0);
+
+  const groupCounts = {};
+  for (const g of COMPANY_GROUPS) {
+    groupCounts[g.id] = companies.filter(c => c.group === g.id).length;
+  }
 
   const marketRoleCounts = {};
   for (const mr of MARKET_ROLES) {
@@ -43,6 +47,27 @@ export default function Sidebar({
     }
     productCounts[product.id] = count;
   }
+
+  // Determine which types to show based on selected groups
+  const availableTypes = selGroups.length > 0
+    ? selGroups.flatMap(g => COMPANY_TYPES[g] || [])
+    : ALL_COMPANY_TYPES;
+
+  // Type counts
+  const typeCounts = {};
+  for (const t of availableTypes) {
+    typeCounts[t] = companies.filter(c => c.companyType === t).length;
+  }
+
+  // Deal stage counts (only Capital Seekers)
+  const stageCounts = {};
+  const capitalSeekerCompanies = companies.filter(c => c.group === "Capital Seeker");
+  for (const s of DEAL_STAGES) {
+    stageCounts[s] = capitalSeekerCompanies.filter(c => c.dealStage === s).length;
+  }
+
+  // Show deal stages only if Capital Seeker is in filters or no group filter active
+  const showDealStages = selGroups.length === 0 || selGroups.includes("Capital Seeker");
 
   return (
     <div style={{
@@ -82,7 +107,73 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Market Role (primero — clasificación principal) */}
+      {/* Company Group */}
+      <FilterSection title="Company Group">
+        {COMPANY_GROUPS.map(g => (
+          <FilterChip key={g.id}
+            label={
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: g.color, display: "inline-block", flexShrink: 0,
+                }} />
+                {g.label}
+                <span style={{
+                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                }}>
+                  {groupCounts[g.id]}
+                </span>
+              </span>
+            }
+            active={selGroups.includes(g.id)}
+            onClick={() => toggle(selGroups, setSelGroups, g.id)}
+          />
+        ))}
+      </FilterSection>
+
+      {/* Company Type */}
+      <FilterSection title="Company Type">
+        {availableTypes.map(t => (
+          <FilterChip key={t}
+            label={
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {t}
+                <span style={{
+                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                }}>
+                  {typeCounts[t]}
+                </span>
+              </span>
+            }
+            active={selTypes.includes(t)}
+            onClick={() => toggle(selTypes, setSelTypes, t)}
+          />
+        ))}
+      </FilterSection>
+
+      {/* Deal Stage (only when Capital Seekers visible) */}
+      {showDealStages && (
+        <FilterSection title="Deal Stage">
+          {DEAL_STAGES.map(s => (
+            <FilterChip key={s}
+              label={
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {s}
+                  <span style={{
+                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                  }}>
+                    {stageCounts[s]}
+                  </span>
+                </span>
+              }
+              active={selStages.includes(s)}
+              onClick={() => toggle(selStages, setSelStages, s)}
+            />
+          ))}
+        </FilterSection>
+      )}
+
+      {/* Market Role */}
       <FilterSection title="Market Role">
         {MARKET_ROLES.map(mr => (
           <FilterChip key={mr.id}
@@ -142,7 +233,6 @@ export default function Sidebar({
                 setPage(0);
               }}
             />
-            {/* Subcategories */}
             {p.subcategories && (
               <div style={{ marginLeft: 20, marginTop: 2, marginBottom: 6 }}>
                 {p.subcategories.map(sub => (
@@ -157,46 +247,6 @@ export default function Sidebar({
               </div>
             )}
           </div>
-        ))}
-      </FilterSection>
-
-      {/* Sector */}
-      <FilterSection title="Sector">
-        {SECTORS.map(s => (
-          <FilterChip key={s} label={s}
-            active={selSectors.includes(s)}
-            onClick={() => toggle(selSectors, setSelSectors, s)}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Type */}
-      <FilterSection title="Tipo de Relación">
-        {TIPOS.map(t => (
-          <FilterChip key={t} label={t}
-            active={selTipos.includes(t)}
-            onClick={() => toggle(selTipos, setSelTipos, t)}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Subtipo Empresa */}
-      <FilterSection title="Subtipo Empresa">
-        {SUBTIPOS_EMPRESA.map(s => (
-          <FilterChip key={s} label={s}
-            active={selSubtipos.includes(s)}
-            onClick={() => toggle(selSubtipos, setSelSubtipos, s)}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Fase Comercial */}
-      <FilterSection title="Fase Comercial">
-        {FASES_COMERCIALES.map(f => (
-          <FilterChip key={f} label={f}
-            active={selFases.includes(f)}
-            onClick={() => toggle(selFases, setSelFases, f)}
-          />
         ))}
       </FilterSection>
 
@@ -266,7 +316,7 @@ export default function Sidebar({
       {hasFilters && (
         <button
           onClick={() => {
-            setSelEmployees([]); setSelSectors([]); setSelTipos([]); setSelSubtipos([]); setSelFases([]); setSelStatus([]); setSelMarketRoles([]); setSelProduct(""); setPage(0);
+            setSelEmployees([]); setSelGroups([]); setSelTypes([]); setSelStages([]); setSelStatus([]); setSelMarketRoles([]); setSelProduct(""); setPage(0);
           }}
           style={{
             marginTop: 20,

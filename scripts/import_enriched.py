@@ -100,19 +100,81 @@ def read_enriched_excel(filepath):
     return companies
 
 
+SUBTIPO_TO_TYPE = {
+    "Desarrollador": "Developer", "IPP": "IPP", "Utility": "Utility",
+    "Fondo Renovable": "Renewable Fund", "Inversor Institucional": "Institutional Investor",
+    "Banco/Entidad Financiera": "Bank", "Family Office": "Family Office",
+    "EPC/Proveedor": "EPC / Contractor", "Asesor": "Financial Advisor",
+    "Administracion Publica": "Public Institution", "Plataforma Crowdfunding": "Platform / Tech",
+    "Otro": "Other",
+}
+
+FASE_TO_DEAL_STAGE = {
+    "Primer contacto": "Prospect", "Exploracion": "Opportunity",
+    "Negociacion": "TS Preparation", "Cliente activo": "Signing",
+    "Dormido": "Prospect", "Descartado": None,
+}
+
+
+def infer_group(enriched):
+    """Infer company group from market roles and other signals."""
+    mr = enriched.get("market_roles", [])
+    if any(r in mr for r in ["Borrower", "Seller (M&A)"]):
+        return "Capital Seeker"
+    if any(r in mr for r in ["Debt Investor", "Equity Investor", "Buyer Investor (M&A)"]):
+        return "Investor"
+    if mr == ["Partner & Services"]:
+        return "Services"
+
+    rel = enriched.get("relType", "").lower()
+    if "prestatario" in rel:
+        return "Capital Seeker"
+    if "inversor" in rel or "banco" in rel:
+        return "Investor"
+    if "asesor" in rel or "proveedor" in rel or "consultor" in rel:
+        return "Services"
+
+    sector = enriched.get("sector", "").lower()
+    if any(s in sector for s in ["renovable", "energía", "energia"]):
+        return "Capital Seeker"
+    if any(s in sector for s in ["banca", "inversor", "inversión"]):
+        return "Investor"
+    if any(s in sector for s in ["legal", "consultoría", "tecnología"]):
+        return "Services"
+
+    return "Other"
+
+
 def build_enrichment(enriched):
-    """Build compact enrichment object from enriched data."""
+    """Build compact enrichment object from enriched data using new taxonomy."""
     e = {}
-    if enriched.get("subtipo"):
-        e["st"] = enriched["subtipo"]
+
+    # Group
+    group = infer_group(enriched)
+    e["grp"] = group
+
+    # Type (from subtipo mapping)
+    subtipo = enriched.get("subtipo", "")
+    comp_type = SUBTIPO_TO_TYPE.get(subtipo, "Other")
+    e["tp"] = comp_type
+
+    # Deal stage (only for Capital Seekers)
+    if group == "Capital Seeker":
+        fase = enriched.get("fase", "")
+        ds = FASE_TO_DEAL_STAGE.get(fase)
+        if ds:
+            e["ds"] = ds
+
+    # Products and signals (preserved)
     if enriched.get("productos"):
         e["pp"] = enriched["productos"]
     if enriched.get("senales"):
         e["sc"] = enriched["senales"]
-    if enriched.get("fase"):
-        e["fc"] = enriched["fase"]
+
+    # Market roles
     if enriched.get("market_roles"):
         e["mr"] = enriched["market_roles"]
+
     return e if e else None
 
 

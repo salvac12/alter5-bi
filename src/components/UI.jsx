@@ -1,22 +1,12 @@
 import React from 'react';
-import { STATUS_LABELS, STATUS_COLORS, STATUS_BG, EMERALD_SECTORS, BLUE_SECTORS } from '../utils/constants';
-
-/* ── Color logic for sector badges ── */
-function sectorColor(sector) {
-  if (EMERALD_SECTORS.some(s => sector.includes(s))) return { color: "#10B981", bg: "#ECFDF5" };
-  if (BLUE_SECTORS.some(s => sector.includes(s))) return { color: "#3B82F6", bg: "#EFF6FF" };
-  return { color: "#1B3A5C", bg: "#F1F5F9" };
-}
+import { STATUS_LABELS, STATUS_COLORS, STATUS_BG } from '../utils/constants';
 
 /* ── Badge ── */
 export function Badge({ children, color, bg, variant }) {
   let c = color || "#1B3A5C";
   let b = bg || "#F1F5F9";
 
-  if (variant === "sector") {
-    const sc = sectorColor(children);
-    c = sc.color; b = sc.bg;
-  } else if (variant === "type") {
+  if (variant === "type") {
     c = "#3B82F6"; b = "#EFF6FF";
   } else if (variant === "employee") {
     c = "#1B3A5C"; b = "#F7F9FC";

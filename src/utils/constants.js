@@ -1,14 +1,26 @@
-/* ── Filter options ── */
-export const SECTORS = [
-  "Asesor Financiero", "Asociación", "Banca", "Construcción", "Consultoría",
-  "Energía", "Fintech", "Institucional", "Inversión", "Inversor/Fondo",
-  "Legal", "Otro", "Renovables", "Tecnología"
+/* ── Company Groups (replaces Sectors + Tipos + Subtipos) ── */
+export const COMPANY_GROUPS = [
+  { id: "Capital Seeker", label: "Capital Seeker", color: "#F59E0B" },
+  { id: "Investor", label: "Investor", color: "#3B82F6" },
+  { id: "Services", label: "Services", color: "#6B7F94" },
+  { id: "Other", label: "Other", color: "#94A3B8" },
 ];
 
-export const TIPOS = [
-  "Asesor Financiero", "Asesor Legal", "Asesor Técnico", "Banco", "Consultoría",
-  "Institucional", "Inversor/Fondo", "Networking", "No identificado", "Otro",
-  "Partnership", "Potencial Prestatario", "Proveedor"
+/* ── Company Types (per group) ── */
+export const COMPANY_TYPES = {
+  "Capital Seeker": ["Developer", "IPP", "Utility", "Asset Owner", "Corporate"],
+  "Investor": ["Renewable Fund", "Institutional Investor", "Bank", "Family Office", "Infrastructure Fund"],
+  "Services": ["Legal Advisor", "Financial Advisor", "Technical Advisor", "EPC / Contractor", "Consultant", "Platform / Tech"],
+  "Other": ["Public Institution", "Association", "Other"],
+};
+
+/* ── All types flat (for cases where no group filter is active) ── */
+export const ALL_COMPANY_TYPES = Object.values(COMPANY_TYPES).flat();
+
+/* ── Deal Stages (only for Capital Seekers) ── */
+export const DEAL_STAGES = [
+  "Prospect", "Opportunity", "Documentation",
+  "TS Preparation", "TS Sent / Discussion", "Signing", "Distribution",
 ];
 
 /* ── Status config ── */
@@ -17,27 +29,12 @@ export const STATUS_COLORS = { active: "#10B981", dormant: "#F59E0B", lost: "#EF
 export const STATUS_BG = { active: "#ECFDF5", dormant: "#FFFBEB", lost: "#FEF2F2" };
 
 /* ── Scoring weights ── */
-export const TYPE_WEIGHTS = {
-  "Potencial Prestatario": 20,
-  "Inversor/Fondo": 18,
-  "Partnership": 16,
-  "Banco": 15,
-  "Asesor Financiero": 12,
-  "Institucional": 10,
-  "Consultoría": 8,
-  "Asesor Legal": 8,
-  "Asesor Técnico": 8,
-  "Networking": 6,
-  "Proveedor": 5,
-  "Otro": 2,
-  "No identificado": 1,
+export const GROUP_WEIGHTS = {
+  "Capital Seeker": 20,
+  "Investor": 18,
+  "Services": 8,
+  "Other": 2,
 };
-
-/* ── Color rules: which badge gets which color ── */
-/* Emerald → sectors, ESG, sustainability, energy, EIF, renewables */
-export const EMERALD_SECTORS = ["Renovables", "Energía", "Institucional"];
-/* Blue → platform, solutions, tech, AI, fintech */
-export const BLUE_SECTORS = ["Fintech", "Tecnología", "Consultoría"];
 
 export const REF_DATE = new Date();
 export const PER_PAGE = 50;
@@ -84,8 +81,8 @@ export const PRODUCTS = [
         "fotovoltaic", "eólic",
       ],
     },
-    sectors: ["Renovables", "Energía", "Energia"],
-    relTypes: ["Potencial Prestatario"],
+    dealRoles: ["Borrower", "Debt Investor"],
+    groupBonus: "Capital Seeker",
     roles: [
       "structured finance", "project finance", "financiación estructurada",
       "cfo", "chief financial officer", "director financiero",
@@ -125,8 +122,8 @@ export const PRODUCTS = [
         "fotovoltaic", "portfolio", "cartera", "proyecto",
       ],
     },
-    sectors: ["Inversor/Fondo", "Inversión", "Banca", "Renovables", "Energía", "Energia", "Asesor Financiero", "Consultoría"],
-    relTypes: ["Inversor/Fondo", "Banco", "Potencial Prestatario", "Asesor Financiero", "Partnership"],
+    dealRoles: ["Seller (M&A)", "Buyer Investor (M&A)", "Equity Investor"],
+    groupBonus: "Investor",
     roles: [
       "portfolio manager", "fund manager", "investment director",
       "cio", "chief investment officer", "analyst",
@@ -146,18 +143,6 @@ export const MARKET_ROLES = [
   { id: "Debt Investor", label: "Debt Investor", color: "#3B82F6" },
   { id: "Equity Investor", label: "Equity Investor", color: "#10B981" },
   { id: "Partner & Services", label: "Partner & Services", color: "#6B7F94" },
-];
-
-/* ── Subtipos de empresa (enrichment IA) ── */
-export const SUBTIPOS_EMPRESA = [
-  "Desarrollador", "IPP", "Fondo Renovable", "Utility", "EPC/Proveedor",
-  "Asesor", "Inversor Institucional", "Banco/Entidad Financiera",
-  "Family Office", "Administracion Publica", "Plataforma Crowdfunding", "Otro"
-];
-
-export const FASES_COMERCIALES = [
-  "Primer contacto", "Exploracion", "Negociacion",
-  "Cliente activo", "Dormido", "Descartado"
 ];
 
 /* ── Tamaño de empresa (rangos de empleados) ── */

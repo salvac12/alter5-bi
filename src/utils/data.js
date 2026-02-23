@@ -1,12 +1,12 @@
 import rawData from '../data/companies.json';
-import { TYPE_WEIGHTS, REF_DATE, PRODUCTS } from './constants';
+import { GROUP_WEIGHTS, REF_DATE, PRODUCTS } from './constants';
 
 const normalize = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 /**
  * Record: [empresa, dominio, sector, nContactos, totalInteracciones,
  *          tipoRelacion, primeraInteraccion, ultimaInteraccion, employeeSources]
- * Detail: [[contacts], [timeline], contexto, [[empId, interactions], ...]]
+ * Detail: [[contacts], [timeline], contexto, [[empId, interactions], ...], subjects, enrichment]
  */
 export function parseCompanies() {
   const maxInteractions = Math.max(...rawData.r.map(r => r[4]));
@@ -19,9 +19,6 @@ export function parseCompanies() {
     const volScore = Math.min(35, Math.round(Math.log(r[4] + 1) / Math.log(maxInteractions) * 35));
     const recScore = Math.max(0, Math.round(30 - monthsAgo * 1.5));
     const netScore = Math.min(15, r[3] * 3);
-    const types = r[5].split(", ");
-    const typeScore = Math.max(...types.map(t => TYPE_WEIGHTS[t] || 2));
-    const score = volScore + recScore + netScore + typeScore;
 
     const employees = r[8] ? r[8].split(",").filter(Boolean) : [];
 
@@ -35,16 +32,35 @@ export function parseCompanies() {
       enrichment: det[5] || null,
     } : null;
 
+    // New taxonomy fields from enrichment
+    const enrichment = detail?.enrichment || {};
+    const group = enrichment.grp || "Other";
+    const companyType = enrichment.tp || "";
+    const dealStage = enrichment.ds || "";
+    const marketRoles = enrichment.mr || [];
+    const productosIA = enrichment.pp || [];
+    const senales = enrichment.sc || [];
+
+    // Group-based scoring (replaces type scoring)
+    const groupScore = GROUP_WEIGHTS[group] || 2;
+    const score = volScore + recScore + netScore + groupScore;
+
     return {
-      idx: i, name: r[0], domain: r[1], sectors: r[2], nContacts: r[3],
-      interactions: r[4], relType: r[5], firstDate: r[6], lastDate: r[7],
-      employees, status, score, volScore, recScore, netScore, typeScore,
+      idx: i, name: r[0], domain: r[1],
+      // Keep legacy fields for CSV export compatibility
+      sectors: r[2], relType: r[5],
+      nContacts: r[3], interactions: r[4],
+      firstDate: r[6], lastDate: r[7],
+      employees, status, score, volScore, recScore, netScore,
+      groupScore,
       monthsAgo: Math.round(monthsAgo), detail,
-      subtipo: detail?.enrichment?.st || "",
-      fase: detail?.enrichment?.fc || "",
-      productosIA: detail?.enrichment?.pp || [],
-      senales: detail?.enrichment?.sc || [],
-      marketRoles: detail?.enrichment?.mr || [],
+      // New taxonomy
+      group,
+      companyType,
+      dealStage,
+      marketRoles,
+      productosIA,
+      senales,
     };
   });
 }
@@ -75,12 +91,9 @@ export function calculateProductMatches(companies) {
     const ctx = (c.detail?.context || "").toLowerCase();
     const subjectsText = (c.detail?.subjects || []).join(" ").toLowerCase();
     const searchText = ctx + " " + subjectsText;
-    const sectorList = c.sectors.toLowerCase();
-    const relList = c.relType.toLowerCase();
     const contactRoles = (c.detail?.contacts || []).map(ct => (ct.role || "").toLowerCase());
 
     // If company has IA-classified products, use those directly
-    // Map old product names to new ones (Debt / Equity)
     if (c.productosIA && c.productosIA.length > 0) {
       const confScores = { alta: 90, media: 60, baja: 30 };
       const IA_NAME_MAP = {
@@ -91,7 +104,6 @@ export function calculateProductMatches(companies) {
         "Debt": "Debt",
         "Equity": "Equity",
       };
-      // Deduplicate: keep highest confidence per mapped product
       const bestByProduct = new Map();
       for (const pia of c.productosIA) {
         const normalizedName = normalize(pia.p);
@@ -154,18 +166,18 @@ export function calculateProductMatches(companies) {
       }
       score += Math.min(40, kwScore);
 
-      // --- Sector match (max 15) ---
-      const sectorMatch = product.sectors.some(s => sectorList.includes(s.toLowerCase()));
-      if (sectorMatch) {
-        score += 15;
-        signals.push({ type: "sector", value: product.sectors.filter(s => sectorList.includes(s.toLowerCase())).join(", ") });
+      // --- Market Role match (max 25, replaces sector+relType) ---
+      const roleMatch = product.dealRoles.some(dr => c.marketRoles.includes(dr));
+      if (roleMatch) {
+        score += 25;
+        const matchedRoles = product.dealRoles.filter(dr => c.marketRoles.includes(dr));
+        signals.push({ type: "marketRole", value: matchedRoles.join(", ") });
       }
 
-      // --- RelType match (max 20) ---
-      const relMatch = product.relTypes.some(r => relList.includes(r.toLowerCase()));
-      if (relMatch) {
-        score += 20;
-        signals.push({ type: "relType", value: product.relTypes.filter(r => relList.includes(r.toLowerCase())).join(", ") });
+      // --- Group bonus (max 10, replaces sector match) ---
+      if (product.groupBonus && c.group === product.groupBonus) {
+        score += 10;
+        signals.push({ type: "group", value: c.group });
       }
 
       // --- Contact role match (max 15) ---
@@ -229,9 +241,7 @@ function contactPriority(role) {
   return { rank: 4, label: role };
 }
 
-/** Split a full name into { nombre, apellidos }.
- *  "Salvador Carrillo Ruiz" → { nombre: "Salvador", apellidos: "Carrillo Ruiz" }
- */
+/** Split a full name into { nombre, apellidos }. */
 function splitName(fullName) {
   const parts = (fullName || "").trim().split(/\s+/);
   if (parts.length === 0) return { nombre: "", apellidos: "" };
@@ -240,16 +250,14 @@ function splitName(fullName) {
   return { nombre, apellidos };
 }
 
-/** Export filtered companies to Airtable-compatible CSV.
- *  Contacts are sorted by priority (CEO/CFO > Fin.Estructurada > M&A > Otros > Desconocido)
- *  and exported as semicolon-separated columns: Nombre · Apellidos · Email · Cargo · Prioridad
- */
+/** Export filtered companies to Airtable-compatible CSV. */
 export function downloadCSV(companies, productMatches) {
   const headers = [
-    "Empresa", "Dominio", "Sector", "Nº Contactos", "Total Interacciones",
-    "Tipo Relación", "Primera Interacción", "Última Interacción",
-    "Estado", "Score", "Score Volumen", "Score Recencia", "Score Red", "Score Tipo",
-    "Buzones",
+    "Empresa", "Dominio", "Group", "Type", "Deal Stage",
+    "Nº Contactos", "Total Interacciones",
+    "Primera Interacción", "Última Interacción",
+    "Estado", "Score", "Score Volumen", "Score Recencia", "Score Red", "Score Grupo",
+    "Buzones", "Market Roles",
     "Producto Match", "Producto Score",
     "Contactos - Nombre", "Contactos - Apellidos", "Contactos - Email",
     "Contactos - Cargo", "Contactos - Prioridad",
@@ -258,8 +266,6 @@ export function downloadCSV(companies, productMatches) {
 
   const rows = companies.map(c => {
     const rawContacts = c.detail?.contacts || [];
-
-    // Sort contacts by priority rank (ascending = highest first)
     const sorted = [...rawContacts].sort((a, b) =>
       contactPriority(a.role).rank - contactPriority(b.role).rank
     );
@@ -273,11 +279,12 @@ export function downloadCSV(companies, productMatches) {
     const bestProduct = productMatches ? getBestProductMatch(productMatches, c.idx) : null;
 
     return [
-      c.name, c.domain, c.sectors, c.nContacts, c.interactions,
-      c.relType, c.firstDate, c.lastDate,
+      c.name, c.domain, c.group, c.companyType, c.dealStage || "",
+      c.nContacts, c.interactions,
+      c.firstDate, c.lastDate,
       { active: "Activa", dormant: "Dormida", lost: "Perdida" }[c.status],
-      c.score, c.volScore, c.recScore, c.netScore, c.typeScore,
-      c.employees.join(", "),
+      c.score, c.volScore, c.recScore, c.netScore, c.groupScore,
+      c.employees.join(", "), (c.marketRoles || []).join(", "),
       bestProduct?.name || "", bestProduct?.score || 0,
       nombres, apellidos, emails, cargos, prioridades,
       c.detail?.context || "",

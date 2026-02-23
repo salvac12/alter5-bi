@@ -43,27 +43,20 @@ from import_mailbox import merge_company, export_to_compact, get_data_paths
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-SECTORS = [
-    "Asesor Financiero", "Asociación", "Banca", "Construcción", "Consultoría",
-    "Energía", "Fintech", "Institucional", "Inversión", "Inversor/Fondo",
-    "Legal", "Otro", "Renovables", "Tecnología",
-]
+COMPANY_GROUPS = ["Capital Seeker", "Investor", "Services", "Other"]
 
-REL_TYPES = [
-    "Asesor Financiero", "Asesor Legal", "Asesor Técnico", "Banco", "Consultoría",
-    "Institucional", "Inversor/Fondo", "Networking", "No identificado", "Otro",
-    "Partnership", "Potencial Prestatario", "Proveedor",
-]
+COMPANY_TYPES = {
+    "Capital Seeker": ["Developer", "IPP", "Utility", "Asset Owner", "Corporate"],
+    "Investor": ["Renewable Fund", "Institutional Investor", "Bank", "Family Office", "Infrastructure Fund"],
+    "Services": ["Legal Advisor", "Financial Advisor", "Technical Advisor", "EPC / Contractor", "Consultant", "Platform / Tech"],
+    "Other": ["Public Institution", "Association", "Other"],
+}
 
-SUBTIPOS_EMPRESA = [
-    "Desarrollador", "IPP", "Fondo Renovable", "Utility", "EPC/Proveedor",
-    "Asesor", "Inversor Institucional", "Banco/Entidad Financiera",
-    "Family Office", "Administracion Publica", "Plataforma Crowdfunding", "Otro",
-]
+ALL_COMPANY_TYPES = [t for types in COMPANY_TYPES.values() for t in types]
 
-FASES_COMERCIALES = [
-    "Primer contacto", "Exploracion", "Negociacion",
-    "Cliente activo", "Dormido", "Descartado",
+DEAL_STAGES = [
+    "Prospect", "Opportunity", "Documentation",
+    "TS Preparation", "TS Sent / Discussion", "Signing", "Distribution",
 ]
 
 MARKET_ROLES_LIST = [
@@ -142,8 +135,8 @@ def log_classifications_batch(sheet, classifications, source):
             rows.append([
                 datetime.utcnow().isoformat(),
                 domain,
-                cls.get("sector", "Otro"),
-                cls.get("relType", "Otro"),
+                cls.get("group", "Other"),
+                cls.get("type", "Other"),
                 source,
             ])
         ws.append_rows(rows)
@@ -228,15 +221,15 @@ Los números son los índices de cada email. Todos los emails deben aparecer en 
 
 
 def classify_domains_with_gemini(domains_with_context):
-    """Classify a list of domains into sector + relType + enrichment using Gemini.
+    """Classify a list of domains into group + type + enrichment using Gemini.
 
     Args:
         domains_with_context: list of (domain, [subjects], [snippets]) tuples
 
     Returns:
-        dict of domain -> {"sector": str, "relType": str, "enrichment": {"st","fc","mr"} | None}
+        dict of domain -> {"group": str, "type": str, "enrichment": {"grp","tp","ds","mr"} | None}
     """
-    default = {"sector": "Otro", "relType": "Otro", "enrichment": None}
+    default = {"group": "Other", "type": "Other", "enrichment": None}
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("  [warn] GEMINI_API_KEY not set — using defaults")
@@ -251,6 +244,12 @@ def classify_domains_with_gemini(domains_with_context):
         return {d: dict(default) for d, _, _ in domains_with_context}
 
     results = {}
+
+    # Build type descriptions for prompt
+    type_lines = []
+    for grp, types in COMPANY_TYPES.items():
+        type_lines.append(f"  {grp}: [{', '.join(types)}]")
+    types_block = "\n".join(type_lines)
 
     # Process in batches
     for batch_start in range(0, len(domains_with_context), GEMINI_BATCH_SIZE):
@@ -267,17 +266,22 @@ def classify_domains_with_gemini(domains_with_context):
 Clasifica estas empresas por su dominio web, los asuntos de email y los fragmentos de conversación.
 
 Para cada empresa determina:
-1. sector: una de [{", ".join(SECTORS)}]
-2. relType (tipo de relación con Alter-5): una de [{", ".join(REL_TYPES)}]
-3. subtipo (subtipo de empresa): una de [{", ".join(SUBTIPOS_EMPRESA)}]
-4. fase (fase comercial): una de [{", ".join(FASES_COMERCIALES)}]
-5. market_roles (roles de mercado, puede ser MÁS DE UNO): subconjunto de [{", ".join(MARKET_ROLES_LIST)}]
+1. group (grupo de empresa): una de [{", ".join(COMPANY_GROUPS)}]
+   - Capital Seeker: empresas que buscan financiación (developers, IPPs, utilities, asset owners)
+   - Investor: proveedores de capital (bancos, fondos, family offices, institucionales)
+   - Services: asesores, consultores, EPC, legal, técnicos
+   - Other: asociaciones, instituciones públicas, no clasificados
+2. type (tipo de empresa, según el grupo):
+{types_block}
+3. deal_stage (solo si group es "Capital Seeker"): una de [{", ".join(DEAL_STAGES)}]
+   Si NO es Capital Seeker, dejar como null.
+4. market_roles (roles de mercado, puede ser MÁS DE UNO): subconjunto de [{", ".join(MARKET_ROLES_LIST)}]
 
 Empresas:
 {chr(10).join(lines)}
 
 Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato exacto:
-{{"dominio1.com": {{"sector": "...", "relType": "...", "subtipo": "...", "fase": "...", "market_roles": ["..."]}}, "dominio2.com": {{...}}}}"""
+{{"dominio1.com": {{"group": "...", "type": "...", "deal_stage": "..." o null, "market_roles": ["..."]}}, "dominio2.com": {{...}}}}"""
 
         try:
             response = model.generate_content(prompt)
@@ -293,34 +297,40 @@ Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato exacto
             for domain, _, _ in batch:
                 if domain in parsed:
                     entry = parsed[domain]
-                    sector = entry.get("sector", "Otro")
-                    rel_type = entry.get("relType", "Otro")
-                    if sector not in SECTORS:
-                        sector = "Otro"
-                    if rel_type not in REL_TYPES:
-                        rel_type = "Otro"
-
-                    # Parse enrichment fields
-                    subtipo = entry.get("subtipo", "")
-                    fase = entry.get("fase", "")
+                    group = entry.get("group", "Other")
+                    comp_type = entry.get("type", "Other")
+                    deal_stage = entry.get("deal_stage")
                     market_roles = entry.get("market_roles", [])
 
-                    # Validate
-                    if subtipo not in SUBTIPOS_EMPRESA:
-                        subtipo = "Otro"
-                    if fase not in FASES_COMERCIALES:
-                        fase = "Primer contacto"
+                    # Validate group
+                    if group not in COMPANY_GROUPS:
+                        group = "Other"
+
+                    # Validate type belongs to group
+                    valid_types = COMPANY_TYPES.get(group, [])
+                    if comp_type not in valid_types:
+                        comp_type = valid_types[-1] if valid_types else "Other"
+
+                    # Validate deal stage (only for Capital Seekers)
+                    if group != "Capital Seeker":
+                        deal_stage = None
+                    elif deal_stage and deal_stage not in DEAL_STAGES:
+                        deal_stage = "Prospect"
+
+                    # Validate market roles
                     valid_mr = [r for r in market_roles if r in MARKET_ROLES_LIST]
 
                     enrichment = {
-                        "st": subtipo,
-                        "fc": fase,
+                        "grp": group,
+                        "tp": comp_type,
                         "mr": valid_mr if valid_mr else [],
                     }
+                    if deal_stage:
+                        enrichment["ds"] = deal_stage
 
                     results[domain] = {
-                        "sector": sector,
-                        "relType": rel_type,
+                        "group": group,
+                        "type": comp_type,
                         "enrichment": enrichment,
                     }
                 else:
@@ -566,10 +576,10 @@ def process_pipeline():
             new_company_data = {
                 "name": domain.split(".")[0].title(),  # fallback name from domain
                 "domain": domain,
-                "sectors": cls.get("sector", all_companies.get(domain, {}).get("sectors", "Otro")),
+                "sectors": "",  # legacy field, kept for compat
                 "nContacts": len(contacts_list),
                 "interactions": emp_stats["interactions"],
-                "relType": cls.get("relType", all_companies.get(domain, {}).get("relType", "Otro")),
+                "relType": "",  # legacy field, kept for compat
                 "firstDate": emp_stats["firstDate"] if emp_stats["firstDate"] != "9999-12-31" else "",
                 "lastDate": emp_stats["lastDate"] if emp_stats["lastDate"] != "0000-01-01" else "",
                 "context": f"Emails sobre: {', '.join(subjects[:3])}"[:150],
