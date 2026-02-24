@@ -125,8 +125,20 @@ def extract_opportunity(record):
     # Record status (active, archived, etc.)
     record_status = fields.get("Record Status", "")
 
+    # Type of opportunity: "Transaction" vs "Internal Initiative"
+    opp_type = fields.get("Type of opportunity", "")
+
+    # Business type from linked "Type (from Business Program)"
+    business_type = fields.get("Type (from Business Program)", "")
+    if isinstance(business_type, list):
+        business_type = business_type[0] if business_type else ""
+
     # Skip archived/deleted records
     if record_status and record_status.lower() in ("archived", "deleted"):
+        return None
+
+    # Skip Internal Initiatives — only keep Transactions
+    if opp_type and opp_type != "Transaction":
         return None
 
     return {
@@ -137,6 +149,7 @@ def extract_opportunity(record):
         "phase": workflow_phase,
         "amount": amount,
         "currency": currency,
+        "businessType": str(business_type) if business_type else "",
     }
 
 
@@ -173,6 +186,7 @@ def build_output(records):
                 "phase": o.get("phase", ""),
                 "amount": o["amount"],
                 "currency": o["currency"],
+                "businessType": o.get("businessType", ""),
             }
             for o in opportunities
         ],

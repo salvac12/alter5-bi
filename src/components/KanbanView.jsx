@@ -26,6 +26,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [businessFilter, setBusinessFilter] = useState('All');
   const [draggedCard, setDraggedCard] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
 
@@ -34,19 +35,25 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
     loadOpportunities();
   }, []);
 
-  // Filter opportunities when search query changes
+  // Filter opportunities when search query or business filter changes
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredOpportunities(opportunities);
-    } else {
+    let filtered = opportunities;
+
+    // Business type filter
+    if (businessFilter !== 'All') {
+      filtered = filtered.filter(opp => opp.businessType === businessFilter);
+    }
+
+    // Search filter
+    if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      setFilteredOpportunities(
-        opportunities.filter(opp =>
-          opp.name.toLowerCase().includes(query)
-        )
+      filtered = filtered.filter(opp =>
+        opp.name.toLowerCase().includes(query)
       );
     }
-  }, [searchQuery, opportunities]);
+
+    setFilteredOpportunities(filtered);
+  }, [searchQuery, businessFilter, opportunities]);
 
   async function loadOpportunities() {
     if (!isAirtableConfigured()) {
@@ -163,6 +170,22 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
                 ×
               </button>
             )}
+          </div>
+
+          {/* Business type filter */}
+          <div style={styles.filterGroup}>
+            {['All', 'Debt', 'M&A'].map(filter => (
+              <button
+                key={filter}
+                onClick={() => setBusinessFilter(filter)}
+                style={{
+                  ...styles.filterButton,
+                  ...(businessFilter === filter ? styles.filterButtonActive : {}),
+                }}
+              >
+                {filter}
+              </button>
+            ))}
           </div>
 
           {/* Create button */}
@@ -371,6 +394,19 @@ function OpportunityCard({
           </div>
         )}
 
+        {/* Business type badge */}
+        {opportunity.businessType && (
+          <div>
+            <span style={{
+              ...styles.phaseBadge,
+              background: opportunity.businessType === 'Debt' ? '#EFF6FF' : '#F0FDF4',
+              color: opportunity.businessType === 'Debt' ? '#3B82F6' : '#10B981',
+            }}>
+              {opportunity.businessType}
+            </span>
+          </div>
+        )}
+
         {opportunity.phase && (
           <div style={styles.cardPhase}>
             <span style={{
@@ -519,6 +555,31 @@ const styles = {
     padding: 4,
     lineHeight: 1,
     borderRadius: 4,
+  },
+
+  // Business type filter
+  filterGroup: {
+    display: 'flex',
+    gap: 0,
+    borderRadius: 8,
+    overflow: 'hidden',
+    border: '1px solid #E2E8F0',
+  },
+  filterButton: {
+    padding: '7px 14px',
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#6B7F94',
+    background: '#FFFFFF',
+    border: 'none',
+    borderRight: '1px solid #E2E8F0',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    fontFamily: "'DM Sans', system-ui",
+  },
+  filterButtonActive: {
+    background: '#3B82F6',
+    color: '#FFFFFF',
   },
 
   // Create button

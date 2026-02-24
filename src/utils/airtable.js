@@ -34,9 +34,12 @@ export function isAirtableConfigured() {
 export async function fetchAllOpportunities() {
   const all = [];
   let offset = null;
+  // Only fetch Transactions (exclude Internal Initiatives)
+  const formula = encodeURIComponent('{Type of opportunity} = "Transaction"');
 
   do {
-    const url = offset ? `${API_ROOT}?offset=${offset}` : API_ROOT;
+    let url = `${API_ROOT}?filterByFormula=${formula}`;
+    if (offset) url += `&offset=${offset}`;
     const res = await fetch(url, { headers: headers() });
     if (!res.ok) {
       const body = await res.text();
@@ -160,6 +163,10 @@ export function normalizeRecord(record) {
   if (Array.isArray(currency)) currency = "EUR"; // linked record IDs
   const recordStatus = f["Record Status"] || "";
 
+  // Business type from linked "Type (from Business Program)" field
+  let businessType = f["Type (from Business Program)"] || "";
+  if (Array.isArray(businessType)) businessType = businessType[0] || "";
+
   return {
     id: record.id,
     name: name.trim(),
@@ -168,6 +175,7 @@ export function normalizeRecord(record) {
     amount: amount || 0,
     currency: String(currency),
     recordStatus,
+    businessType: String(businessType),
     // Keep raw fields for editing
     _raw: f,
   };

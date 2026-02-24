@@ -267,13 +267,30 @@ export default function OpportunityPanel({
                 </h2>
               </div>
               {!isNew && opportunity?.id && (
-                <div style={{
-                  fontSize: 12,
-                  color: '#6B7F94',
-                  fontWeight: 500,
-                  fontFamily: 'monospace'
-                }}>
-                  {opportunity.id}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    fontSize: 12,
+                    color: '#6B7F94',
+                    fontWeight: 500,
+                    fontFamily: 'monospace'
+                  }}>
+                    {opportunity.id}
+                  </div>
+                  {opportunity.businessType && (
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '0.3px',
+                      background: opportunity.businessType === 'Debt' ? '#EFF6FF' : '#F0FDF4',
+                      color: opportunity.businessType === 'Debt' ? '#3B82F6' : '#10B981',
+                    }}>
+                      {opportunity.businessType}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
