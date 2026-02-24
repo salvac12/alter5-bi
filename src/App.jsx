@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import alter5Logo from './assets/alter5-logo.svg';
-import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch } from './utils/data';
+import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch, getOpportunityStages, getOpportunityCounts } from './utils/data';
 import { PER_PAGE, PRODUCTS } from './utils/constants';
 import { KPI } from './components/UI';
 import Sidebar from './components/Sidebar';
@@ -40,6 +40,7 @@ export default function App() {
   const [selStatus, setSelStatus] = useState([]);
   const [selProduct, setSelProduct] = useState("");
   const [selMarketRoles, setSelMarketRoles] = useState([]);
+  const [selPipeline, setSelPipeline] = useState("");  // "" | "_any" | stage name
   const [sortBy, setSortBy] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
@@ -70,6 +71,13 @@ export default function App() {
     if (selTypes.length) list = list.filter(c => selTypes.includes(c.companyType));
     if (selStatus.length) list = list.filter(c => selStatus.includes(c.status));
     if (selMarketRoles.length) list = list.filter(c => selMarketRoles.some(mr => c.marketRoles.includes(mr)));
+    if (selPipeline) {
+      if (selPipeline === "_any") {
+        list = list.filter(c => !!c.opportunity);
+      } else {
+        list = list.filter(c => c.opportunity?.stage === selPipeline);
+      }
+    }
     if (selProduct) {
       list = list.filter(c => {
         const matches = productMatches.get(c.idx) || [];
@@ -87,7 +95,7 @@ export default function App() {
       }
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selTypes, selStatus, selMarketRoles, selProduct, productMatches, sortBy, sortDir]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selTypes, selStatus, selMarketRoles, selPipeline, selProduct, productMatches, sortBy, sortDir]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -200,6 +208,7 @@ export default function App() {
           selStatus={selStatus} setSelStatus={setSelStatus}
           selProduct={selProduct} setSelProduct={setSelProduct}
           selMarketRoles={selMarketRoles} setSelMarketRoles={setSelMarketRoles}
+          selPipeline={selPipeline} setSelPipeline={setSelPipeline}
           productMatches={productMatches}
           setPage={setPage}
         />

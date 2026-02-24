@@ -33,11 +33,17 @@ jobs:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
         run: python scripts/process_sheet_emails.py
 
+      - name: Sync Airtable opportunities
+        if: ${{ env.AIRTABLE_PAT != '' }}
+        env:
+          AIRTABLE_PAT: ${{ secrets.AIRTABLE_PAT }}
+        run: python scripts/sync_airtable_opportunities.py
+
       - name: Commit and push if changed
         run: |
           git config user.name "alter5-bi-bot"
           git config user.email "bot@alter5.com"
-          for f in src/data/companies.json src/data/companies_full.json src/data/employees.json; do
+          for f in src/data/companies.json src/data/companies_full.json src/data/employees.json src/data/opportunities.json; do
             [ -f "$f" ] && git add -f "$f"
           done
           if git diff --cached --quiet; then

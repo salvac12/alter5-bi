@@ -1,7 +1,44 @@
 import rawData from '../data/companies.json';
+import oppData from '../data/opportunities.json';
 import { GROUP_WEIGHTS, REF_DATE, PRODUCTS } from './constants';
 
-const normalize = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const normalize = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+// ── Airtable opportunities lookup ──
+const oppByName = new Map();
+for (const o of (oppData.opportunities || [])) {
+  oppByName.set(o.nn, o);
+}
+
+/** Check if a company name matches an Airtable opportunity (fuzzy) */
+function findOpportunity(companyName) {
+  const nn = normalize(companyName);
+  // Direct match
+  if (oppByName.has(nn)) return oppByName.get(nn);
+  // Partial match: company name contains opp name or vice versa
+  for (const [oppName, opp] of oppByName) {
+    if (nn.includes(oppName) || oppName.includes(nn)) return opp;
+  }
+  return null;
+}
+
+/** Get all pipeline stages from Airtable data */
+export function getOpportunityStages() {
+  return oppData.stages || [];
+}
+
+/** Get opportunity count per stage */
+export function getOpportunityCounts(companies) {
+  const counts = { _any: 0 };
+  for (const c of companies) {
+    if (c.opportunity) {
+      counts._any++;
+      const stage = c.opportunity.stage;
+      counts[stage] = (counts[stage] || 0) + 1;
+    }
+  }
+  return counts;
+}
 
 /**
  * Record: [empresa, dominio, sector, nContactos, totalInteracciones,
@@ -45,6 +82,9 @@ export function parseCompanies() {
     const groupScore = GROUP_WEIGHTS[group] || 2;
     const score = volScore + recScore + netScore + groupScore;
 
+    // Airtable opportunity match
+    const opportunity = findOpportunity(r[0]);
+
     return {
       idx: i, name: r[0], domain: r[1],
       // Keep legacy fields for CSV export compatibility
@@ -60,6 +100,8 @@ export function parseCompanies() {
       marketRoles,
       productosIA,
       senales,
+      // Airtable pipeline
+      opportunity,
     };
   });
 }
@@ -96,12 +138,12 @@ export function calculateProductMatches(companies) {
     if (c.productosIA && c.productosIA.length > 0) {
       const confScores = { alta: 90, media: 60, baja: 30 };
       const IA_NAME_MAP = {
-        "Prestamo Construccion": "Debt",
-        "Refinanciacion": "Debt",
-        "Colocacion Inversores": "Equity",
-        "Advisory / M&A": "Equity",
-        "Debt": "Debt",
-        "Equity": "Equity",
+        "prestamo construccion": "Debt",
+        "refinanciacion": "Debt",
+        "colocacion inversores": "Equity",
+        "advisory / m&a": "Equity",
+        "debt": "Debt",
+        "equity": "Equity",
       };
       const bestByProduct = new Map();
       for (const pia of c.productosIA) {
@@ -257,6 +299,7 @@ export function downloadCSV(companies, productMatches) {
     "Primera Interacción", "Última Interacción",
     "Estado", "Score", "Score Volumen", "Score Recencia", "Score Red", "Score Grupo",
     "Buzones", "Market Roles",
+    "Pipeline Airtable", "Pipeline Stage",
     "Producto Match", "Producto Score",
     "Contactos - Nombre", "Contactos - Apellidos", "Contactos - Email",
     "Contactos - Cargo", "Contactos - Prioridad",
@@ -284,6 +327,7 @@ export function downloadCSV(companies, productMatches) {
       { active: "Activa", dormant: "Dormida", lost: "Perdida" }[c.status],
       c.score, c.volScore, c.recScore, c.netScore, c.groupScore,
       c.employees.join(", "), (c.marketRoles || []).join(", "),
+      c.opportunity ? "Si" : "No", c.opportunity?.stage || "",
       bestProduct?.name || "", bestProduct?.score || 0,
       nombres, apellidos, emails, cargos, prioridades,
       c.detail?.context || "",

@@ -1,4 +1,5 @@
 import { COMPANY_GROUPS, COMPANY_TYPES, ALL_COMPANY_TYPES, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS, MARKET_ROLES } from '../utils/constants';
+import { getOpportunityStages, getOpportunityCounts } from '../utils/data';
 import { FilterChip, ComingSoonBadge, Tooltip } from './UI';
 
 export default function Sidebar({
@@ -9,6 +10,7 @@ export default function Sidebar({
   selStatus, setSelStatus,
   selProduct, setSelProduct,
   selMarketRoles, setSelMarketRoles,
+  selPipeline, setSelPipeline,
   productMatches,
   setPage,
 }) {
@@ -17,7 +19,7 @@ export default function Sidebar({
     setPage(0);
   };
 
-  const hasFilters = selGroups.length > 0 || selTypes.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct;
+  const hasFilters = selGroups.length > 0 || selTypes.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct || !!selPipeline;
 
   const statusCounts = {
     active: companies.filter(c => c.status === "active").length,
@@ -25,7 +27,7 @@ export default function Sidebar({
     lost: companies.filter(c => c.status === "lost").length,
   };
 
-  const totalActiveFilters = selEmployees.length + selGroups.length + selTypes.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0);
+  const totalActiveFilters = selEmployees.length + selGroups.length + selTypes.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0) + (selPipeline ? 1 : 0);
 
   const groupCounts = {};
   for (const g of COMPANY_GROUPS) {
@@ -175,6 +177,62 @@ export default function Sidebar({
         ))}
       </FilterSection>
 
+      {/* Pipeline Airtable */}
+      {(() => {
+        const stages = getOpportunityStages();
+        const oppCounts = getOpportunityCounts(companies);
+        if (oppCounts._any === 0 && stages.length === 0) return null;
+        return (
+          <FilterSection title={
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              Pipeline
+              <span style={{
+                fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
+                background: "#8B5CF620", color: "#A78BFA", textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}>Airtable</span>
+            </span>
+          }>
+            <FilterChip
+              label={
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: "#8B5CF6", display: "inline-block", flexShrink: 0,
+                  }} />
+                  Todas las oportunidades
+                  <span style={{
+                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                  }}>{oppCounts._any || 0}</span>
+                </span>
+              }
+              active={selPipeline === "_any"}
+              onClick={() => {
+                setSelPipeline(prev => prev === "_any" ? "" : "_any");
+                setPage(0);
+              }}
+            />
+            {stages.map(stage => (
+              <FilterChip key={stage}
+                label={
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 14 }}>
+                    {stage}
+                    <span style={{
+                      fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                    }}>{oppCounts[stage] || 0}</span>
+                  </span>
+                }
+                active={selPipeline === stage}
+                onClick={() => {
+                  setSelPipeline(prev => prev === stage ? "" : stage);
+                  setPage(0);
+                }}
+              />
+            ))}
+          </FilterSection>
+        );
+      })()}
+
       {/* Producto Alter5 */}
       <FilterSection title="Producto Alter5">
         {PRODUCTS.map(p => (
@@ -283,7 +341,7 @@ export default function Sidebar({
       {hasFilters && (
         <button
           onClick={() => {
-            setSelEmployees([]); setSelGroups([]); setSelTypes([]); setSelStatus([]); setSelMarketRoles([]); setSelProduct(""); setPage(0);
+            setSelEmployees([]); setSelGroups([]); setSelTypes([]); setSelStatus([]); setSelMarketRoles([]); setSelPipeline(""); setSelProduct(""); setPage(0);
           }}
           style={{
             marginTop: 20,

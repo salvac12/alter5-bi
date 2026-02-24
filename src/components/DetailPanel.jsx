@@ -221,6 +221,17 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               }}>{role}</span>
             );
           })}
+          {/* Airtable pipeline badge */}
+          {c.opportunity && (
+            <span style={{
+              padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+              background: "#8B5CF620", color: "#A78BFA", border: "1px solid #8B5CF640",
+              display: "inline-flex", alignItems: "center", gap: 4,
+            }}>
+              <span style={{ fontSize: 9 }}>AT</span>
+              {c.opportunity.stage}
+            </span>
+          )}
         </div>
 
         {/* Tab Bar */}
@@ -303,6 +314,41 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
 
             {/* Total Interacciones */}
             <SummaryRow label="Total interacciones" value={c.interactions.toLocaleString()} />
+
+            {/* Airtable Pipeline */}
+            {c.opportunity && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #8B5CF640",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  Pipeline Airtable
+                  <span style={{
+                    fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
+                    background: "#8B5CF620", color: "#A78BFA",
+                  }}>LIVE</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>
+                    {c.opportunity.stage}
+                  </div>
+                  {c.opportunity.amount > 0 && (
+                    <div style={{ fontSize: 12, color: "#94A3B8" }}>
+                      {c.opportunity.amount.toLocaleString("es-ES")} {c.opportunity.currency}
+                    </div>
+                  )}
+                  {c.opportunity.owner && (
+                    <div style={{ fontSize: 11, color: "#6B7F94" }}>
+                      {c.opportunity.owner}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Productos IA */}
             {c.productosIA?.length > 0 && (
