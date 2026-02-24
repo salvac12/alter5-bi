@@ -1,4 +1,4 @@
-import { COMPANY_GROUPS, COMPANY_TYPES, ALL_COMPANY_TYPES, DEAL_STAGES, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS, MARKET_ROLES } from '../utils/constants';
+import { COMPANY_GROUPS, COMPANY_TYPES, ALL_COMPANY_TYPES, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS, MARKET_ROLES } from '../utils/constants';
 import { FilterChip, ComingSoonBadge, Tooltip } from './UI';
 
 export default function Sidebar({
@@ -6,7 +6,6 @@ export default function Sidebar({
   selEmployees, setSelEmployees,
   selGroups, setSelGroups,
   selTypes, setSelTypes,
-  selStages, setSelStages,
   selStatus, setSelStatus,
   selProduct, setSelProduct,
   selMarketRoles, setSelMarketRoles,
@@ -18,7 +17,7 @@ export default function Sidebar({
     setPage(0);
   };
 
-  const hasFilters = selGroups.length > 0 || selTypes.length > 0 || selStages.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct;
+  const hasFilters = selGroups.length > 0 || selTypes.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct;
 
   const statusCounts = {
     active: companies.filter(c => c.status === "active").length,
@@ -26,7 +25,7 @@ export default function Sidebar({
     lost: companies.filter(c => c.status === "lost").length,
   };
 
-  const totalActiveFilters = selEmployees.length + selGroups.length + selTypes.length + selStages.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0);
+  const totalActiveFilters = selEmployees.length + selGroups.length + selTypes.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0);
 
   const groupCounts = {};
   for (const g of COMPANY_GROUPS) {
@@ -58,16 +57,6 @@ export default function Sidebar({
   for (const t of availableTypes) {
     typeCounts[t] = companies.filter(c => c.companyType === t).length;
   }
-
-  // Deal stage counts (only Capital Seekers)
-  const stageCounts = {};
-  const capitalSeekerCompanies = companies.filter(c => c.group === "Capital Seeker");
-  for (const s of DEAL_STAGES) {
-    stageCounts[s] = capitalSeekerCompanies.filter(c => c.dealStage === s).length;
-  }
-
-  // Show deal stages only if Capital Seeker is in filters or no group filter active
-  const showDealStages = selGroups.length === 0 || selGroups.includes("Capital Seeker");
 
   return (
     <div style={{
@@ -150,28 +139,6 @@ export default function Sidebar({
           />
         ))}
       </FilterSection>
-
-      {/* Deal Stage (only when Capital Seekers visible) */}
-      {showDealStages && (
-        <FilterSection title="Deal Stage">
-          {DEAL_STAGES.map(s => (
-            <FilterChip key={s}
-              label={
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {s}
-                  <span style={{
-                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                  }}>
-                    {stageCounts[s]}
-                  </span>
-                </span>
-              }
-              active={selStages.includes(s)}
-              onClick={() => toggle(selStages, setSelStages, s)}
-            />
-          ))}
-        </FilterSection>
-      )}
 
       {/* Market Role */}
       <FilterSection title="Market Role">
@@ -316,7 +283,7 @@ export default function Sidebar({
       {hasFilters && (
         <button
           onClick={() => {
-            setSelEmployees([]); setSelGroups([]); setSelTypes([]); setSelStages([]); setSelStatus([]); setSelMarketRoles([]); setSelProduct(""); setPage(0);
+            setSelEmployees([]); setSelGroups([]); setSelTypes([]); setSelStatus([]); setSelMarketRoles([]); setSelProduct(""); setPage(0);
           }}
           style={{
             marginTop: 20,

@@ -37,7 +37,6 @@ export function parseCompanies() {
     const enrichment = detail?.enrichment || {};
     const group = enrichment.grp || "Other";
     const companyType = enrichment.tp || "";
-    const dealStage = enrichment.ds || "";
     const marketRoles = enrichment.mr || [];
     const productosIA = enrichment.pp || [];
     const senales = enrichment.sc || [];
@@ -58,7 +57,6 @@ export function parseCompanies() {
       // New taxonomy
       group,
       companyType,
-      dealStage,
       marketRoles,
       productosIA,
       senales,
@@ -254,7 +252,7 @@ function splitName(fullName) {
 /** Export filtered companies to Airtable-compatible CSV. */
 export function downloadCSV(companies, productMatches) {
   const headers = [
-    "Empresa", "Dominio", "Group", "Type", "Deal Stage",
+    "Empresa", "Dominio", "Group", "Type",
     "Nº Contactos", "Total Interacciones",
     "Primera Interacción", "Última Interacción",
     "Estado", "Score", "Score Volumen", "Score Recencia", "Score Red", "Score Grupo",
@@ -280,7 +278,7 @@ export function downloadCSV(companies, productMatches) {
     const bestProduct = productMatches ? getBestProductMatch(productMatches, c.idx) : null;
 
     return [
-      c.name, c.domain, c.group, c.companyType, c.dealStage || "",
+      c.name, c.domain, c.group, c.companyType,
       c.nContacts, c.interactions,
       c.firstDate, c.lastDate,
       { active: "Activa", dormant: "Dormida", lost: "Perdida" }[c.status],

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides } from '../utils/companyData';
-import { COUNTRIES, COMPANY_SIZES, COMPANY_GROUPS, COMPANY_TYPES, DEAL_STAGES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
+import { COUNTRIES, COMPANY_SIZES, COMPANY_GROUPS, COMPANY_TYPES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -53,8 +53,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   const [editedMR, setEditedMR] = useState([]);
   const [editedGroup, setEditedGroup] = useState('');
   const [editedType, setEditedType] = useState('');
-  const [editedStage, setEditedStage] = useState('');
-
   // Cargar datos al abrir el panel
   useEffect(() => {
     if (c.domain) {
@@ -71,10 +69,9 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
       setEditedMR(c.marketRoles || []);
       setEditedGroup(c.group || '');
       setEditedType(c.companyType || '');
-      setEditedStage(c.dealStage || '');
       setIsEditingEnrichment(false);
     }
-  }, [c.domain, det?.contacts, c.marketRoles, c.group, c.companyType, c.dealStage]);
+  }, [c.domain, det?.contacts, c.marketRoles, c.group, c.companyType]);
 
   const qualifiedCountry = qualifyCountry(c);
   const qualifiedSize = qualifyCompanySize(c);
@@ -139,7 +136,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
         mr: editedMR,
         grp: editedGroup,
         tp: editedType,
-        ds: editedGroup === "Capital Seeker" ? editedStage : "",
       });
       if (success) setIsEditingEnrichment(false);
     }
@@ -149,7 +145,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
     setEditedMR(c.marketRoles || []);
     setEditedGroup(c.group || '');
     setEditedType(c.companyType || '');
-    setEditedStage(c.dealStage || '');
     setIsEditingEnrichment(false);
   };
 
@@ -214,15 +209,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
               background: "#8B5CF620", color: "#A78BFA", border: "1px solid #8B5CF640",
             }}>{c.companyType}</span>
-          )}
-          {/* Deal Stage badge (only Capital Seekers) */}
-          {c.dealStage && c.group === "Capital Seeker" && (
-            <span style={{
-              padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-              background: c.dealStage === "Signing" ? "#10B98120" : c.dealStage.includes("TS") ? "#F59E0B20" : "#3B82F620",
-              color: c.dealStage === "Signing" ? "#34D399" : c.dealStage.includes("TS") ? "#FBBF24" : "#60A5FA",
-              border: `1px solid ${c.dealStage === "Signing" ? "#10B98140" : c.dealStage.includes("TS") ? "#F59E0B40" : "#3B82F640"}`,
-            }}>{c.dealStage}</span>
           )}
           {/* Market role badges */}
           {c.marketRoles?.map((role, i) => {
@@ -317,11 +303,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
 
             {/* Total Interacciones */}
             <SummaryRow label="Total interacciones" value={c.interactions.toLocaleString()} />
-
-            {/* Deal Stage (solo Capital Seeker) */}
-            {c.dealStage && c.group === "Capital Seeker" && (
-              <SummaryRow label="Fase comercial" value={c.dealStage} />
-            )}
 
             {/* Productos IA */}
             {c.productosIA?.length > 0 && (
@@ -710,8 +691,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
                     setEditedGroup(e.target.value);
                     // Reset type when group changes
                     setEditedType('');
-                    // Clear deal stage if not Capital Seeker
-                    if (e.target.value !== "Capital Seeker") setEditedStage('');
                   }}
                   style={{
                     width: "100%", background: "#0A1628",
@@ -797,38 +776,6 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
             </div>
           </div>
 
-          {/* Deal Stage (only for Capital Seekers) */}
-          {(isEditingEnrichment ? editedGroup === "Capital Seeker" : c.group === "Capital Seeker") && (
-            <div>
-              <div style={{
-                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
-                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
-              }}>Deal Stage</div>
-              {isEditingEnrichment ? (
-                <select
-                  value={editedStage}
-                  onChange={(e) => setEditedStage(e.target.value)}
-                  style={{
-                    width: "100%", background: "#0A1628",
-                    border: "1px solid #8B5CF640", borderRadius: 4,
-                    padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
-                    fontFamily: "inherit", outline: "none", cursor: "pointer",
-                  }}
-                >
-                  <option value="">Sin asignar</option>
-                  {DEAL_STAGES.map(s => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              ) : (
-                <span style={{
-                  fontSize: 13, fontWeight: 600,
-                  color: c.dealStage ? "#60A5FA" : "#475569",
-                  fontStyle: c.dealStage ? "normal" : "italic",
-                }}>{c.dealStage || "Sin asignar"}</span>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Enrichment: Productos IA & Senales */}

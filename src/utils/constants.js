@@ -17,12 +17,6 @@ export const COMPANY_TYPES = {
 /* ── All types flat (for cases where no group filter is active) ── */
 export const ALL_COMPANY_TYPES = Object.values(COMPANY_TYPES).flat();
 
-/* ── Deal Stages (only for Capital Seekers) ── */
-export const DEAL_STAGES = [
-  "Prospect", "Opportunity", "Documentation",
-  "TS Preparation", "TS Sent / Discussion", "Signing", "Distribution",
-];
-
 /* ── Status config ── */
 export const STATUS_LABELS = { active: "Activa", dormant: "Dormida", lost: "Perdida" };
 export const STATUS_COLORS = { active: "#10B981", dormant: "#F59E0B", lost: "#EF4444" };

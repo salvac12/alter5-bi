@@ -26,7 +26,6 @@ export default function App() {
           marketRoles: ov.mr !== undefined ? ov.mr : c.marketRoles,
           group: ov.grp !== undefined ? ov.grp : c.group,
           companyType: ov.tp !== undefined ? ov.tp : c.companyType,
-          dealStage: ov.ds !== undefined ? ov.ds : c.dealStage,
         };
       });
   }, [allCompanies, hiddenCompanies, enrichmentOverrides]);
@@ -38,7 +37,6 @@ export default function App() {
   const [selEmployees, setSelEmployees] = useState([]);
   const [selGroups, setSelGroups] = useState([]);
   const [selTypes, setSelTypes] = useState([]);
-  const [selStages, setSelStages] = useState([]);
   const [selStatus, setSelStatus] = useState([]);
   const [selProduct, setSelProduct] = useState("");
   const [selMarketRoles, setSelMarketRoles] = useState([]);
@@ -64,14 +62,12 @@ export default function App() {
         c.domain.toLowerCase().includes(q) ||
         c.group.toLowerCase().includes(q) ||
         c.companyType.toLowerCase().includes(q) ||
-        (c.dealStage || "").toLowerCase().includes(q) ||
         c.marketRoles.some(mr => mr.toLowerCase().includes(q))
       );
     }
     if (selEmployees.length) list = list.filter(c => selEmployees.some(e => c.employees.includes(e)));
     if (selGroups.length) list = list.filter(c => selGroups.includes(c.group));
     if (selTypes.length) list = list.filter(c => selTypes.includes(c.companyType));
-    if (selStages.length) list = list.filter(c => selStages.includes(c.dealStage));
     if (selStatus.length) list = list.filter(c => selStatus.includes(c.status));
     if (selMarketRoles.length) list = list.filter(c => selMarketRoles.some(mr => c.marketRoles.includes(mr)));
     if (selProduct) {
@@ -91,7 +87,7 @@ export default function App() {
       }
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selTypes, selStages, selStatus, selMarketRoles, selProduct, productMatches, sortBy, sortDir]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selTypes, selStatus, selMarketRoles, selProduct, productMatches, sortBy, sortDir]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -201,7 +197,6 @@ export default function App() {
           selEmployees={selEmployees} setSelEmployees={setSelEmployees}
           selGroups={selGroups} setSelGroups={setSelGroups}
           selTypes={selTypes} setSelTypes={setSelTypes}
-          selStages={selStages} setSelStages={setSelStages}
           selStatus={selStatus} setSelStatus={setSelStatus}
           selProduct={selProduct} setSelProduct={setSelProduct}
           selMarketRoles={selMarketRoles} setSelMarketRoles={setSelMarketRoles}
