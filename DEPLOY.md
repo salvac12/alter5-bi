@@ -41,6 +41,7 @@ La app se despliega como sitio estático. Vercel ejecuta el build en cada deploy
 - **npm** (incluido con Node)
 - **Cuenta en Vercel** (gratuita): [vercel.com](https://vercel.com)
 - **Datos en el repo**: `src/data/companies.json` (y opcionalmente `companies_full.json`, `employees.json`) deben existir y estar **no** ignorados por git
+- **Variable de entorno Airtable** (opcional): `VITE_AIRTABLE_PAT` — necesaria para la vista Pipeline/Kanban
 
 Comprobación rápida:
 
@@ -322,14 +323,29 @@ Los deploys por Git no requieren Vercel CLI en tu máquina; la CLI sigue siendo 
 
 ---
 
+## Variables de entorno en Vercel
+
+Para que la vista **Pipeline (Kanban)** funcione en produccion, hay que configurar la variable de entorno de Airtable:
+
+1. Vercel Dashboard > tu proyecto > **Settings** > **Environment Variables**
+2. Anadir:
+   - **Name**: `VITE_AIRTABLE_PAT`
+   - **Value**: tu Personal Access Token de Airtable
+   - **Environments**: Production, Preview, Development
+3. **Redeploy** para que tome efecto (Deployments > ultimo deploy > Redeploy)
+
+> Nota: Las variables `VITE_*` se inyectan en build time por Vite, no en runtime. Por eso es necesario el redeploy tras configurarlas.
+
+---
+
 ## Notas importantes
 
-- **Seguridad:** No subas secretos (`.env` con API keys, etc.). Usa **Environment Variables** en Vercel Dashboard para producción.
-- **Datos:**  
-  - `data_sources/` (Excels) no se suben (están en `.gitignore`).  
-  - `src/data/companies.json` (y similares) **sí** deben estar en el repo para que el build y la app en producción tengan datos.
+- **Seguridad:** No subas secretos (`.env` con API keys, etc.). Usa **Environment Variables** en Vercel Dashboard para produccion.
+- **Datos:**
+  - `data_sources/` (Excels) no se suben (estan en `.gitignore`).
+  - `src/data/companies.json` (y similares) **si** deben estar en el repo para que el build y la app en produccion tengan datos.
 - **Build:** Vercel ejecuta el build en cada deploy; no hace falta subir la carpeta `dist/` local.
-- **Documentación:** Para más contexto del proyecto y convenciones, ver `README.md` y `.claude.md`.
+- **Documentacion:** Para mas contexto del proyecto y convenciones, ver `README.md`.
 
 ---
 
