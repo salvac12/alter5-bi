@@ -141,6 +141,13 @@ def extract_opportunity(record):
     if opp_type and opp_type != "Transaction":
         return None
 
+    # Skip junk / test records
+    import re
+    if not name.strip() or len(name.strip()) < 3:
+        return None
+    if re.match(r'^(test|prueba|unnamed|sin nombre|xxx|aaa|bbb|dummy|ejemplo|sample)\b', name.strip(), re.IGNORECASE):
+        return None
+
     return {
         "id": record["id"],
         "name": name.strip(),

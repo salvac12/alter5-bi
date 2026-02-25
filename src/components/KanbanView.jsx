@@ -3,6 +3,7 @@ import {
   fetchAllOpportunities,
   updateOpportunity,
   normalizeRecord,
+  isValidOpportunity,
   isAirtableConfigured,
   KANBAN_STAGES,
   STAGE_COLORS,
@@ -66,7 +67,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
       setLoading(true);
       setError(null);
       const records = await fetchAllOpportunities();
-      const normalized = records.map(normalizeRecord);
+      const normalized = records.map(normalizeRecord).filter(isValidOpportunity);
       setOpportunities(normalized);
     } catch (err) {
       console.error('Failed to load opportunities:', err);

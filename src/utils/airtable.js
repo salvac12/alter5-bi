@@ -149,6 +149,17 @@ export async function deleteOpportunity(recordId) {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
+/** Junk / test name patterns to exclude */
+const JUNK_NAMES = /^(test|prueba|unnamed|sin nombre|xxx|aaa|bbb|dummy|ejemplo|sample)\b/i;
+
+/** Check if a normalized record is a real opportunity (not junk/archived) */
+export function isValidOpportunity(opp) {
+  if (!opp.name || opp.name.length < 3) return false;
+  if (JUNK_NAMES.test(opp.name)) return false;
+  if (opp.recordStatus && /^(archived|deleted)$/i.test(opp.recordStatus)) return false;
+  return true;
+}
+
 /** Normalize a raw Airtable record into our app shape */
 export function normalizeRecord(record) {
   const f = record.fields || {};
