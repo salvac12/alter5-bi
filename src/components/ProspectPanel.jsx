@@ -120,7 +120,13 @@ export default function ProspectPanel({
           setAiLoading(false);
           return;
         }
-        notesText = await fetchGoogleDocText(gdocUrl.trim());
+        try {
+          notesText = await fetchGoogleDocText(gdocUrl.trim());
+        } catch (fetchErr) {
+          setAiError(fetchErr.message + ' Cambia a modo "Texto" y pega el contenido directamente.');
+          setAiLoading(false);
+          return;
+        }
       }
 
       if (!notesText) {
@@ -664,6 +670,8 @@ export default function ProspectPanel({
                   <Spinner />
                   Procesando...
                 </>
+              ) : !isGeminiConfigured() ? (
+                'Gemini API no configurada'
               ) : (
                 <>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
