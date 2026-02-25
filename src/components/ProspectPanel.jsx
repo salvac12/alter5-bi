@@ -10,6 +10,8 @@ import {
   ORIGIN_OPTIONS,
   TEAM_MEMBERS,
 } from '../utils/airtableProspects';
+import { isGeminiConfigured, summarizeMeetingNotes, extractTasksFromNotes, fetchGoogleDocText } from '../utils/gemini';
+import ProspectTasks from './ProspectTasks';
 
 /**
  * ProspectPanel - Slide-in panel for creating/editing Prospects
@@ -50,6 +52,14 @@ export default function ProspectPanel({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
+  // AI notes + tasks state
+  const [meetingNotesInput, setMeetingNotesInput] = useState('');
+  const [meetingNotesMode, setMeetingNotesMode] = useState('text'); // 'text' | 'gdoc'
+  const [gdocUrl, setGdocUrl] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [tasks, setTasks] = useState([]);
+
   useEffect(() => {
     if (isNew) {
       setFormData({
@@ -79,6 +89,88 @@ export default function ProspectPanel({
       });
     }
   }, [prospect, isNew, initialStage]);
+
+  // Load tasks from prospect
+  useEffect(() => {
+    if (isNew) {
+      setTasks([]);
+    } else if (prospect?._raw?.['Tasks']) {
+      setTasks(Array.isArray(prospect._raw['Tasks']) ? prospect._raw['Tasks'] : []);
+    } else if (prospect?.tasks) {
+      setTasks(Array.isArray(prospect.tasks) ? prospect.tasks : []);
+    } else {
+      setTasks([]);
+    }
+    setMeetingNotesInput('');
+    setGdocUrl('');
+    setAiError(null);
+  }, [prospect, isNew]);
+
+  const handleAiProcess = async () => {
+    setAiLoading(true);
+    setAiError(null);
+
+    try {
+      let notesText = meetingNotesInput.trim();
+
+      // If gdoc mode, fetch text first
+      if (meetingNotesMode === 'gdoc') {
+        if (!gdocUrl.trim()) {
+          setAiError('Introduce una URL de Google Doc');
+          setAiLoading(false);
+          return;
+        }
+        notesText = await fetchGoogleDocText(gdocUrl.trim());
+      }
+
+      if (!notesText) {
+        setAiError('No hay notas para procesar');
+        setAiLoading(false);
+        return;
+      }
+
+      const prospectName = formData.name || 'Prospect';
+
+      // Run summarize + extract in parallel
+      const [summaryResult, tasksResult] = await Promise.allSettled([
+        summarizeMeetingNotes(notesText, prospectName),
+        extractTasksFromNotes(notesText, prospectName),
+      ]);
+
+      // Prepend summary to Context with timestamp
+      if (summaryResult.status === 'fulfilled' && summaryResult.value) {
+        const timestamp = new Date().toLocaleString('es-ES', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        });
+        const summaryBlock = `[Resumen IA ${timestamp}]\n${summaryResult.value}\n\n`;
+        updateField('context', summaryBlock + formData.context);
+      } else if (summaryResult.status === 'rejected') {
+        console.warn('Summary failed:', summaryResult.reason);
+      }
+
+      // Merge extracted tasks
+      if (tasksResult.status === 'fulfilled' && tasksResult.value?.length > 0) {
+        setTasks(prev => [...prev, ...tasksResult.value]);
+      } else if (tasksResult.status === 'rejected') {
+        console.warn('Task extraction failed:', tasksResult.reason);
+      }
+
+      // Show partial error if one failed
+      if (summaryResult.status === 'rejected' && tasksResult.status === 'rejected') {
+        setAiError('Error al procesar notas. Verifica tu API key.');
+      } else {
+        setMeetingNotesInput('');
+        setGdocUrl('');
+        showFeedback('success', 'Notas procesadas con IA');
+      }
+    } catch (err) {
+      console.error('AI processing error:', err);
+      setAiError(err.message || 'Error al procesar con IA');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const showFeedback = (type, message) => {
     setFeedback({ type, message });
@@ -130,6 +222,7 @@ export default function ProspectPanel({
         'Next Steps': formData.nextSteps.trim(),
         'Assigned To': formData.assignedTo || undefined,
         'Assigned Email': formData.assignedEmail.trim() || undefined,
+        'Tasks': tasks,
       };
 
       // Remove undefined fields (Airtable doesn't like undefined in single-select)
@@ -453,6 +546,142 @@ export default function ProspectPanel({
               style={textareaStyle(loading)}
               onFocus={focusStyle}
               onBlur={blurStyle}
+            />
+          </FormField>
+
+          {/* ── AI Meeting Notes Section ────────────────── */}
+          <div style={{
+            marginBottom: 22, padding: 16,
+            background: 'linear-gradient(135deg, #F5F3FF, #EFF6FF)',
+            borderRadius: 10, border: '1px solid #DDD6FE',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 12,
+            }}>
+              <label style={{
+                fontSize: 12, fontWeight: 700, color: '#6B21A8',
+                textTransform: 'uppercase', letterSpacing: '0.5px',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                  <path d="M2 17l10 5 10-5"/>
+                  <path d="M2 12l10 5 10-5"/>
+                </svg>
+                Notas de reunion IA
+                {!isGeminiConfigured() && (
+                  <span style={{ fontSize: 10, fontWeight: 500, color: '#94A3B8' }}>(sin configurar)</span>
+                )}
+              </label>
+
+              {/* Toggle text / gdoc */}
+              <div style={{
+                display: 'flex', borderRadius: 6, overflow: 'hidden',
+                border: '1px solid #DDD6FE',
+              }}>
+                {[
+                  { key: 'text', label: 'Texto' },
+                  { key: 'gdoc', label: 'Google Doc' },
+                ].map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setMeetingNotesMode(opt.key)}
+                    style={{
+                      padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                      border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                      background: meetingNotesMode === opt.key ? '#8B5CF6' : '#FFFFFF',
+                      color: meetingNotesMode === opt.key ? '#FFFFFF' : '#6B7F94',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {meetingNotesMode === 'text' ? (
+              <textarea
+                value={meetingNotesInput}
+                onChange={(e) => setMeetingNotesInput(e.target.value)}
+                placeholder="Pega aqui las notas de reunion, transcripcion o puntos clave..."
+                disabled={loading || aiLoading}
+                rows={4}
+                style={{
+                  ...textareaStyle(loading || aiLoading),
+                  background: '#FFFFFF',
+                  border: '1.5px solid #DDD6FE',
+                  fontSize: 13,
+                }}
+                onFocus={focusStyle}
+                onBlur={blurStyle}
+              />
+            ) : (
+              <input
+                type="url"
+                value={gdocUrl}
+                onChange={(e) => setGdocUrl(e.target.value)}
+                placeholder="https://docs.google.com/document/d/..."
+                disabled={loading || aiLoading}
+                style={{
+                  ...inputStyle(loading || aiLoading),
+                  background: '#FFFFFF',
+                  border: '1.5px solid #DDD6FE',
+                  fontSize: 13,
+                }}
+                onFocus={focusStyle}
+                onBlur={blurStyle}
+              />
+            )}
+
+            {aiError && (
+              <div style={{
+                marginTop: 8, fontSize: 12, color: '#DC2626',
+                fontWeight: 500, padding: '6px 8px',
+                background: '#FEF2F2', borderRadius: 4,
+              }}>
+                {aiError}
+              </div>
+            )}
+
+            <button
+              onClick={handleAiProcess}
+              disabled={loading || aiLoading || !isGeminiConfigured() || (meetingNotesMode === 'text' ? !meetingNotesInput.trim() : !gdocUrl.trim())}
+              style={{
+                marginTop: 10, padding: '8px 16px',
+                fontSize: 12, fontWeight: 700,
+                color: '#FFFFFF',
+                background: (aiLoading || !isGeminiConfigured()) ? '#94A3B8' : 'linear-gradient(135deg, #8B5CF6, #3B82F6)',
+                border: 'none', borderRadius: 6,
+                cursor: (aiLoading || !isGeminiConfigured()) ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', transition: 'all 0.15s',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {aiLoading ? (
+                <>
+                  <Spinner />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                  </svg>
+                  Generar resumen y tareas
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* ── Tasks Section ─────────────────────────────── */}
+          <FormField label={`Tareas (${tasks.filter(t => t.status === 'hecho').length}/${tasks.length})`}>
+            <ProspectTasks
+              tasks={tasks}
+              onChange={setTasks}
+              disabled={loading}
             />
           </FormField>
 

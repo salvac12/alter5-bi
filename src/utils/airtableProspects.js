@@ -163,6 +163,7 @@ export function normalizeProspect(record) {
   const converted = !!f["Converted"];
   const opportunityId = f["Opportunity ID"] || "";
   const recordStatus = f["Record Status"] || "Active";
+  const tasks = f["Tasks"] || [];
 
   return {
     id: record.id,
@@ -179,6 +180,7 @@ export function normalizeProspect(record) {
     converted,
     opportunityId,
     recordStatus,
+    tasks,
     _raw: f,
   };
 }

@@ -599,6 +599,18 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick })
               {prospect.assignedTo}
             </span>
           )}
+          {prospect.tasks && prospect.tasks.length > 0 && (
+            <span style={{
+              fontSize: 11, color: '#8B5CF6', display: 'flex', alignItems: 'center', gap: 3,
+              fontWeight: 600,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+              {prospect.tasks.filter(t => t.status === 'hecho').length}/{prospect.tasks.length}
+            </span>
+          )}
         </div>
       </div>
     </div>
