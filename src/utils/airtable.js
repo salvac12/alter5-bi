@@ -150,13 +150,22 @@ export async function deleteOpportunity(recordId) {
 // ── Helpers ─────────────────────────────────────────────────────────
 
 /** Junk / test name patterns to exclude */
-const JUNK_NAMES = /^(test|prueba|unnamed|sin nombre|xxx|aaa|bbb|dummy|ejemplo|sample)\b/i;
+const JUNK_NAMES = /^(test|prueba|unnamed|sin nombre|xxx|aaa|bbb|dummy|ejemplo|sample|sabri)\b/i;
+const JUNK_EXACT = new Set(["all", "defense", "lm8", "bwb", "dvp"]);
 
-/** Check if a normalized record is a real opportunity (not junk/archived) */
+/** Check if a normalized record is a real opportunity (not junk/archived/inactive) */
 export function isValidOpportunity(opp) {
-  if (!opp.name || opp.name.length < 3) return false;
-  if (JUNK_NAMES.test(opp.name)) return false;
-  if (opp.recordStatus && /^(archived|deleted)$/i.test(opp.recordStatus)) return false;
+  const name = (opp.name || "").trim();
+  // No name or too short
+  if (!name || name.length < 3) return false;
+  // Known junk patterns
+  if (JUNK_NAMES.test(name)) return false;
+  // Known junk exact names (case-insensitive)
+  if (JUNK_EXACT.has(name.toLowerCase())) return false;
+  // Archived, deleted, or inactive records
+  if (opp.recordStatus && /^(archived|deleted|inactive)$/i.test(opp.recordStatus)) return false;
+  // No stage assigned — orphan record
+  if (!opp.stage) return false;
   return true;
 }
 

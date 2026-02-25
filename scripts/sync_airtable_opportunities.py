@@ -133,8 +133,8 @@ def extract_opportunity(record):
     if isinstance(business_type, list):
         business_type = business_type[0] if business_type else ""
 
-    # Skip archived/deleted records
-    if record_status and record_status.lower() in ("archived", "deleted"):
+    # Skip archived/deleted/inactive records
+    if record_status and record_status.lower() in ("archived", "deleted", "inactive"):
         return None
 
     # Skip Internal Initiatives — only keep Transactions
@@ -143,9 +143,16 @@ def extract_opportunity(record):
 
     # Skip junk / test records
     import re
-    if not name.strip() or len(name.strip()) < 3:
+    clean_name = name.strip()
+    if not clean_name or len(clean_name) < 3:
         return None
-    if re.match(r'^(test|prueba|unnamed|sin nombre|xxx|aaa|bbb|dummy|ejemplo|sample)\b', name.strip(), re.IGNORECASE):
+    if re.match(r'^(test|prueba|unnamed|sin nombre|xxx|aaa|bbb|dummy|ejemplo|sample|sabri)\b', clean_name, re.IGNORECASE):
+        return None
+    # Known junk exact names
+    if clean_name.lower() in ("all", "defense", "lm8", "bwb", "dvp"):
+        return None
+    # No stage = orphan record
+    if not stage:
         return None
 
     return {
