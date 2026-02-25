@@ -9,6 +9,7 @@ import {
   PROSPECT_STAGE_SHORT,
   ORIGIN_OPTIONS,
   TEAM_MEMBERS,
+  TASK_TEMPLATES,
 } from '../utils/airtableProspects';
 import { isGeminiConfigured, summarizeMeetingNotes, extractTasksFromNotes, fetchGoogleDocText } from '../utils/gemini';
 import ProspectTasks from './ProspectTasks';
@@ -38,6 +39,7 @@ export default function ProspectPanel({
   const [formData, setFormData] = useState({
     name: '',
     stage: initialStage || 'Lead',
+    dealManager: '',
     amount: '',
     currency: 'EUR',
     product: '',
@@ -65,6 +67,7 @@ export default function ProspectPanel({
       setFormData({
         name: '',
         stage: initialStage || 'Lead',
+        dealManager: '',
         amount: '',
         currency: 'EUR',
         product: '',
@@ -78,6 +81,7 @@ export default function ProspectPanel({
       setFormData({
         name: prospect.name || '',
         stage: prospect.stage || 'Lead',
+        dealManager: prospect.dealManager || '',
         amount: prospect.amount ? String(prospect.amount) : '',
         currency: prospect.currency || 'EUR',
         product: prospect.product || '',
@@ -235,6 +239,7 @@ export default function ProspectPanel({
       const fields = {
         'Prospect Name': formData.name.trim(),
         'Stage': formData.stage,
+        'Deal Manager': formData.dealManager || undefined,
         'Amount': parseAmount(formData.amount),
         'Currency': formData.currency,
         'Product': formData.product || undefined,
@@ -251,20 +256,70 @@ export default function ProspectPanel({
         if (fields[k] === undefined) delete fields[k];
       });
 
+      // Detect tasks with assignedTo that haven't been notified yet
+      const tasksToNotify = tasks.filter(t =>
+        t.assignedTo && !t.notifiedAt && t.status !== 'hecho'
+      );
+
       let result;
       if (isNew) {
-        // Add Record Status for new records
         fields['Record Status'] = 'Active';
         result = await createProspect(fields);
-        showFeedback('success', 'Prospect creado correctamente');
       } else {
         result = await updateProspect(prospect.id, fields);
-        showFeedback('success', 'Prospect actualizado correctamente');
       }
+
+      // Send email notifications for newly assigned tasks
+      const notifiedNames = [];
+      if (tasksToNotify.length > 0) {
+        const notifyPromises = tasksToNotify.map(async (task) => {
+          const member = TEAM_MEMBERS.find(m => m.name === task.assignedTo);
+          if (!member) return;
+
+          try {
+            const resp = await fetch('/api/notify-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: member.email,
+                toName: member.name,
+                taskText: task.text,
+                taskDescription: task.description || '',
+                prospectName: formData.name.trim(),
+                assignedBy: formData.dealManager || 'Alter5 BI',
+                dueDate: task.dueDate || '',
+              }),
+            });
+
+            if (resp.ok) {
+              // Mark task as notified
+              task.notifiedAt = new Date().toISOString();
+              notifiedNames.push(member.name.split(' ')[0]);
+            }
+          } catch (err) {
+            console.warn('Notification failed for', member.name, err);
+          }
+        });
+
+        await Promise.allSettled(notifyPromises);
+
+        // Update tasks with notifiedAt timestamps
+        if (notifiedNames.length > 0) {
+          const updatedFields = { 'Tasks': tasks };
+          if (!isNew) {
+            await updateProspect(result.id, updatedFields);
+          }
+        }
+      }
+
+      const feedbackMsg = notifiedNames.length > 0
+        ? `Guardado. Notificacion enviada a ${notifiedNames.join(', ')}.`
+        : isNew ? 'Prospect creado correctamente' : 'Prospect actualizado correctamente';
+      showFeedback('success', feedbackMsg);
 
       if (onSaved) onSaved(result);
 
-      setTimeout(() => { onClose(); }, 1000);
+      setTimeout(() => { onClose(); }, 1200);
     } catch (error) {
       console.error('Error saving prospect:', error);
       showFeedback('error', error.message || 'Error al guardar');
@@ -462,6 +517,23 @@ export default function ProspectPanel({
                 {PROSPECT_STAGE_SHORT[formData.stage] || formData.stage}
               </div>
             )}
+          </FormField>
+
+          {/* Deal Manager */}
+          <FormField label="Deal Manager">
+            <select
+              value={formData.dealManager}
+              onChange={(e) => updateField('dealManager', e.target.value)}
+              disabled={loading}
+              style={selectStyle(loading)}
+              onFocus={focusStyle}
+              onBlur={blurStyle}
+            >
+              <option value="">-- Sin asignar --</option>
+              {TEAM_MEMBERS.map(m => (
+                <option key={m.email} value={m.name}>{m.name}</option>
+              ))}
+            </select>
           </FormField>
 
           {/* Amount + Currency */}
@@ -708,40 +780,7 @@ export default function ProspectPanel({
             />
           </FormField>
 
-          {/* Assigned To */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <FormField label="Asignado a">
-              <select
-                value={formData.assignedTo}
-                onChange={(e) => updateField('assignedTo', e.target.value)}
-                disabled={loading}
-                style={selectStyle(loading)}
-                onFocus={focusStyle}
-                onBlur={blurStyle}
-              >
-                <option value="">-- Sin asignar --</option>
-                {TEAM_MEMBERS.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </FormField>
-
-            {/* Show email field when "Otro" is selected */}
-            {formData.assignedTo === 'Otro' && (
-              <FormField label="Email del asignado">
-                <input
-                  type="email"
-                  value={formData.assignedEmail}
-                  onChange={(e) => updateField('assignedEmail', e.target.value)}
-                  placeholder="nombre@empresa.com"
-                  disabled={loading}
-                  style={inputStyle(loading)}
-                  onFocus={focusStyle}
-                  onBlur={blurStyle}
-                />
-              </FormField>
-            )}
-          </div>
+          {/* (Deal Manager moved above Amount) */}
         </div>
 
         {/* Footer */}

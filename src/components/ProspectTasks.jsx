@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { TEAM_MEMBERS, TASK_TEMPLATES } from '../utils/airtableProspects';
 
 /**
- * ProspectTasks — Mini task list grouped by status.
+ * ProspectTasks — Mini task list with template chips, team dropdown, description.
  *
  * @param {Array} tasks - Array of task objects
  * @param {function} onChange - Called with updated tasks array
@@ -9,6 +10,7 @@ import { useState } from 'react';
  */
 export default function ProspectTasks({ tasks = [], onChange, disabled }) {
   const [showDone, setShowDone] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   const STATUS_ORDER = ["pendiente", "en_curso", "hecho"];
   const STATUS_CONFIG = {
@@ -41,16 +43,23 @@ export default function ProspectTasks({ tasks = [], onChange, disabled }) {
     onChange(tasks.filter(t => t.id !== taskId));
   }
 
-  function addTask() {
+  function addTaskFromTemplate(text) {
     const newTask = {
       id: "task_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      text: "",
+      text,
+      description: "",
       status: "pendiente",
       assignedTo: "",
       dueDate: "",
       createdAt: new Date().toISOString(),
+      notifiedAt: "",
     };
     onChange([...tasks, newTask]);
+    setShowTemplates(false);
+  }
+
+  function addCustomTask() {
+    addTaskFromTemplate("");
   }
 
   function isOverdue(dueDate) {
@@ -65,7 +74,7 @@ export default function ProspectTasks({ tasks = [], onChange, disabled }) {
         key={task.id}
         style={{
           display: "flex", alignItems: "flex-start", gap: 8,
-          padding: "8px 10px", borderRadius: 6,
+          padding: "10px 12px", borderRadius: 8,
           background: "#FFFFFF",
           border: `1px solid ${cfg.border}`,
           transition: "all 0.15s",
@@ -101,38 +110,59 @@ export default function ProspectTasks({ tasks = [], onChange, disabled }) {
             type="text"
             value={task.text}
             onChange={(e) => updateTask(task.id, { text: e.target.value })}
-            placeholder="Descripcion de la tarea..."
+            placeholder="Titulo de la tarea..."
             disabled={disabled}
             style={{
               width: "100%", border: "none", outline: "none",
-              fontSize: 13, fontWeight: 500, color: task.status === "hecho" ? "#94A3B8" : "#1A2B3D",
+              fontSize: 13, fontWeight: 600, color: task.status === "hecho" ? "#94A3B8" : "#1A2B3D",
               textDecoration: task.status === "hecho" ? "line-through" : "none",
               background: "transparent", fontFamily: "inherit",
               padding: 0,
             }}
           />
 
+          {/* Description — textarea */}
+          <textarea
+            value={task.description || ""}
+            onChange={(e) => updateTask(task.id, { description: e.target.value })}
+            placeholder="Descripcion adicional..."
+            disabled={disabled}
+            rows={2}
+            style={{
+              width: "100%", border: "none", outline: "none",
+              fontSize: 12, fontWeight: 400, color: task.status === "hecho" ? "#CBD5E1" : "#6B7F94",
+              background: "transparent", fontFamily: "inherit",
+              padding: 0, marginTop: 4, resize: "vertical",
+              minHeight: 32, lineHeight: 1.4,
+            }}
+          />
+
           {/* Metadata row */}
           <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
-            {/* Assigned */}
-            <input
-              type="text"
-              value={task.assignedTo}
+            {/* Assigned — dropdown */}
+            <select
+              value={task.assignedTo || ""}
               onChange={(e) => updateTask(task.id, { assignedTo: e.target.value })}
-              placeholder="Asignado"
               disabled={disabled}
               style={{
                 border: "none", outline: "none",
-                fontSize: 11, color: "#6B7F94", fontWeight: 500,
+                fontSize: 11, color: task.assignedTo ? "#1A2B3D" : "#94A3B8",
+                fontWeight: 500,
                 background: "transparent", fontFamily: "inherit",
-                width: 80, padding: 0,
+                padding: 0, cursor: disabled ? "not-allowed" : "pointer",
+                maxWidth: 140,
               }}
-            />
+            >
+              <option value="">Asignar a...</option>
+              {TEAM_MEMBERS.map(m => (
+                <option key={m.email} value={m.name}>{m.name}</option>
+              ))}
+            </select>
 
             {/* Due date */}
             <input
               type="date"
-              value={task.dueDate}
+              value={task.dueDate || ""}
               onChange={(e) => updateTask(task.id, { dueDate: e.target.value })}
               disabled={disabled}
               style={{
@@ -144,6 +174,17 @@ export default function ProspectTasks({ tasks = [], onChange, disabled }) {
                 cursor: disabled ? "not-allowed" : "pointer",
               }}
             />
+
+            {/* Notified indicator */}
+            {task.notifiedAt && (
+              <span style={{ fontSize: 10, color: "#10B981", fontWeight: 600, display: "flex", alignItems: "center", gap: 2 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 2L11 13"/>
+                  <path d="M22 2L15 22L11 13L2 9L22 2Z"/>
+                </svg>
+                Notificado
+              </span>
+            )}
           </div>
         </div>
 
@@ -224,10 +265,10 @@ export default function ProspectTasks({ tasks = [], onChange, disabled }) {
         </div>
       )}
 
-      {/* Add task button */}
-      {!disabled && (
+      {/* Add task — template chips or button */}
+      {!disabled && !showTemplates && (
         <button
-          onClick={addTask}
+          onClick={() => setShowTemplates(true)}
           style={{
             width: "100%", padding: "8px",
             background: "transparent",
@@ -251,7 +292,81 @@ export default function ProspectTasks({ tasks = [], onChange, disabled }) {
         </button>
       )}
 
-      {tasks.length === 0 && (
+      {/* Template chips */}
+      {!disabled && showTemplates && (
+        <div style={{
+          padding: 10, background: "#F5F3FF",
+          borderRadius: 8, border: "1px solid #DDD6FE",
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: "#6B21A8",
+            textTransform: "uppercase", letterSpacing: "0.5px",
+            marginBottom: 8,
+          }}>
+            Selecciona tipo de tarea
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {TASK_TEMPLATES.map(tpl => (
+              <button
+                key={tpl}
+                onClick={() => addTaskFromTemplate(tpl)}
+                style={{
+                  padding: "6px 12px", fontSize: 12, fontWeight: 600,
+                  color: "#6B21A8", background: "#FFFFFF",
+                  border: "1px solid #DDD6FE", borderRadius: 6,
+                  cursor: "pointer", fontFamily: "inherit",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#8B5CF6";
+                  e.currentTarget.style.color = "#FFFFFF";
+                  e.currentTarget.style.borderColor = "#8B5CF6";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#FFFFFF";
+                  e.currentTarget.style.color = "#6B21A8";
+                  e.currentTarget.style.borderColor = "#DDD6FE";
+                }}
+              >
+                {tpl}
+              </button>
+            ))}
+            <button
+              onClick={addCustomTask}
+              style={{
+                padding: "6px 12px", fontSize: 12, fontWeight: 600,
+                color: "#6B7F94", background: "#FFFFFF",
+                border: "1px dashed #CBD5E1", borderRadius: 6,
+                cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#6B7F94";
+                e.currentTarget.style.color = "#1A2B3D";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "#CBD5E1";
+                e.currentTarget.style.color = "#6B7F94";
+              }}
+            >
+              + Otra
+            </button>
+          </div>
+          <button
+            onClick={() => setShowTemplates(false)}
+            style={{
+              marginTop: 8, padding: "4px 8px",
+              fontSize: 11, fontWeight: 500, color: "#94A3B8",
+              background: "transparent", border: "none",
+              cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {tasks.length === 0 && !showTemplates && (
         <div style={{
           textAlign: "center", padding: "16px 0",
           fontSize: 12, color: "#94A3B8",

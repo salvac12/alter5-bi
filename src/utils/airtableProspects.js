@@ -61,10 +61,24 @@ export const ORIGIN_OPTIONS = [
   "Otro",
 ];
 
-// ── Team members placeholder ────────────────────────────────────────
+// ── Team members ────────────────────────────────────────────────────
 
 export const TEAM_MEMBERS = [
-  "Otro",
+  { name: "Carlos Almodovar", email: "carlos.almodovar@alter-5.com" },
+  { name: "Gonzalo de Gracia", email: "gonzalo.degracia@alter-5.com" },
+  { name: "Miguel Solana", email: "miguel.solana@alter-5.com" },
+  { name: "Salvador Carrillo", email: "salvador.carrillo@alter-5.com" },
+  { name: "Rafael Nevado", email: "rafael.nevado@alter-5.com" },
+  { name: "Javier Ruiz", email: "javier.ruiz@alter-5.com" },
+  { name: "Leticia Menendez", email: "leticia.menendez@alter-5.com" },
+];
+
+// ── Task templates ──────────────────────────────────────────────────
+
+export const TASK_TEMPLATES = [
+  "Convocar reunion",
+  "Reclamar informacion",
+  "Preparar Term-Sheet",
 ];
 
 // ── READ ────────────────────────────────────────────────────────────
@@ -164,6 +178,7 @@ export function normalizeProspect(record) {
   const opportunityId = f["Opportunity ID"] || "";
   const recordStatus = f["Record Status"] || "Active";
   const tasks = f["Tasks"] || [];
+  const dealManager = f["Deal Manager"] || "";
 
   return {
     id: record.id,
@@ -177,6 +192,7 @@ export function normalizeProspect(record) {
     nextSteps,
     assignedTo: String(assignedTo),
     assignedEmail,
+    dealManager,
     converted,
     opportunityId,
     recordStatus,

@@ -580,6 +580,21 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick })
           )}
         </div>
 
+        {/* Deal Manager */}
+        {prospect.dealManager && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            fontSize: 11, color: '#6B21A8', fontWeight: 600,
+            marginTop: 2,
+          }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            {prospect.dealManager}
+          </div>
+        )}
+
         {/* Indicators */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
           {prospect.context && (
@@ -588,15 +603,6 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick })
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
               Notas
-            </span>
-          )}
-          {prospect.assignedTo && prospect.assignedTo !== 'Otro' && (
-            <span style={{ fontSize: 11, color: '#6B7F94', display: 'flex', alignItems: 'center', gap: 3 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
-              {prospect.assignedTo}
             </span>
           )}
           {prospect.tasks && prospect.tasks.length > 0 && (
