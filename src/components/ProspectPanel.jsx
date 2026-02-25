@@ -155,9 +155,24 @@ export default function ProspectPanel({
         console.warn('Summary failed:', summaryResult.reason);
       }
 
-      // Merge extracted tasks
+      // Merge extracted tasks + populate "Próximos pasos" field
       if (tasksResult.status === 'fulfilled' && tasksResult.value?.length > 0) {
-        setTasks(prev => [...prev, ...tasksResult.value]);
+        const newTasks = tasksResult.value;
+        setTasks(prev => [...prev, ...newTasks]);
+
+        // Build readable next-steps text and prepend to field
+        const timestamp = new Date().toLocaleString('es-ES', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        });
+        const stepsText = newTasks.map((t, i) => {
+          let line = `${i + 1}. ${t.text}`;
+          if (t.assignedTo) line += ` → ${t.assignedTo}`;
+          if (t.dueDate) line += ` (${t.dueDate})`;
+          return line;
+        }).join('\n');
+        const stepsBlock = `[Próximos pasos IA ${timestamp}]\n${stepsText}\n\n`;
+        updateField('nextSteps', stepsBlock + formData.nextSteps);
       } else if (tasksResult.status === 'rejected') {
         console.warn('Task extraction failed:', tasksResult.reason);
       }
