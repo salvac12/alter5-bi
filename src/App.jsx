@@ -9,6 +9,8 @@ import DetailPanel from './components/DetailPanel';
 import EmployeeTabs from './components/EmployeeTabs';
 import KanbanView from './components/KanbanView';
 import OpportunityPanel from './components/OpportunityPanel';
+import ProspectsView from './components/ProspectsView';
+import ProspectPanel from './components/ProspectPanel';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride } from './utils/companyData';
 
 export default function App() {
@@ -16,7 +18,7 @@ export default function App() {
   const [hiddenCompanies, setHiddenCompanies] = useState(() => getHiddenCompanies());
   const [enrichmentOverrides, setEnrichmentOverrides] = useState(() => getAllEnrichmentOverrides());
 
-  // ── View state: "empresas" | "pipeline" ──
+  // ── View state: "empresas" | "pipeline" | "prospects" ──
   const [activeView, setActiveView] = useState("empresas");
 
   // ── Pipeline panel state ──
@@ -25,7 +27,13 @@ export default function App() {
   const [newOppStage, setNewOppStage] = useState("New");
   const [kanbanKey, setKanbanKey] = useState(0); // bump to force refresh
 
-  // ── URL params: ?view=pipeline&add=CompanyName&stage=New ──
+  // ── Prospects panel state ──
+  const [selectedProspect, setSelectedProspect] = useState(null);
+  const [isCreatingProspect, setIsCreatingProspect] = useState(false);
+  const [newProspectStage, setNewProspectStage] = useState("Lead");
+  const [prospectsKey, setProspectsKey] = useState(0);
+
+  // ── URL params: ?view=pipeline|prospects&add=CompanyName&stage=New ──
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const view = params.get("view");
@@ -36,6 +44,14 @@ export default function App() {
       if (addName) {
         setNewOppStage(stage);
         setIsCreatingOpp(true);
+      }
+    } else if (view === "prospects") {
+      setActiveView("prospects");
+      const addName = params.get("add");
+      const stage = params.get("stage") || "Lead";
+      if (addName) {
+        setNewProspectStage(stage);
+        setIsCreatingProspect(true);
       }
     }
   }, []);
@@ -192,6 +208,37 @@ export default function App() {
     setKanbanKey(k => k + 1); // refresh kanban
   };
 
+  // ── Prospects handlers ──
+  const handleSelectProspect = (p) => {
+    setSelectedProspect(p);
+    setIsCreatingProspect(false);
+  };
+
+  const handleCreateProspect = (stage) => {
+    setNewProspectStage(stage || "Lead");
+    setSelectedProspect(null);
+    setIsCreatingProspect(true);
+  };
+
+  const handleProspectSaved = () => {
+    setSelectedProspect(null);
+    setIsCreatingProspect(false);
+    setProspectsKey(k => k + 1);
+  };
+
+  const handleProspectDeleted = () => {
+    setSelectedProspect(null);
+    setProspectsKey(k => k + 1);
+  };
+
+  const handleProspectConverted = () => {
+    setSelectedProspect(null);
+    setIsCreatingProspect(false);
+    setProspectsKey(k => k + 1);
+    // Also refresh Pipeline kanban in case user switches
+    setKanbanKey(k => k + 1);
+  };
+
   const subtitle = employees.length === 1
     ? `Red de contactos · ${employees[0].name}`
     : `${employees.length} buzones · ${companies.length} empresas`;
@@ -229,7 +276,8 @@ export default function App() {
           }}>
             {[
               { id: "empresas", label: "Empresas" },
-              { id: "pipeline", label: "Pipeline" },
+              { id: "prospects", label: "Prospects", badge: "PR" },
+              { id: "pipeline", label: "Pipeline", badge: "AT" },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -244,15 +292,19 @@ export default function App() {
                 }}
               >
                 {tab.label}
-                {tab.id === "pipeline" && (
+                {tab.badge && (
                   <span style={{
                     marginLeft: 6, fontSize: 8, fontWeight: 800,
                     padding: "1px 5px", borderRadius: 4,
-                    background: activeView === tab.id ? "#8B5CF620" : "#E2E8F040",
-                    color: activeView === tab.id ? "#8B5CF6" : "#94A3B8",
+                    background: activeView === tab.id
+                      ? (tab.id === "prospects" ? "#8B5CF620" : "#3B82F620")
+                      : "#E2E8F040",
+                    color: activeView === tab.id
+                      ? (tab.id === "prospects" ? "#8B5CF6" : "#3B82F6")
+                      : "#94A3B8",
                     textTransform: "uppercase", letterSpacing: "0.5px",
                     verticalAlign: "middle",
-                  }}>AT</span>
+                  }}>{tab.badge}</span>
                 )}
               </button>
             ))}
@@ -345,6 +397,13 @@ export default function App() {
             />
           </div>
         </div>
+      ) : activeView === "prospects" ? (
+        /* ── Prospects (Kanban) view ── */
+        <ProspectsView
+          key={prospectsKey}
+          onSelectProspect={handleSelectProspect}
+          onCreateProspect={handleCreateProspect}
+        />
       ) : (
         /* ── Pipeline (Kanban) view ── */
         <KanbanView
@@ -385,6 +444,19 @@ export default function App() {
             onDeleted={handleOppDeleted}
           />
         </>
+      )}
+
+      {/* ── Prospect Panel (prospects view) ── */}
+      {(selectedProspect || isCreatingProspect) && (
+        <ProspectPanel
+          prospect={selectedProspect}
+          isNew={isCreatingProspect}
+          initialStage={newProspectStage}
+          onClose={() => { setSelectedProspect(null); setIsCreatingProspect(false); }}
+          onSaved={handleProspectSaved}
+          onDeleted={handleProspectDeleted}
+          onConverted={handleProspectConverted}
+        />
       )}
     </div>
   );
