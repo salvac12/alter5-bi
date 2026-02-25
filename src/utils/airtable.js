@@ -34,8 +34,10 @@ export function isAirtableConfigured() {
 export async function fetchAllOpportunities() {
   const all = [];
   let offset = null;
-  // Only fetch Transactions (exclude Internal Initiatives)
-  const formula = encodeURIComponent('{Type of opportunity} = "Transaction"');
+  // Only fetch active Transactions (exclude Internal Initiatives + Inactive/Archived)
+  const formula = encodeURIComponent(
+    'AND({Type of opportunity} = "Transaction", {Record Status} = "Active")'
+  );
 
   do {
     let url = `${API_ROOT}?filterByFormula=${formula}`;

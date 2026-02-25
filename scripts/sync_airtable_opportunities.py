@@ -61,11 +61,13 @@ def fetch_all_records():
     records = []
     offset = None
     base_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{urllib.request.quote(TABLE_NAME)}"
+    # Only fetch active Transactions (exclude Internal Initiatives + Inactive/Archived)
+    formula = urllib.request.quote('AND({Type of opportunity} = "Transaction", {Record Status} = "Active")')
 
     while True:
-        url = base_url
+        url = f"{base_url}?filterByFormula={formula}"
         if offset:
-            url += f"?offset={offset}"
+            url += f"&offset={offset}"
 
         req = urllib.request.Request(url, headers={
             "Authorization": f"Bearer {AIRTABLE_PAT}",
