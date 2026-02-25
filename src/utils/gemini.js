@@ -3,7 +3,7 @@
  * Used for summarizing meeting notes and extracting tasks from prospects.
  */
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
 export function isGeminiConfigured() {
@@ -112,24 +112,19 @@ ${notes}`;
  * Only works with publicly shared docs (CORS limitations).
  */
 export async function fetchGoogleDocText(url) {
-  // Extract doc ID from various Google Docs URL formats
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (!match) throw new Error("URL de Google Doc no valida. Formato esperado: https://docs.google.com/document/d/...");
+  // Use the Vercel serverless proxy to bypass CORS
+  const proxyUrl = `/api/fetch-gdoc?url=${encodeURIComponent(url)}`;
 
-  const docId = match[1];
-  const exportUrl = `https://docs.google.com/document/d/${docId}/export?format=txt`;
+  const res = await fetch(proxyUrl);
+  const data = await res.json();
 
-  try {
-    const res = await fetch(exportUrl);
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        throw new Error("El documento no es publico. Comparte el doc con 'Cualquiera con el enlace' para poder extraer el texto.");
-      }
-      throw new Error(`Error al descargar documento (${res.status})`);
-    }
-    return await res.text();
-  } catch (err) {
-    if (err.message.includes("publico") || err.message.includes("Error al descargar")) throw err;
-    throw new Error("No se pudo acceder al Google Doc. Posible bloqueo CORS — pega el texto directamente.");
+  if (!res.ok || data.error) {
+    throw new Error(data.error || `Error al descargar documento (${res.status})`);
   }
+
+  if (!data.text || !data.text.trim()) {
+    throw new Error("El documento esta vacio o no se pudo leer.");
+  }
+
+  return data.text;
 }
