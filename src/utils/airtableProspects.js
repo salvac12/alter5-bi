@@ -220,6 +220,10 @@ export function normalizeProspect(record) {
   const assignedTo = f["Assigned To"] || "";
   const contactEmail = f["Contact Email"] || "";
   const assignedEmail = f["Assigned Email"] || "";
+
+  // Contacts stored as JSON string in multilineText field
+  let contacts = [];
+  try { contacts = JSON.parse(f["Contacts"] || "[]"); } catch { contacts = []; }
   const converted = !!f["Converted"];
   const opportunityId = f["Opportunity ID"] || "";
   const recordStatus = f["Record Status"] || "Active";
@@ -242,6 +246,7 @@ export function normalizeProspect(record) {
     assignedTo: String(assignedTo),
     assignedEmail,
     contactEmail,
+    contacts,
     dealManager,
     converted,
     opportunityId,

@@ -45,7 +45,10 @@ Lead -> Interesado -> Reunion -> Doc. Pendiente -> Term-Sheet  |  conversion aut
 
 ## Airtable Tables
 - **Opportunities** — Pipeline deals (9 stages, filtro: Transaction + Active)
-- **Prospects** — Pre-pipeline leads (5 stages, conversion a Opportunity)
+- **BETA-Prospects** (`tblAAc8XXwo8rNHR1`) — Pre-pipeline leads (5 stages, conversion a Opportunity)
+  - JSON fields: `Tasks` y `Contacts` se almacenan como JSON.stringify en multilineText
+  - Product: singleSelect (Corporate Debt, Project Finance, Development Debt, PF Guaranteed, Investment, Co-Development, M&A)
+  - Multi-contactos: campo `Contacts` (JSON array de `{name, email, role}`), `Contact Email` mantiene primer email por backward compat
 - Base ID: `appVu3TvSZ1E4tj0J`
 - Token: `VITE_AIRTABLE_PAT` (env var, scopes: data.records:read/write, schema.bases:read/write)
 
@@ -53,6 +56,8 @@ Lead -> Interesado -> Reunion -> Doc. Pendiente -> Term-Sheet  |  conversion aut
 - Inline styles (CSS-in-JS objects), no CSS modules
 - Spanish UI labels, English code/comments
 - Airtable linked record fields come as arrays — always handle `Array.isArray()`
+- Airtable singleSelect: no enviar `""` (eliminar campo del objeto antes de POST/PATCH)
+- JSON en Airtable: Tasks y Contacts se guardan como `JSON.stringify()` en multilineText y se parsean con `JSON.parse()` en normalizeProspect
 - Colors: Debt=#3B82F6, Equity/M&A=#10B981, Prospects=#8B5CF6
 - Git: conventional commits en espanol (`feat:`, `fix:`, `ui:`, `docs:`)
 - Prospects identity: purple gradient (#8B5CF6 -> #3B82F6), Pipeline: blue-green (#3B82F6 -> #10B981)

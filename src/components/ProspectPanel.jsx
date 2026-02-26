@@ -52,6 +52,8 @@ export default function ProspectPanel({
     contactEmail: '',
   });
 
+  const [contacts, setContacts] = useState([]);
+
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -78,6 +80,7 @@ export default function ProspectPanel({
         assignedEmail: '',
         contactEmail: '',
       });
+      setContacts([]);
     } else if (prospect) {
       setFormData({
         name: prospect.name || '',
@@ -93,6 +96,14 @@ export default function ProspectPanel({
         assignedEmail: prospect.assignedEmail || '',
         contactEmail: prospect.contactEmail || '',
       });
+      // Load contacts array; fallback to single contactEmail for backward compat
+      if (prospect.contacts && prospect.contacts.length > 0) {
+        setContacts(prospect.contacts);
+      } else if (prospect.contactEmail) {
+        setContacts([{ name: '', email: prospect.contactEmail, role: '' }]);
+      } else {
+        setContacts([]);
+      }
     }
   }, [prospect, isNew, initialStage]);
 
@@ -220,6 +231,9 @@ export default function ProspectPanel({
 
     setLoading(true);
     try {
+      // Filter out empty contacts
+      const validContacts = contacts.filter(c => c.name.trim() || c.email.trim());
+
       const fields = {
         'Prospect Name': formData.name.trim(),
         'Stage': formData.stage,
@@ -231,8 +245,9 @@ export default function ProspectPanel({
         'Context': formData.context.trim(),
         'Next Steps': formData.nextSteps.trim(),
         'Assigned To': formData.assignedTo || undefined,
-        'Contact Email': formData.contactEmail.trim() || undefined,
+        'Contact Email': validContacts[0]?.email || undefined,
         'Assigned Email': formData.assignedEmail.trim() || undefined,
+        'Contacts': JSON.stringify(validContacts),
         'Tasks': JSON.stringify(tasks),
       };
 
@@ -490,18 +505,73 @@ export default function ProspectPanel({
             />
           </FormField>
 
-          {/* Contact Email */}
-          <FormField label="Email de contacto">
-            <input
-              type="email"
-              value={formData.contactEmail}
-              onChange={(e) => updateField('contactEmail', e.target.value)}
-              placeholder="contacto@empresa.com"
+          {/* Contacts */}
+          <FormField label={`Contactos (${contacts.length})`}>
+            {contacts.map((c, idx) => (
+              <div key={idx} style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr auto',
+                gap: 8, marginBottom: 8, alignItems: 'start',
+              }}>
+                <input
+                  type="text"
+                  value={c.name}
+                  onChange={(e) => {
+                    const updated = [...contacts];
+                    updated[idx] = { ...updated[idx], name: e.target.value };
+                    setContacts(updated);
+                  }}
+                  placeholder="Nombre"
+                  disabled={loading}
+                  style={{ ...inputStyle(loading), fontSize: 13 }}
+                  onFocus={focusStyle}
+                  onBlur={blurStyle}
+                />
+                <input
+                  type="email"
+                  value={c.email}
+                  onChange={(e) => {
+                    const updated = [...contacts];
+                    updated[idx] = { ...updated[idx], email: e.target.value };
+                    setContacts(updated);
+                  }}
+                  placeholder="email@empresa.com"
+                  disabled={loading}
+                  style={{ ...inputStyle(loading), fontSize: 13 }}
+                  onFocus={focusStyle}
+                  onBlur={blurStyle}
+                />
+                <button
+                  onClick={() => setContacts(contacts.filter((_, i) => i !== idx))}
+                  disabled={loading}
+                  style={{
+                    width: 32, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'transparent', border: '2px solid #FEE2E2', borderRadius: 8,
+                    color: '#EF4444', fontSize: 16, cursor: loading ? 'not-allowed' : 'pointer',
+                    fontFamily: 'inherit', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = '#FEF2F2'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  title="Eliminar contacto"
+                >
+                  \u2715
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => setContacts([...contacts, { name: '', email: '', role: '' }])}
               disabled={loading}
-              style={inputStyle(loading)}
-              onFocus={focusStyle}
-              onBlur={blurStyle}
-            />
+              style={{
+                padding: '6px 14px', fontSize: 12, fontWeight: 600,
+                color: '#8B5CF6', background: '#F5F3FF',
+                border: '1.5px dashed #C4B5FD', borderRadius: 6,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit', transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = '#EDE9FE'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#F5F3FF'; }}
+            >
+              + Anadir contacto
+            </button>
           </FormField>
 
           {/* Stage */}
