@@ -129,7 +129,7 @@ export async function createProspect(fields) {
   const res = await fetch(API_ROOT, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ fields, typecast: true }),
+    body: JSON.stringify({ fields }),
   });
   if (!res.ok) {
     const body = await res.text();
@@ -150,7 +150,7 @@ export async function updateProspect(recordId, fields) {
   const res = await fetch(`${API_ROOT}/${recordId}`, {
     method: "PATCH",
     headers: headers(),
-    body: JSON.stringify({ fields, typecast: true }),
+    body: JSON.stringify({ fields }),
   });
   if (!res.ok) {
     const body = await res.text();
@@ -218,6 +218,7 @@ export function normalizeProspect(record) {
   const context = f["Context"] || "";
   const nextSteps = f["Next Steps"] || "";
   const assignedTo = f["Assigned To"] || "";
+  const contactEmail = f["Contact Email"] || "";
   const assignedEmail = f["Assigned Email"] || "";
   const converted = !!f["Converted"];
   const opportunityId = f["Opportunity ID"] || "";
@@ -240,6 +241,7 @@ export function normalizeProspect(record) {
     nextSteps,
     assignedTo: String(assignedTo),
     assignedEmail,
+    contactEmail,
     dealManager,
     converted,
     opportunityId,

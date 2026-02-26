@@ -49,6 +49,7 @@ export default function ProspectPanel({
     nextSteps: '',
     assignedTo: '',
     assignedEmail: '',
+    contactEmail: '',
   });
 
   const [loading, setLoading] = useState(false);
@@ -75,6 +76,7 @@ export default function ProspectPanel({
         nextSteps: '',
         assignedTo: '',
         assignedEmail: '',
+        contactEmail: '',
       });
     } else if (prospect) {
       setFormData({
@@ -89,6 +91,7 @@ export default function ProspectPanel({
         nextSteps: prospect.nextSteps || '',
         assignedTo: prospect.assignedTo || '',
         assignedEmail: prospect.assignedEmail || '',
+        contactEmail: prospect.contactEmail || '',
       });
     }
   }, [prospect, isNew, initialStage]);
@@ -228,6 +231,7 @@ export default function ProspectPanel({
         'Context': formData.context.trim(),
         'Next Steps': formData.nextSteps.trim(),
         'Assigned To': formData.assignedTo || undefined,
+        'Contact Email': formData.contactEmail.trim() || undefined,
         'Assigned Email': formData.assignedEmail.trim() || undefined,
         'Tasks': JSON.stringify(tasks),
       };
@@ -477,6 +481,20 @@ export default function ProspectPanel({
               value={formData.name}
               onChange={(e) => updateField('name', e.target.value)}
               placeholder="Ej: Solaria Energia"
+              disabled={loading}
+              style={inputStyle(loading)}
+              onFocus={focusStyle}
+              onBlur={blurStyle}
+            />
+          </FormField>
+
+          {/* Contact Email */}
+          <FormField label="Email de contacto">
+            <input
+              type="email"
+              value={formData.contactEmail}
+              onChange={(e) => updateField('contactEmail', e.target.value)}
+              placeholder="contacto@empresa.com"
               disabled={loading}
               style={inputStyle(loading)}
               onFocus={focusStyle}
