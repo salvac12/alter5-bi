@@ -12,6 +12,7 @@ import {
   TASK_TEMPLATES,
 } from '../utils/airtableProspects';
 import { isGeminiConfigured, summarizeMeetingNotes, extractTasksFromNotes, fetchGoogleDocText } from '../utils/gemini';
+import { syncTasksToAirtable } from '../utils/airtableTasks';
 import ProspectTasks from './ProspectTasks';
 
 /**
@@ -269,6 +270,24 @@ export default function ProspectPanel({
         result = await updateProspect(prospect.id, fields);
       }
 
+      // Sync tasks to Airtable (non-blocking — errors don't prevent save)
+      let airtableSyncMsg = '';
+      try {
+        const opportunityId = prospect?.opportunityId || '';
+        const syncResult = await syncTasksToAirtable(tasks, opportunityId);
+        if (syncResult.synced > 0) {
+          // Update localStorage with airtableIds
+          setTasks(syncResult.tasks);
+          await updateProspect(result.id, { 'Tasks': syncResult.tasks });
+          airtableSyncMsg = syncResult.errors > 0
+            ? ` (${syncResult.synced} tareas sync, ${syncResult.errors} error)`
+            : '';
+        }
+      } catch (syncErr) {
+        console.warn('Airtable task sync failed:', syncErr);
+        airtableSyncMsg = ' (sync Airtable pendiente)';
+      }
+
       // Send email notifications for newly assigned tasks
       const notifiedNames = [];
       if (tasksToNotify.length > 0) {
@@ -313,8 +332,8 @@ export default function ProspectPanel({
       }
 
       const feedbackMsg = notifiedNames.length > 0
-        ? `Guardado. Notificacion enviada a ${notifiedNames.join(', ')}.`
-        : isNew ? 'Prospect creado correctamente' : 'Prospect actualizado correctamente';
+        ? `Guardado. Notificacion enviada a ${notifiedNames.join(', ')}.${airtableSyncMsg}`
+        : (isNew ? 'Prospect creado correctamente' : 'Prospect actualizado correctamente') + airtableSyncMsg;
       showFeedback('success', feedbackMsg);
 
       if (onSaved) onSaved(result);
