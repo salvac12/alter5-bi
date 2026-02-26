@@ -3,7 +3,7 @@
  *
  * Sends email notification via Resend API when a task is assigned.
  *
- * Body: { to, toName, taskText, taskDescription, prospectName, assignedBy, dueDate }
+ * Body: { to, toName, taskText, taskDescription, prospectName, assignedBy, dueDate, prospectContext, dashboardUrl }
  * Env:  RESEND_API_KEY
  */
 export default async function handler(req, res) {
@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { to, toName, taskText, taskDescription, prospectName, assignedBy, dueDate } = req.body || {};
+  const { to, toName, taskText, taskDescription, prospectName, assignedBy, dueDate, prospectContext, dashboardUrl } = req.body || {};
 
   if (!to || !taskText || !prospectName) {
     return res.status(400).json({ error: 'Missing required fields: to, taskText, prospectName' });
@@ -24,6 +24,22 @@ export default async function handler(req, res) {
 
   const dueLine = dueDate ? `<p><strong>Fecha limite:</strong> ${dueDate}</p>` : '';
   const descLine = taskDescription ? `<p><strong>Descripcion:</strong> ${taskDescription}</p>` : '';
+
+  // Truncate context to first 500 chars for email
+  let contextBlock = '';
+  if (prospectContext) {
+    const trimmed = prospectContext.length > 500 ? prospectContext.slice(0, 500) + '...' : prospectContext;
+    const escaped = trimmed.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    contextBlock = `
+        <div style="background: #F7F9FC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 14px; margin: 16px 0;">
+          <p style="margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #6B7F94; text-transform: uppercase; letter-spacing: 0.5px;">Contexto</p>
+          <p style="margin: 0; font-size: 13px; color: #1A2B3D; line-height: 1.5;">${escaped}</p>
+        </div>`;
+  }
+
+  const linkBlock = dashboardUrl
+    ? `<p style="margin: 16px 0 0;"><a href="${dashboardUrl}" style="display: inline-block; padding: 10px 20px; background: linear-gradient(135deg, #8B5CF6, #3B82F6); color: #FFFFFF; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600;">Ver prospect en dashboard</a></p>`
+    : '';
 
   const htmlBody = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
@@ -44,9 +60,11 @@ export default async function handler(req, res) {
           ${descLine}
           ${dueLine}
         </div>
+        ${contextBlock}
         <p style="color: #6B7F94; font-size: 13px;">
           Asignada por: <strong>${assignedBy}</strong>
         </p>
+        ${linkBlock}
         <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;">
         <p style="color: #94A3B8; font-size: 11px; margin-bottom: 0;">
           Alter5 BI — Dashboard de inteligencia comercial

@@ -291,6 +291,8 @@ export default function ProspectPanel({
                 prospectName: formData.name.trim(),
                 assignedBy: formData.dealManager || 'Alter5 BI',
                 dueDate: task.dueDate || '',
+                prospectContext: formData.context.trim(),
+                dashboardUrl: window.location.origin + '/?tab=prospects',
               }),
             });
 
