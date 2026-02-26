@@ -59,8 +59,24 @@ CURRENCY_CHOICES = [
     {"name": "GBP", "color": "purpleLight2"},
 ]
 
+PRODUCT_CHOICES = [
+    {"name": "Debt", "color": "blueLight2"},
+    {"name": "Equity", "color": "greenLight2"},
+]
+
+TEAM_CHOICES = [
+    {"name": "Carlos Almodovar", "color": "blueLight2"},
+    {"name": "Gonzalo de Gracia", "color": "cyanLight2"},
+    {"name": "Miguel Solana", "color": "yellowLight2"},
+    {"name": "Salvador Carrillo", "color": "orangeLight2"},
+    {"name": "Rafael Nevado", "color": "greenLight2"},
+    {"name": "Javier Ruiz", "color": "purpleLight2"},
+    {"name": "Leticia Menendez", "color": "pinkLight2"},
+    {"name": "Otro", "color": "grayLight2"},
+]
+
 TABLE_SCHEMA = {
-    "name": "Prospects",
+    "name": "BETA-Prospects",
     "fields": [
         {
             "name": "Prospect Name",
@@ -88,8 +104,8 @@ TABLE_SCHEMA = {
         {
             "name": "Product",
             "type": "singleSelect",
-            "description": "Alter5 product line (to be populated later)",
-            "options": {"choices": [{"name": "(pendiente)", "color": "grayLight2"}]},
+            "description": "Alter5 product line",
+            "options": {"choices": PRODUCT_CHOICES},
         },
         {
             "name": "Origin",
@@ -108,14 +124,21 @@ TABLE_SCHEMA = {
             "description": "Pending tasks / next actions",
         },
         {
+            "name": "Deal Manager",
+            "type": "singleSelect",
+            "description": "Deal manager responsible for this prospect",
+            "options": {"choices": TEAM_CHOICES[:7]},
+        },
+        {
+            "name": "Tasks",
+            "type": "multilineText",
+            "description": "JSON-stringified array of task objects",
+        },
+        {
             "name": "Assigned To",
             "type": "singleSelect",
-            "description": "Team member responsible (to be populated later)",
-            "options": {
-                "choices": [
-                    {"name": "Otro", "color": "grayLight2"},
-                ]
-            },
+            "description": "Team member responsible",
+            "options": {"choices": TEAM_CHOICES},
         },
         {
             "name": "Assigned Email",

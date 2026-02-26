@@ -11,7 +11,7 @@ import {
   TEAM_MEMBERS,
   TASK_TEMPLATES,
 } from '../utils/airtableProspects';
-import { isGeminiConfigured, summarizeMeetingNotes, extractTasksFromNotes, fetchGoogleDocText } from '../utils/gemini';
+import { isGeminiConfigured, summarizeMeetingNotes, extractTasksFromNotes } from '../utils/gemini';
 import { syncTasksToAirtable } from '../utils/airtableTasks';
 import ProspectTasks from './ProspectTasks';
 
@@ -57,8 +57,6 @@ export default function ProspectPanel({
 
   // AI notes + tasks state
   const [meetingNotesInput, setMeetingNotesInput] = useState('');
-  const [meetingNotesMode, setMeetingNotesMode] = useState('text'); // 'text' | 'gdoc'
-  const [gdocUrl, setGdocUrl] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -107,7 +105,6 @@ export default function ProspectPanel({
       setTasks([]);
     }
     setMeetingNotesInput('');
-    setGdocUrl('');
     setAiError(null);
   }, [prospect, isNew]);
 
@@ -116,23 +113,7 @@ export default function ProspectPanel({
     setAiError(null);
 
     try {
-      let notesText = meetingNotesInput.trim();
-
-      // If gdoc mode, fetch text first
-      if (meetingNotesMode === 'gdoc') {
-        if (!gdocUrl.trim()) {
-          setAiError('Introduce una URL de Google Doc');
-          setAiLoading(false);
-          return;
-        }
-        try {
-          notesText = await fetchGoogleDocText(gdocUrl.trim());
-        } catch (fetchErr) {
-          setAiError(fetchErr.message + ' Cambia a modo "Texto" y pega el contenido directamente.');
-          setAiLoading(false);
-          return;
-        }
-      }
+      const notesText = meetingNotesInput.trim();
 
       if (!notesText) {
         setAiError('No hay notas para procesar');
@@ -187,7 +168,6 @@ export default function ProspectPanel({
         setAiError('Error al procesar notas. Verifica tu API key.');
       } else {
         setMeetingNotesInput('');
-        setGdocUrl('');
         showFeedback('success', 'Notas procesadas con IA');
       }
     } catch (err) {
@@ -249,12 +229,12 @@ export default function ProspectPanel({
         'Next Steps': formData.nextSteps.trim(),
         'Assigned To': formData.assignedTo || undefined,
         'Assigned Email': formData.assignedEmail.trim() || undefined,
-        'Tasks': tasks,
+        'Tasks': JSON.stringify(tasks),
       };
 
-      // Remove undefined fields (Airtable doesn't like undefined in single-select)
+      // Remove undefined/empty fields (Airtable rejects empty strings for single-select)
       Object.keys(fields).forEach(k => {
-        if (fields[k] === undefined) delete fields[k];
+        if (fields[k] === undefined || fields[k] === '') delete fields[k];
       });
 
       // Detect tasks with assignedTo that haven't been notified yet
@@ -276,9 +256,9 @@ export default function ProspectPanel({
         const opportunityId = prospect?.opportunityId || '';
         const syncResult = await syncTasksToAirtable(tasks, opportunityId);
         if (syncResult.synced > 0) {
-          // Update localStorage with airtableIds
+          // Update Airtable with airtableIds
           setTasks(syncResult.tasks);
-          await updateProspect(result.id, { 'Tasks': syncResult.tasks });
+          await updateProspect(result.id, { 'Tasks': JSON.stringify(syncResult.tasks) });
           airtableSyncMsg = syncResult.errors > 0
             ? ` (${syncResult.synced} tareas sync, ${syncResult.errors} error)`
             : '';
@@ -324,7 +304,7 @@ export default function ProspectPanel({
 
         // Update tasks with notifiedAt timestamps
         if (notifiedNames.length > 0) {
-          const updatedFields = { 'Tasks': tasks };
+          const updatedFields = { 'Tasks': JSON.stringify(tasks) };
           if (!isNew) {
             await updateProspect(result.id, updatedFields);
           }
@@ -604,16 +584,27 @@ export default function ProspectPanel({
 
           {/* Product */}
           <FormField label="Producto">
-            <input
-              type="text"
+            <select
               value={formData.product}
               onChange={(e) => updateField('product', e.target.value)}
-              placeholder="(pendiente de definir)"
               disabled={loading}
-              style={inputStyle(loading)}
+              style={selectStyle(loading)}
               onFocus={focusStyle}
               onBlur={blurStyle}
-            />
+            >
+              <option value="">-- Seleccionar --</option>
+              <optgroup label="Debt">
+                <option value="Corporate Debt">Corporate Debt</option>
+                <option value="Project Finance">Project Finance</option>
+                <option value="Development Debt">Development Debt</option>
+                <option value="Project Finance (Guaranteed)">Project Finance (Guaranteed)</option>
+              </optgroup>
+              <optgroup label="Equity">
+                <option value="Investment">Investment</option>
+                <option value="Co-Development">Co-Development</option>
+                <option value="M&A">M&A</option>
+              </optgroup>
+            </select>
           </FormField>
 
           {/* Origin */}
@@ -667,85 +658,38 @@ export default function ProspectPanel({
             background: 'linear-gradient(135deg, #F5F3FF, #EFF6FF)',
             borderRadius: 10, border: '1px solid #DDD6FE',
           }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: 12,
+            <label style={{
+              display: 'block', fontSize: 12, fontWeight: 700, color: '#6B21A8',
+              textTransform: 'uppercase', letterSpacing: '0.5px',
+              marginBottom: 10,
+              alignItems: 'center', gap: 6,
             }}>
-              <label style={{
-                fontSize: 12, fontWeight: 700, color: '#6B21A8',
-                textTransform: 'uppercase', letterSpacing: '0.5px',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                  <path d="M2 17l10 5 10-5"/>
-                  <path d="M2 12l10 5 10-5"/>
-                </svg>
-                Notas de reunion IA
-                {!isGeminiConfigured() && (
-                  <span style={{ fontSize: 10, fontWeight: 500, color: '#94A3B8' }}>(sin configurar)</span>
-                )}
-              </label>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="2" style={{ verticalAlign: 'middle', marginRight: 6 }}>
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+              Notas de reunion IA
+              {!isGeminiConfigured() && (
+                <span style={{ fontSize: 10, fontWeight: 500, color: '#94A3B8', marginLeft: 6 }}>(sin configurar)</span>
+              )}
+            </label>
 
-              {/* Toggle text / gdoc */}
-              <div style={{
-                display: 'flex', borderRadius: 6, overflow: 'hidden',
-                border: '1px solid #DDD6FE',
-              }}>
-                {[
-                  { key: 'text', label: 'Texto' },
-                  { key: 'gdoc', label: 'Google Doc' },
-                ].map(opt => (
-                  <button
-                    key={opt.key}
-                    onClick={() => setMeetingNotesMode(opt.key)}
-                    style={{
-                      padding: '4px 10px', fontSize: 11, fontWeight: 600,
-                      border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                      background: meetingNotesMode === opt.key ? '#8B5CF6' : '#FFFFFF',
-                      color: meetingNotesMode === opt.key ? '#FFFFFF' : '#6B7F94',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {meetingNotesMode === 'text' ? (
-              <textarea
-                value={meetingNotesInput}
-                onChange={(e) => setMeetingNotesInput(e.target.value)}
-                placeholder="Pega aqui las notas de reunion, transcripcion o puntos clave..."
-                disabled={loading || aiLoading}
-                rows={4}
-                style={{
-                  ...textareaStyle(loading || aiLoading),
-                  background: '#FFFFFF',
-                  border: '1.5px solid #DDD6FE',
-                  fontSize: 13,
-                }}
-                onFocus={focusStyle}
-                onBlur={blurStyle}
-              />
-            ) : (
-              <input
-                type="url"
-                value={gdocUrl}
-                onChange={(e) => setGdocUrl(e.target.value)}
-                placeholder="https://docs.google.com/document/d/..."
-                disabled={loading || aiLoading}
-                style={{
-                  ...inputStyle(loading || aiLoading),
-                  background: '#FFFFFF',
-                  border: '1.5px solid #DDD6FE',
-                  fontSize: 13,
-                }}
-                onFocus={focusStyle}
-                onBlur={blurStyle}
-              />
-            )}
+            <textarea
+              value={meetingNotesInput}
+              onChange={(e) => setMeetingNotesInput(e.target.value)}
+              placeholder="Pega aqui notas de reunion, transcripcion, resumen IA o texto libre..."
+              disabled={loading || aiLoading}
+              rows={4}
+              style={{
+                ...textareaStyle(loading || aiLoading),
+                background: '#FFFFFF',
+                border: '1.5px solid #DDD6FE',
+                fontSize: 13,
+              }}
+              onFocus={focusStyle}
+              onBlur={blurStyle}
+            />
 
             {aiError && (
               <div style={{
@@ -759,7 +703,7 @@ export default function ProspectPanel({
 
             <button
               onClick={handleAiProcess}
-              disabled={loading || aiLoading || !isGeminiConfigured() || (meetingNotesMode === 'text' ? !meetingNotesInput.trim() : !gdocUrl.trim())}
+              disabled={loading || aiLoading || !isGeminiConfigured() || !meetingNotesInput.trim()}
               style={{
                 marginTop: 10, padding: '8px 16px',
                 fontSize: 12, fontWeight: 700,

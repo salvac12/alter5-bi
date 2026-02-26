@@ -1,27 +1,25 @@
 /**
- * Prospects data layer — localStorage backend.
+ * Prospects data layer — Airtable REST API backend.
  *
- * Same interface as the Airtable version so ProspectsView / ProspectPanel
- * work unchanged. When the Airtable "Prospects" table is ready, swap back
- * to API calls.
+ * Same base as Opportunities (appVu3TvSZ1E4tj0J), table "Prospects".
+ * Uses VITE_AIRTABLE_PAT (env var injected at build time by Vite).
  */
 
 import { createOpportunity } from './airtable';
 
-const LS_KEY = "alter5_prospects";
+const BASE_ID = "appVu3TvSZ1E4tj0J";
+const TABLE_NAME = "BETA-Prospects";
+const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
 
-function generateId() {
-  return "loc_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function getToken() {
+  return import.meta.env.VITE_AIRTABLE_PAT || "";
 }
 
-function loadAll() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
-  } catch { return []; }
-}
-
-function saveAll(records) {
-  localStorage.setItem(LS_KEY, JSON.stringify(records));
+function headers() {
+  return {
+    Authorization: `Bearer ${getToken()}`,
+    "Content-Type": "application/json",
+  };
 }
 
 // ── Prospect Stages ─────────────────────────────────────────────────
@@ -83,52 +81,99 @@ export const TASK_TEMPLATES = [
 
 // ── READ ────────────────────────────────────────────────────────────
 
+/**
+ * Fetch all active prospects (handles pagination).
+ * Returns raw Airtable records: [{ id, fields, createdTime }, ...]
+ */
 export async function fetchAllProspects() {
-  const records = loadAll();
-  // Return in Airtable record shape: { id, fields }
-  return records
-    .filter(r => {
-      const status = r.fields?.["Record Status"] || "Active";
-      return status === "Active" || !status;
-    })
-    .map(r => ({ id: r.id, fields: r.fields }));
+  const all = [];
+  let offset = null;
+  const formula = encodeURIComponent('{Record Status}="Active"');
+
+  do {
+    let url = `${API_ROOT}?filterByFormula=${formula}`;
+    if (offset) url += `&offset=${offset}`;
+    const res = await fetch(url, { headers: headers() });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Airtable Prospects GET ${res.status}: ${body}`);
+    }
+    const data = await res.json();
+    all.push(...(data.records || []));
+    offset = data.offset || null;
+  } while (offset);
+
+  return all;
 }
 
+/**
+ * Fetch a single prospect by ID.
+ */
 export async function fetchProspect(recordId) {
-  const records = loadAll();
-  const found = records.find(r => r.id === recordId);
-  if (!found) throw new Error(`Prospect ${recordId} not found`);
-  return { id: found.id, fields: found.fields };
+  const res = await fetch(`${API_ROOT}/${recordId}`, { headers: headers() });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Airtable Prospects GET ${res.status}: ${body}`);
+  }
+  return res.json();
 }
 
 // ── CREATE ──────────────────────────────────────────────────────────
 
+/**
+ * Create a new prospect record.
+ * @param {object} fields - Airtable field values
+ * @returns {object} Created record { id, fields, createdTime }
+ */
 export async function createProspect(fields) {
-  const records = loadAll();
-  const newRecord = { id: generateId(), fields: { ...fields } };
-  records.push(newRecord);
-  saveAll(records);
-  return { id: newRecord.id, fields: newRecord.fields };
+  const res = await fetch(API_ROOT, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ fields, typecast: true }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Airtable Prospects POST ${res.status}: ${body}`);
+  }
+  return res.json();
 }
 
 // ── UPDATE ──────────────────────────────────────────────────────────
 
+/**
+ * Update an existing prospect (PATCH — partial update).
+ * @param {string} recordId - Airtable record ID (rec...)
+ * @param {object} fields - Fields to update
+ * @returns {object} Updated record
+ */
 export async function updateProspect(recordId, fields) {
-  const records = loadAll();
-  const idx = records.findIndex(r => r.id === recordId);
-  if (idx === -1) throw new Error(`Prospect ${recordId} not found`);
-  records[idx].fields = { ...records[idx].fields, ...fields };
-  saveAll(records);
-  return { id: records[idx].id, fields: records[idx].fields };
+  const res = await fetch(`${API_ROOT}/${recordId}`, {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify({ fields, typecast: true }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Airtable Prospects PATCH ${res.status}: ${body}`);
+  }
+  return res.json();
 }
 
 // ── DELETE ───────────────────────────────────────────────────────────
 
+/**
+ * Delete a prospect record by ID.
+ */
 export async function deleteProspect(recordId) {
-  const records = loadAll();
-  const filtered = records.filter(r => r.id !== recordId);
-  saveAll(filtered);
-  return { id: recordId, deleted: true };
+  const res = await fetch(`${API_ROOT}/${recordId}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Airtable Prospects DELETE ${res.status}: ${body}`);
+  }
+  return res.json();
 }
 
 // ── CONVERSION: Prospect → Opportunity ──────────────────────────────
@@ -146,7 +191,7 @@ export async function convertToOpportunity(prospect) {
 
   const newOpp = await createOpportunity(oppFields);
 
-  // 2. Mark prospect as converted in localStorage
+  // 2. Mark prospect as converted
   const updated = await updateProspect(prospect.id, {
     "Converted": true,
     "Opportunity ID": newOpp.id,
@@ -177,8 +222,11 @@ export function normalizeProspect(record) {
   const converted = !!f["Converted"];
   const opportunityId = f["Opportunity ID"] || "";
   const recordStatus = f["Record Status"] || "Active";
-  const tasks = f["Tasks"] || [];
   const dealManager = f["Deal Manager"] || "";
+
+  // Tasks are stored as JSON string in Airtable multilineText field
+  let tasks = [];
+  try { tasks = JSON.parse(f["Tasks"] || "[]"); } catch { tasks = []; }
 
   return {
     id: record.id,
