@@ -261,6 +261,9 @@ export default function ProspectPanel({
         t.assignedTo && !t.notifiedAt && t.status !== 'hecho'
       );
 
+      // DEBUG: log payload to identify which field causes 422
+      console.log('[ProspectPanel] PATCH payload:', JSON.stringify(fields, null, 2));
+
       let result;
       if (isNew) {
         fields['Record Status'] = 'Active';
