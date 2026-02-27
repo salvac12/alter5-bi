@@ -130,6 +130,7 @@ export default function App() {
     return [...list].sort((a, b) => {
       const m = sortDir === "desc" ? -1 : 1;
       if (sortBy === "name") return m * a.name.localeCompare(b.name);
+      if (sortBy === "lastDate") return m * (a.lastDate || "").localeCompare(b.lastDate || "");
       if (sortBy === "productScore") {
         const aMatch = getBestProductMatch(productMatches, a.idx);
         const bMatch = getBestProductMatch(productMatches, b.idx);
@@ -161,6 +162,20 @@ export default function App() {
   const handleSort = (col) => {
     if (sortBy === col) setSortDir(d => d === "desc" ? "asc" : "desc");
     else { setSortBy(col); setSortDir("desc"); }
+  };
+
+  const handleKpiClick = (status) => {
+    if (selStatus.length === 1 && selStatus[0] === status) {
+      // Toggle off: clear filter, restore default sort
+      setSelStatus([]);
+      setSortBy("score");
+      setSortDir("desc");
+    } else {
+      setSelStatus([status]);
+      setSortBy("lastDate");
+      setSortDir("desc");
+    }
+    setPage(0);
   };
 
   const handleTabChange = (tabId) => {
@@ -367,9 +382,12 @@ export default function App() {
               display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10,
             }}>
               <KPI label="Total empresas" value={stats.total} sub={`${filtered.length} filtradas`} />
-              <KPI label="Activas" value={stats.active} accent="#10B981" sub="< 6 meses" />
-              <KPI label="Dormidas" value={stats.dormant} accent="#F59E0B" sub="6-18 meses" />
-              <KPI label="Perdidas" value={stats.lost} accent="#EF4444" sub="> 18 meses" />
+              <KPI label="Activas" value={stats.active} accent="#10B981" sub="< 6 meses"
+                onClick={() => handleKpiClick("active")} active={selStatus.length === 1 && selStatus[0] === "active"} />
+              <KPI label="Dormidas" value={stats.dormant} accent="#F59E0B" sub="6-18 meses"
+                onClick={() => handleKpiClick("dormant")} active={selStatus.length === 1 && selStatus[0] === "dormant"} />
+              <KPI label="Perdidas" value={stats.lost} accent="#EF4444" sub="> 18 meses"
+                onClick={() => handleKpiClick("lost")} active={selStatus.length === 1 && selStatus[0] === "lost"} />
               <KPI label="Score medio" value={stats.avgScore} accent="#3B82F6" sub="/100 puntos" />
             </div>
 

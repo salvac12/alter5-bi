@@ -73,11 +73,14 @@ export function ScoreBar({ score, max = 100, label }) {
 }
 
 /* ── KPI Card ── */
-export function KPI({ label, value, sub, accent }) {
+export function KPI({ label, value, sub, accent, onClick, active }) {
   return (
-    <div style={{
-      background: "#FFFFFF", borderRadius: 10, padding: "16px 18px",
-      border: "1px solid #E2E8F0",
+    <div onClick={onClick} style={{
+      background: active ? (accent ? `${accent}10` : "#F0F9FF") : "#FFFFFF",
+      borderRadius: 10, padding: "16px 18px",
+      border: active ? `2px solid ${accent || "#3B82F6"}` : "1px solid #E2E8F0",
+      cursor: onClick ? "pointer" : "default",
+      transition: "all 0.15s ease",
     }}>
       <div style={{
         fontSize: 10, textTransform: "uppercase", letterSpacing: "2.5px",
