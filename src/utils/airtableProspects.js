@@ -126,10 +126,18 @@ export async function fetchProspect(recordId) {
  * @returns {object} Created record { id, fields, createdTime }
  */
 export async function createProspect(fields) {
+  // Sanitize: strip linked-record arrays that shouldn't be sent as raw values
+  const clean = { ...fields };
+  for (const [k, v] of Object.entries(clean)) {
+    if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string" && v[0].startsWith("rec")) {
+      delete clean[k];
+    }
+  }
+
   const res = await fetch(API_ROOT, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields: clean }),
   });
   if (!res.ok) {
     const body = await res.text();
@@ -147,10 +155,20 @@ export async function createProspect(fields) {
  * @returns {object} Updated record
  */
 export async function updateProspect(recordId, fields) {
+  // Sanitize: remove fields that are arrays of record IDs (linked records read
+  // from Airtable) — sending them as-is causes 422 "Value is not an array of
+  // record IDs" when the value gets coerced to string.
+  const clean = { ...fields };
+  for (const [k, v] of Object.entries(clean)) {
+    if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string" && v[0].startsWith("rec")) {
+      delete clean[k];
+    }
+  }
+
   const res = await fetch(`${API_ROOT}/${recordId}`, {
     method: "PATCH",
     headers: headers(),
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields: clean }),
   });
   if (!res.ok) {
     const body = await res.text();
