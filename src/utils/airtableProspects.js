@@ -160,7 +160,6 @@ export async function updateProspect(recordId, fields) {
   const clean = { ...fields };
   for (const [k, v] of Object.entries(clean)) {
     if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string" && v[0].startsWith("rec")) {
-      console.warn(`[updateProspect] Stripping linked-record array: ${k} =`, v);
       delete clean[k];
     }
   }
@@ -172,27 +171,6 @@ export async function updateProspect(recordId, fields) {
   });
   if (!res.ok) {
     const body = await res.text();
-    // If 422 "not an array of record IDs", identify the offending field
-    if (res.status === 422 && body.includes("record IDs")) {
-      console.error(`[updateProspect] 422 error. Payload was:`, JSON.stringify(clean, null, 2));
-      // Try removing fields one by one to find the culprit
-      for (const key of Object.keys(clean)) {
-        const test = { ...clean };
-        delete test[key];
-        const retry = await fetch(`${API_ROOT}/${recordId}`, {
-          method: "PATCH",
-          headers: headers(),
-          body: JSON.stringify({ fields: test }),
-        });
-        if (retry.ok) {
-          console.error(`[updateProspect] CULPRIT FIELD: "${key}" (value: ${JSON.stringify(clean[key])})`);
-          // Return the successful result but warn about the skipped field
-          const result = await retry.json();
-          console.warn(`[updateProspect] Saved without "${key}". This field may have been changed to a linked record in Airtable.`);
-          return result;
-        }
-      }
-    }
     throw new Error(`Airtable Prospects PATCH ${res.status}: ${body}`);
   }
   return res.json();

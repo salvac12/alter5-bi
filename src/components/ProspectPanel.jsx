@@ -248,7 +248,8 @@ export default function ProspectPanel({
         'Contact Email': validContacts[0]?.email || undefined,
         'Assigned Email': formData.assignedEmail.trim() || undefined,
         'Contacts': JSON.stringify(validContacts),
-        'Tasks': JSON.stringify(tasks),
+        // Tasks field is now a linked record in Airtable — don't send as JSON string.
+        // Tasks are synced separately via syncTasksToAirtable().
       };
 
       // Remove undefined/empty fields (Airtable rejects empty strings for single-select)
@@ -260,9 +261,6 @@ export default function ProspectPanel({
       const tasksToNotify = tasks.filter(t =>
         t.assignedTo && !t.notifiedAt && t.status !== 'hecho'
       );
-
-      // DEBUG: log payload to identify which field causes 422
-      console.log('[ProspectPanel] PATCH payload:', JSON.stringify(fields, null, 2));
 
       let result;
       if (isNew) {
@@ -278,9 +276,8 @@ export default function ProspectPanel({
         const opportunityId = prospect?.opportunityId || '';
         const syncResult = await syncTasksToAirtable(tasks, opportunityId);
         if (syncResult.synced > 0) {
-          // Update Airtable with airtableIds
+          // Update local state with airtableIds from sync
           setTasks(syncResult.tasks);
-          await updateProspect(result.id, { 'Tasks': JSON.stringify(syncResult.tasks) });
           airtableSyncMsg = syncResult.errors > 0
             ? ` (${syncResult.synced} tareas sync, ${syncResult.errors} error)`
             : '';
