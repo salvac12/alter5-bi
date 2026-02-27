@@ -91,14 +91,16 @@ def get_gspread_client():
     return gspread.authorize(creds)
 
 
-def read_pending_emails(sheet):
-    """Read rows with status 'pending' from raw_emails tab."""
+def read_pending_emails(sheet, reprocess=False):
+    """Read rows with status 'pending' (or 'done' if reprocess=True) from raw_emails tab."""
     ws = sheet.worksheet("raw_emails")
     records = ws.get_all_records()
 
+    valid_statuses = {"pending", "done"} if reprocess else {"pending"}
     pending = []
     for i, row in enumerate(records):
-        if str(row.get("processed", "")).strip().lower() == "pending":
+        status = str(row.get("processed", "")).strip().lower()
+        if status in valid_statuses:
             # row index in sheet is i+2 (1-indexed header + 1-indexed data)
             row["_sheet_row"] = i + 2
             pending.append(row)
@@ -565,10 +567,17 @@ def group_emails_by_company(pending_emails):
     return dict(companies)
 
 
-def process_pipeline():
-    """Main pipeline entry point."""
+def process_pipeline(reprocess=False):
+    """Main pipeline entry point.
+
+    Args:
+        reprocess: If True, re-read 'done' rows from the Sheet and merge them
+                   into existing data. Useful for backfilling after a fix.
+    """
     print("=" * 60)
     print("  Alter5 BI — Pipeline automático Gmail → Dashboard")
+    if reprocess:
+        print("  ⚡ MODO REPROCESS: re-leyendo emails ya procesados")
     print("=" * 60)
     print()
 
@@ -582,19 +591,25 @@ def process_pipeline():
         raise RuntimeError("GOOGLE_SHEET_ID env var not set")
     sheet = gc.open_by_key(sheet_id)
 
-    # 2. Read pending emails
-    print("  [2/7] Leyendo emails pendientes...")
-    ws, pending = read_pending_emails(sheet)
+    # 2. Read pending emails (or done+pending if reprocessing)
+    label = "pendientes + procesados" if reprocess else "pendientes"
+    print(f"  [2/7] Leyendo emails {label}...")
+    ws, pending = read_pending_emails(sheet, reprocess=reprocess)
     if not pending:
-        print("  → No hay emails pendientes. Nada que hacer.")
+        print(f"  → No hay emails {label}. Nada que hacer.")
         return False
 
-    print(f"  → {len(pending)} emails pendientes encontrados")
+    print(f"  → {len(pending)} emails encontrados")
 
-    # 2b. Filter relevant emails with AI
-    print("  [2b/7] Filtrando emails relevantes con IA...")
-    relevant, ignored = filter_relevant_emails(pending)
-    print(f"  → {len(relevant)} relevantes, {len(ignored)} ignorados")
+    # 2b. Filter relevant emails with AI (skip for reprocess — already filtered)
+    if reprocess:
+        print("  [2b/7] Saltando filtro IA (reprocess: ya fueron filtrados)")
+        relevant = pending
+        ignored = []
+    else:
+        print("  [2b/7] Filtrando emails relevantes con IA...")
+        relevant, ignored = filter_relevant_emails(pending)
+        print(f"  → {len(relevant)} relevantes, {len(ignored)} ignorados")
 
     if ignored:
         ignored_rows = [row["_sheet_row"] for row in ignored]
@@ -754,10 +769,13 @@ def process_pipeline():
     with open(paths["employees"], "w", encoding="utf-8") as f:
         json.dump(employees, f, ensure_ascii=False, indent=2)
 
-    # Mark rows as done in the sheet
-    print("  → Marcando emails como procesados en la Sheet...")
-    row_indices = [row["_sheet_row"] for row in pending]
-    mark_rows_done(ws, row_indices)
+    # Mark rows as done in the sheet (skip for reprocess — already done)
+    if not reprocess:
+        print("  → Marcando emails como procesados en la Sheet...")
+        row_indices = [row["_sheet_row"] for row in pending]
+        mark_rows_done(ws, row_indices)
+    else:
+        print("  → Reprocess: emails ya estaban marcados como done")
 
     print()
     print(f"  OK: {len(all_companies)} empresas totales en el dashboard")
@@ -769,5 +787,6 @@ def process_pipeline():
 
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    had_changes = process_pipeline()
+    reprocess = "--reprocess" in sys.argv
+    had_changes = process_pipeline(reprocess=reprocess)
     sys.exit(0 if had_changes else 0)

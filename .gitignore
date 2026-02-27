@@ -4,7 +4,6 @@ dist
 *.local
 .env
 data_sources/*.xlsx
-src/data/companies_full.json
 src/data/*.bak
 .vercel
 __pycache__/

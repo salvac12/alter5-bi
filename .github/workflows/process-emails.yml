@@ -2,8 +2,17 @@ name: Process Gmail Emails
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 03:00 UTC = 04:00 Madrid
-  workflow_dispatch:       # Manual trigger or from GAS webhook
+    - cron: '0 4 * * *'  # 04:00 UTC = 05:00 Madrid (after GAS runs at ~03:12)
+  workflow_dispatch:
+    inputs:
+      reprocess:
+        description: 'Re-process emails already marked as done (backfill)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 permissions:
   contents: write
@@ -11,7 +20,7 @@ permissions:
 jobs:
   process:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
@@ -31,7 +40,13 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-        run: python scripts/process_sheet_emails.py
+        run: |
+          if [ "${{ github.event.inputs.reprocess }}" = "true" ]; then
+            echo "Running in REPROCESS mode..."
+            python scripts/process_sheet_emails.py --reprocess
+          else
+            python scripts/process_sheet_emails.py
+          fi
 
       - name: Sync Airtable opportunities
         if: ${{ env.AIRTABLE_PAT != '' }}
@@ -44,7 +59,7 @@ jobs:
           git config user.name "alter5-bi-bot"
           git config user.email "bot@alter5.com"
           for f in src/data/companies.json src/data/companies_full.json src/data/employees.json src/data/opportunities.json; do
-            [ -f "$f" ] && git add -f "$f"
+            [ -f "$f" ] && git add "$f"
           done
           if git diff --cached --quiet; then
             echo "No changes to commit"
