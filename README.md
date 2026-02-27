@@ -10,12 +10,15 @@ Dashboard de inteligencia comercial para Alter5 — analisis, clasificacion y pi
 
 | Metrica | Valor |
 |---------|-------|
-| Empresas | ~3.272 (fusionadas de 3 buzones) |
-| Buzones | Salvador Carrillo, Guillermo Souto, Leticia Menendez |
-| Oportunidades Airtable | ~227 activas en 9 stages |
+| Empresas | ~3,317 (fusionadas de 3 buzones + pipeline Gmail) |
+| Buzones activos | Salvador Carrillo, Leticia Menendez |
+| Buzon historico | Guillermo Souto (ya no en la empresa) |
+| Oportunidades Airtable | ~114 deals activos en 9 stages |
+| Prospects | Kanban pre-pipeline con 5 stages (Airtable) |
 | Productos | Debt, Equity (con subcategorias) |
-| Pipeline CI/CD | Gmail -> Sheet -> Gemini -> JSON -> Vercel (diario 03:00 UTC) |
+| Pipeline CI/CD | Gmail -> Sheet -> Gemini -> JSON -> Vercel (diario 04:00 UTC) |
 | Clasificacion IA | Gemini 2.0 Flash (grupo, tipo, market roles, productos, senales) |
+| Empresas enriquecidas IA | 1,882 (Guillermo + Leticia) |
 
 ---
 
@@ -25,7 +28,7 @@ Dashboard de inteligencia comercial para Alter5 — analisis, clasificacion y pi
 # 1. Instalar dependencias
 npm install
 
-# 2. Configurar Airtable (opcional, para Pipeline view)
+# 2. Configurar Airtable (necesario para Prospects y Pipeline views)
 echo "VITE_AIRTABLE_PAT=tu_token_aqui" > .env
 
 # 3. Arrancar en desarrollo
@@ -40,15 +43,17 @@ npm run dev
 ## Arquitectura
 
 ```
-                  Gmail (3 buzones)
+                  Gmail (2 buzones activos)
                         |
                   Google Apps Script
                   (scanMailboxes.gs)
+                  ~03:12 UTC diario
                         |
                   Google Sheet
-                  (raw_emails tab)
+               (alter5-bi-pipeline)
+                   raw_emails tab
                         |
-              GitHub Actions (diario 03:00 UTC)
+              GitHub Actions (04:00 UTC)
                    /          \
      process_sheet_emails.py   sync_airtable_opportunities.py
         (Gemini 2.0 Flash)           (Airtable REST API)
@@ -62,12 +67,19 @@ npm run dev
 
 ### Flujo de datos
 
-1. **Google Apps Script** escanea 3 buzones Gmail diariamente y escribe emails pendientes en Google Sheet
-2. **GitHub Actions** se ejecuta a las 03:00 UTC:
-   - `process_sheet_emails.py` lee emails pendientes, clasifica con Gemini AI, actualiza `companies.json`
+1. **Google Apps Script** escanea 2 buzones Gmail (Salvador + Leticia) diariamente (~03:12 UTC) y escribe emails pendientes en Google Sheet
+2. **GitHub Actions** se ejecuta a las 04:00 UTC:
+   - `process_sheet_emails.py` lee emails pendientes, clasifica con Gemini AI, fusiona con `companies_full.json`
    - `sync_airtable_opportunities.py` descarga oportunidades de Airtable -> `opportunities.json`
 3. **Bot commits** los JSONs actualizados y push a `main`
 4. **Vercel** detecta el push y redespliega automaticamente
+
+### Flujo de ventas
+
+```
+Prospects (5 stages)  ──>  Pipeline (9 stages)  ──>  Closed
+Lead -> Interesado -> Reunion -> Doc. Pendiente -> Term-Sheet  |  conversion automatica a Opportunity
+```
 
 ---
 
@@ -76,53 +88,62 @@ npm run dev
 ```
 alter5-bi/
 ├── .github/workflows/
-│   └── process-emails.yml        # CI/CD: Gmail pipeline diario + Airtable sync
+│   └── process-emails.yml        # CI/CD: Gmail pipeline diario (04:00 UTC) + dispatch manual
+├── api/
+│   ├── notify-task.js            # Serverless: notificaciones email via Resend API
+│   └── fetch-gdoc.js             # Serverless: proxy CORS Google Docs
 ├── data_sources/                  # Excels originales (no en git)
 ├── scripts/
 │   ├── gas/
-│   │   ├── scanMailboxes.gs       # Google Apps Script para Gmail
+│   │   ├── scanMailboxes.gs       # Google Apps Script (2 buzones: Salvador + Leticia)
 │   │   └── README.md              # Guia setup completo del pipeline
 │   ├── import_mailbox.py          # Importador de buzones Excel
-│   ├── process_sheet_emails.py    # Pipeline principal: Sheet -> Gemini -> JSON
+│   ├── import_enriched.py         # Importador de datos enriquecidos v2 (Gemini)
+│   ├── import_campaign.py         # Importador de datos de campana
+│   ├── process_sheet_emails.py    # Pipeline principal: Sheet -> Gemini -> JSON (soporta --reprocess)
 │   ├── sync_airtable_opportunities.py  # Airtable -> opportunities.json
-│   ├── backfill_dated_subjects.py # Backfill de subjects con fecha
-│   ├── reclassify_products.py     # Re-clasificacion masiva Debt/Equity
-│   ├── import_enriched.py         # Importar clasificaciones
-│   ├── import_campaign.py         # Importar datos de campanas
-│   └── migrate_taxonomy.py        # Migracion entre taxonomias
+│   ├── create_prospects_table.py  # Crear tabla Prospects en Airtable (una vez)
+│   └── reclassify_products.py     # Re-clasificacion masiva Debt/Equity
 ├── src/
 │   ├── main.jsx                   # Entry point React
-│   ├── App.jsx                    # App principal: tabs Empresas | Pipeline
+│   ├── App.jsx                    # App principal: tabs Empresas | Prospects | Pipeline
 │   ├── index.css                  # Design tokens y estilos globales
-│   ├── assets/
-│   │   └── alter5-logo.svg        # Logo Alter5
 │   ├── components/
 │   │   ├── UI.jsx                 # Badge, KPI, FilterChip, ScoreBar, Tooltip
-│   │   ├── Sidebar.jsx            # 7 filtros: Group, Type, Role, Status, Pipeline, Product
+│   │   ├── Sidebar.jsx            # Filtros CRM (7 dimensiones + 2 futuras)
 │   │   ├── CompanyTable.jsx       # Tabla ordenable con paginacion
-│   │   ├── DetailPanel.jsx        # Ficha empresa: Resumen, Timeline, Detalles
+│   │   ├── DetailPanel.jsx        # Ficha empresa: Resumen, Timeline, Detalles, enrichment IA
 │   │   ├── EmployeeTabs.jsx       # Tabs por buzon (Todos, Salvador, Guillermo, Leticia)
-│   │   ├── KanbanView.jsx         # Vista Kanban pipeline (9 columnas, drag & drop)
+│   │   ├── ProspectsView.jsx      # Kanban Prospects (5 columnas)
+│   │   ├── ProspectPanel.jsx      # CRUD Prospects slide-in panel
+│   │   ├── ProspectTasks.jsx      # Gestion tareas con asignacion y notificaciones
+│   │   ├── KanbanView.jsx         # Vista Kanban Pipeline (9 columnas, drag & drop)
 │   │   └── OpportunityPanel.jsx   # Panel CRUD oportunidades Airtable
 │   ├── utils/
 │   │   ├── constants.js           # Taxonomia, productos, scoring weights
 │   │   ├── data.js                # Parsing, scoring, product matching, CSV export
 │   │   ├── companyData.js         # localStorage: datos manuales, hidden, overrides
-│   │   └── airtable.js            # Cliente REST Airtable (fetch, create, update, delete)
+│   │   ├── airtable.js            # Cliente REST Airtable Opportunities
+│   │   ├── airtableProspects.js   # Cliente REST Airtable Prospects (sanitiza linked records)
+│   │   ├── airtableTasks.js       # Sync tareas con Airtable
+│   │   └── gemini.js              # Integracion Gemini AI
 │   └── data/
-│       ├── companies.json         # ~8MB datos compactos (auto-generado)
-│       ├── companies_full.json    # Datos completos (no en git)
+│       ├── companies.json         # ~8MB datos compactos (trackeado en git, auto-generado)
+│       ├── companies_full.json    # ~15MB datos completos (trackeado en git, auto-generado)
 │       ├── employees.json         # 3 empleados registrados
-│       └── opportunities.json     # 227 oportunidades Airtable (auto-generado)
+│       └── opportunities.json     # Oportunidades Airtable (auto-generado)
 ├── .env                           # VITE_AIRTABLE_PAT (no en git)
 ├── package.json                   # React 18, Vite 5, lodash
 ├── vite.config.js                 # Config Vite con React plugin
 ├── vercel.json                    # Deploy config, headers, cache
 ├── requirements.txt               # Python: gspread, google-auth, google-generativeai
-├── deploy-vercel.sh               # Script deploy Vercel
+├── CLAUDE.md                      # Instrucciones para Claude Code
+├── ESTADO_PROYECTO.md             # Estado detallado del proyecto
 ├── DEPLOY.md                      # Guia deploy completa
 └── README.md                      # Este archivo
 ```
+
+**IMPORTANTE:** `companies_full.json` debe estar trackeado en git (no en `.gitignore`). El GitHub Action lo necesita como base para el merge incremental.
 
 ---
 
@@ -131,16 +152,30 @@ alter5-bi/
 ### Vista Empresas (tab por defecto)
 
 - **KPIs**: Total, Activas, Dormidas, Perdidas, Score medio
-- **Filtros laterales**: Company Group, Company Type, Market Role, Estado, Pipeline Airtable, Producto Alter5
+- **Filtros laterales**: Company Group, Company Type, Market Role, Estado, Subtipo Empresa, Fase Comercial, Producto Alter5
 - **Tabs buzones**: Todos | Salvador | Guillermo | Leticia
 - **Tabla**: Score, Empresa, Group, Type, Market Role, Producto, Status, Emails, Contactos, Ultimo contacto
-- **Panel detalle**: slide-in con 3 tabs (Resumen, Timeline, Detalles), edicion inline de clasificacion
+- **Panel detalle**: slide-in con Resumen, Timeline, Detalles, enrichment IA (subtipo, fase, productos potenciales, senales clave, market roles)
+- **Ordenamiento**: por score descendente por defecto
+
+### Vista Prospects (tab Prospects)
+
+- **Kanban board**: 5 columnas (Lead -> Interesado -> Reunion -> Doc. Pendiente -> Term-Sheet)
+- **CRUD completo**: crear, editar, eliminar prospects via Airtable API
+- **Multi-contactos**: JSON array en campo Contacts (nombre, email, rol)
+- **Tareas**: asignacion a equipo con notificaciones email via Resend API
+- **Integracion Google Docs**: contexto de reuniones
+- **Filtros**: por origen (Referral, Evento, Campana, Cold Outreach, Web/Inbound, Otro)
+- **Deal Manager**: asignable por prospect
+- **Productos**: con subcategorias (Corporate Debt, Project Finance, Development Debt, PF Guaranteed, Investment, Co-Development, M&A)
+- **Conversion**: automatica de Prospect -> Opportunity (Pipeline)
 
 ### Vista Pipeline (tab Pipeline con badge AT)
 
 - **Kanban board**: 9 columnas replicando Airtable
 - **Drag & drop**: HTML5 nativo, actualiza Airtable en tiempo real
 - **Busqueda**: filtrar oportunidades por nombre
+- **Filtro Debt/Equity**
 - **CRUD completo**: crear, editar, eliminar oportunidades
 - **Panel lateral**: formulario con todos los campos Airtable
 - **Cross-project**: accesible via URL params `?view=pipeline&add=Empresa&stage=New`
@@ -158,11 +193,21 @@ alter5-bi/
 | Other | 2 | Public Institution, Association |
 
 ### Market Roles
-Borrower, Seller (M&A), Buyer Investor (M&A), Debt Investor, Equity Investor, Partner & Services
+| Role | Color | Descripcion |
+|------|-------|-------------|
+| Borrower | Amber | Prestatario potencial |
+| Seller (M&A) | Red | Vendedor de activos/proyectos |
+| Buyer Investor (M&A) | Purple | Comprador de activos |
+| Debt Investor | Blue | Inversor en deuda |
+| Equity Investor | Green | Inversor en equity |
+| Partner & Services | Gray | Proveedor/asesor/partner |
 
 ### Productos Alter5
 - **Debt**: Project Finance, Asset Backed, Development Debt, Corporate Loan, PF Guaranteed
 - **Equity**: M&A, Co-Development, Equity Investment
+
+### Prospect Stages
+Lead -> Interesado -> Reunion -> Documentacion Pendiente -> Listo para Term-Sheet
 
 ### Pipeline Stages (Airtable)
 New -> Origination (Prep & NDA -> Fin. Analysis -> Termsheet) -> Distribution (Prep -> Ongoing) -> In Execution -> Closed / Lost
@@ -178,6 +223,10 @@ New -> Origination (Prep & NDA -> Fin. Analysis -> Termsheet) -> Distribution (P
 | Red | 15 | Numero de contactos en la empresa (3 pts/contacto) |
 | Grupo | 20 | Peso estrategico del Company Group |
 
+### Scoring de productos con IA
+- Si la empresa tiene clasificacion Gemini: alta=90, media=60, baja=30
+- Si no tiene: fallback al keyword scoring existente
+
 ### Estados
 - **Activa**: ultimo contacto < 6 meses
 - **Dormida**: entre 6 y 18 meses
@@ -189,21 +238,28 @@ New -> Origination (Prep & NDA -> Fin. Analysis -> Termsheet) -> Distribution (P
 
 ### Airtable
 - **Base**: `appVu3TvSZ1E4tj0J` (Alter5 OS)
-- **Tabla**: Opportunities
-- **Campos**: Opportunity Name, Global Status, Workflow Phase (Debt), Targeted Ticket Size, Currency, Record Status
+- **Tabla Opportunities**: Pipeline deals (9 stages, filtro: Transaction + Active)
+- **Tabla BETA-Prospects**: Pre-pipeline leads (5 stages, conversion a Opportunity)
+  - Campos JSON: `Contacts` almacenado como JSON.stringify en multilineText
+  - Campo `Tasks`: linked record en Airtable (no enviar en PATCH/POST)
+  - Product: singleSelect con subcategorias
 - **Token scope necesario**: `data.records:read` + `data.records:write`
 - **Sync**: diario via GitHub Actions (read) + browser CRUD (read/write)
 
 ### Google Workspace
-- **Gmail**: 3 buzones (Salvador, Guillermo, Leticia)
-- **Google Sheets**: Pipeline de emails pendientes
+- **Gmail**: 2 buzones activos (Salvador, Leticia) + 1 historico (Guillermo)
+- **Google Sheets**: `alter5-bi-pipeline` con tabs `raw_emails`, `config`, `ai_classifications`
 - **Gemini 2.0 Flash**: Clasificacion IA (grupo, tipo, market roles, productos, senales)
-- **Service Account**: Para acceso programatico desde GitHub Actions
+- **Service Account**: `alter5-ai-crm` project, con OAuth2 delegation por usuario
 
 ### GitHub Actions
 - **Workflow**: `process-emails.yml`
-- **Frecuencia**: Diario 03:00 UTC + manual dispatch
+- **Frecuencia**: Diario 04:00 UTC + manual dispatch (con opcion `reprocess`)
 - **Secrets**: `GOOGLE_SERVICE_ACCOUNT_JSON`, `GEMINI_API_KEY`, `GOOGLE_SHEET_ID`, `AIRTABLE_PAT`
+
+### Vercel Serverless Functions
+- `api/notify-task.js` — Notificaciones email via Resend API (asignacion de tareas)
+- `api/fetch-gdoc.js` — Proxy CORS para Google Docs (contexto reuniones)
 
 ---
 
@@ -246,7 +302,7 @@ El script fusiona automaticamente: si una empresa aparece en varios buzones, com
 ```bash
 # Build local
 npm run build          # Genera dist/
-npm run preview        # Preview del build
+npm run preview        # Preview del build (recomendado para testing)
 
 # Deploy Vercel (automatico via Git push)
 git push origin main   # Vercel detecta y redespliega
@@ -265,14 +321,18 @@ vercel --prod
 - [x] Scoring 0-100 con 4 dimensiones
 - [x] Filtros combinables (7 dimensiones activas + 2 futuras)
 - [x] Clasificacion IA con Gemini (grupo, tipo, market roles, productos)
+- [x] Enriquecimiento IA v2 (subtipo, fase, senales clave, 500 chars contexto)
 - [x] Product matching Debt/Equity con scoring de confianza
 - [x] Panel detalle con Timeline trimestral y extractos de email
 - [x] Edicion inline de clasificacion y contactos
 - [x] Exportacion CSV compatible con Airtable
-- [x] Pipeline Airtable: filtro en sidebar + badges
-- [x] Vista Kanban con drag & drop y CRUD bidireccional
+- [x] Vista Prospects: Kanban 5 columnas, CRUD Airtable, multi-contactos, tareas
+- [x] Vista Pipeline: Kanban 9 columnas, drag & drop, CRUD Airtable bidireccional
+- [x] Conversion automatica Prospect -> Opportunity
+- [x] Notificaciones email para asignacion de tareas (Resend API)
 - [x] URL params para cross-project (`?view=pipeline&add=X&stage=Y`)
-- [x] CI/CD diario: Gmail -> Gemini -> JSON -> Vercel
+- [x] CI/CD diario: Gmail -> Gemini -> JSON -> Vercel (04:00 UTC)
+- [x] Modo reprocess para backfill de emails historicos
 - [ ] Filtro por tamano de empresa (requiere datos LinkedIn)
 - [ ] Filtro por pais (requiere clasificacion por idioma)
 - [ ] Graficos de distribucion por grupo/tipo
@@ -282,17 +342,16 @@ vercel --prod
 
 ## Historial de versiones
 
-| Commit | Fecha | Descripcion |
-|--------|-------|-------------|
-| `5fb28af` | 2026-02-24 | Kanban Pipeline view con CRUD bidireccional Airtable |
-| `d294ae1` | 2026-02-24 | Integrar pipeline de oportunidades desde Airtable API |
-| `85c4884` | 2026-02-24 | Eliminar Deal Stage del frontend |
-| `1eedcce` | 2026-02-23 | Extracto de email expandible por subject |
-| `f7f1400` | 2026-02-23 | Backfill dated_subjects y quarterly summaries |
-| `e0f5e38` | 2026-02-23 | Resumen cronologico con fechas por email |
-| `12e60a5` | 2026-02-22 | DetailPanel con pestanas + summaries trimestrales |
-| `d9367f1` | 2026-02-22 | Simplificar taxonomia: 6 sistemas -> 4 dimensiones |
-| `f8b818c` | 2026-02-20 | Scoring IA, import 3 buzones, REF_DATE dinamica |
+| Version | Fecha | Descripcion |
+|---------|-------|-------------|
+| v1.6.0 | 2026-02-27 | Fix pipeline Gmail + Tasks linked record |
+| v1.5.1 | 2026-02-26 | Multi-contactos Prospects + subproductos |
+| v1.5.0 | 2026-02-22 | Market Roles (6 categorias) |
+| v1.4.0 | 2026-02-22 | Datos enriquecidos v2 con IA (1,882 empresas) |
+| v1.3.0 | 2026-02-22 | Pipeline automatico Gmail -> Dashboard |
+| v1.2.0 | 2026-02-20 | Gestion avanzada de empresas y contactos |
+| v1.1.0 | 2026-02-20 | Sistema de edicion y cualificacion |
+| v1.0.0 | 2026-02-20 | Dashboard inicial |
 
 ---
 

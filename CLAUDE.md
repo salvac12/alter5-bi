@@ -9,13 +9,15 @@ React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 - `npm run preview` — build + preview (recomendado para testing)
 - `npm run build` — production build
 - `python scripts/sync_airtable_opportunities.py` — sync Airtable Opportunities -> JSON
+- `python scripts/process_sheet_emails.py` — pipeline Gmail -> companies.json (diario en CI)
+- `python scripts/process_sheet_emails.py --reprocess` — releer emails ya procesados (backfill)
 - `python scripts/create_prospects_table.py` — crear tabla Prospects en Airtable (una vez)
 
 ## Architecture
-- **3 vistas**: Empresas (tabla CRM con 3,294 empresas), Prospects (Kanban pre-pipeline) y Pipeline (Kanban Airtable con ~114 deals)
-- **Datos empresas**: `src/data/companies.json` (compact), `companies_full.json` (dict by domain)
+- **3 vistas**: Empresas (tabla CRM con ~3,317 empresas), Prospects (Kanban pre-pipeline) y Pipeline (Kanban Airtable con ~114 deals)
+- **Datos empresas**: `src/data/companies.json` (compact), `companies_full.json` (dict by domain, trackeado en git)
 - **Datos pipeline**: live API Airtable (`src/utils/airtable.js`) + static `src/data/opportunities.json`
-- **Datos prospects**: live API Airtable (`src/utils/airtableProspects.js`), tabla "Prospects"
+- **Datos prospects**: live API Airtable (`src/utils/airtableProspects.js`), tabla "BETA-Prospects"
 - **Enrichment**: AI-generated taxonomy con localStorage overrides editables inline
 
 ### Flujo de ventas
@@ -23,6 +25,25 @@ React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 Prospects (5 stages)  -->  Pipeline (9 stages)  -->  Closed
 Lead -> Interesado -> Reunion -> Doc. Pendiente -> Term-Sheet  |  conversion automatica a Opportunity
 ```
+
+### Pipeline automatico Gmail -> Dashboard
+```
+Gmail (2 buzones: Salvador + Leticia)
+    |
+Google Apps Script (scanMailboxes.gs, trigger ~03:12 UTC)
+    |
+Google Sheet "alter5-bi-pipeline" (tab raw_emails, status=pending)
+    |
+GitHub Actions (04:00 UTC, process-emails.yml)
+    |
+process_sheet_emails.py (Gemini filtra + clasifica)
+    |
+companies_full.json + companies.json (merge incremental)
+    |
+git commit + push -> Vercel auto-deploy
+```
+
+Nota: Guillermo Souto ya no esta en la empresa. Su buzon no se escanea, pero sus datos historicos permanecen.
 
 ## Key Files
 - `src/App.jsx` — main router, state management, 3 tabs (Empresas/Prospects/Pipeline)
@@ -40,24 +61,38 @@ Lead -> Interesado -> Reunion -> Doc. Pendiente -> Term-Sheet  |  conversion aut
 - `src/components/CompanyTable.jsx` — tabla de empresas
 - `src/components/EmployeeTabs.jsx` — tabs por empleado/buzon
 - `src/components/UI.jsx` — KPI cards y componentes UI comunes
+- `scripts/process_sheet_emails.py` — Pipeline Gmail: Sheet -> Gemini -> JSON (soporta --reprocess)
 - `scripts/sync_airtable_opportunities.py` — Airtable Opportunities -> JSON sync
+- `scripts/gas/scanMailboxes.gs` — Google Apps Script que escanea Gmail
 - `scripts/create_prospects_table.py` — crear tabla Prospects via Meta API
+- `.github/workflows/process-emails.yml` — CI/CD diario + dispatch manual con opcion reprocess
 
 ## Airtable Tables
 - **Opportunities** — Pipeline deals (9 stages, filtro: Transaction + Active)
 - **BETA-Prospects** (`tblAAc8XXwo8rNHR1`) — Pre-pipeline leads (5 stages, conversion a Opportunity)
-  - JSON fields: `Tasks` y `Contacts` se almacenan como JSON.stringify en multilineText
+  - `Tasks`: campo cambiado a **linked record** (multipleRecordLinks) — NO enviar como JSON string
+  - `Contacts`: multilineText con JSON.stringify de array `[{name, email, role}]`
   - Product: singleSelect (Corporate Debt, Project Finance, Development Debt, PF Guaranteed, Investment, Co-Development, M&A)
-  - Multi-contactos: campo `Contacts` (JSON array de `{name, email, role}`), `Contact Email` mantiene primer email por backward compat
+  - Multi-contactos: campo `Contacts` (JSON array), `Contact Email` mantiene primer email por backward compat
 - Base ID: `appVu3TvSZ1E4tj0J`
 - Token: `VITE_AIRTABLE_PAT` (env var, scopes: data.records:read/write, schema.bases:read/write)
+
+## Data Files
+- `src/data/companies.json` — formato compacto para React (~8MB, trackeado en git)
+- `src/data/companies_full.json` — formato completo dict by domain (~15MB, trackeado en git desde 27-feb-2026)
+- `src/data/employees.json` — registro de 3 empleados con contadores
+- `src/data/opportunities.json` — snapshot de oportunidades Airtable
+
+**IMPORTANTE**: `companies_full.json` DEBE estar en git (no en .gitignore) para que el GitHub Action tenga la base completa al hacer merge incremental. Sin este fichero, el pipeline parte de cero y pierde las empresas existentes.
 
 ## Conventions
 - Inline styles (CSS-in-JS objects), no CSS modules
 - Spanish UI labels, English code/comments
 - Airtable linked record fields come as arrays — always handle `Array.isArray()`
 - Airtable singleSelect: no enviar `""` (eliminar campo del objeto antes de POST/PATCH)
-- JSON en Airtable: Tasks y Contacts se guardan como `JSON.stringify()` en multilineText y se parsean con `JSON.parse()` en normalizeProspect
+- Airtable linked records en PATCH: sanitizar arrays de record IDs antes de enviar
+- `Contacts` en Prospects: se guarda como `JSON.stringify()` en multilineText
+- `Tasks` en Prospects: campo linked record — NO enviar como JSON string, se sincroniza via syncTasksToAirtable()
 - Colors: Debt=#3B82F6, Equity/M&A=#10B981, Prospects=#8B5CF6
 - Git: conventional commits en espanol (`feat:`, `fix:`, `ui:`, `docs:`)
 - Prospects identity: purple gradient (#8B5CF6 -> #3B82F6), Pipeline: blue-green (#3B82F6 -> #10B981)

@@ -1,12 +1,12 @@
 # Estado del Proyecto - Alter5 BI
-**Fecha actualización:** 22 de febrero de 2026
-**Ultima modificacion:** Market Roles - clasificacion de rol de mercado por empresa (Gemini)
+**Fecha actualizacion:** 27 de febrero de 2026
+**Ultima modificacion:** Fix pipeline Gmail + campo Tasks linked record
 
 ---
 
 ## Resumen Ejecutivo
 
-Dashboard de Business Intelligence para analisis y clasificacion de la red de contactos empresariales de Alter5, con sistema de scoring multi-dimensional, gestion multi-buzon y enriquecimiento de datos con Gemini.
+Dashboard de Business Intelligence para analisis y clasificacion de la red de contactos empresariales de Alter5, con sistema de scoring multi-dimensional, gestion multi-buzon, enriquecimiento de datos con Gemini, y pipeline automatico Gmail -> Dashboard.
 
 ---
 
@@ -21,13 +21,13 @@ Dashboard de Business Intelligence para analisis y clasificacion de la red de co
 
 2. **Datos importados**
    - Salvador Carrillo: 2,202 empresas (18/02/2026)
-   - Guillermo Souto: 1,511 empresas (18/02/2026)
+   - Guillermo Souto: 1,511 empresas (18/02/2026) — historico, ya no activo
    - Leticia Menendez: 681 empresas (18/02/2026)
-   - **Total tras fusion:** 3,272 empresas unicas
+   - **Total tras fusion + pipeline:** 3,317 empresas (23 nuevas via pipeline Gmail)
    - **Con datos enriquecidos IA:** 1,882 empresas (Guillermo + Leticia v2)
    - **Market Roles:** Preparado, pendiente de datos (procesando en Colab con Gemini)
 
-3. **Enriquecimiento IA v2 (NUEVO)**
+3. **Enriquecimiento IA v2**
    - Analisis con Gemini de los buzones de Guillermo (1,503 empresas) y Leticia (682 empresas)
    - Campos nuevos por empresa: subtipo empresa, fase comercial, productos potenciales IA, senales clave, **market roles**
    - Contexto ampliado de 150 a 500 caracteres
@@ -62,33 +62,62 @@ Dashboard de Business Intelligence para analisis y clasificacion de la red de co
    - Timeline de interacciones visual
    - Contactos clave priorizados
 
-5. **Sistema de importacion**
+5. **Vista Prospects (Kanban pre-pipeline)**
+   - 5 columnas: Lead, Interesado, Reunion, Doc. Pendiente, Term-Sheet
+   - CRUD completo con Airtable REST API (tabla BETA-Prospects)
+   - Multi-contactos (JSON array en campo Contacts)
+   - Tareas con asignacion a equipo y notificaciones por email (Resend API)
+   - Integracion Google Docs para contexto de reuniones
+   - Conversion automatica Prospect -> Opportunity
+   - Filtro por origen (Referral, Evento, Campana, Cold Outreach, Web/Inbound, Otro)
+   - Deal Manager asignable
+   - Productos con subcategorias (Corporate Debt, Project Finance, etc.)
+
+6. **Vista Pipeline (Kanban Airtable)**
+   - 9 columnas replicando stages de Airtable Opportunities
+   - Drag & drop HTML5 nativo con sync en tiempo real
+   - CRUD completo: crear, editar, eliminar oportunidades
+   - ~114 deals activos
+   - Filtro Debt/Equity
+
+7. **Sistema de importacion**
    - `scripts/import_mailbox.py` — Importacion manual de buzones Excel
    - `scripts/import_enriched.py` — Importacion de analisis enriquecido v2 (Gemini)
    - `scripts/import_campaign.py` — Importacion de datos de campana
    - Todos los exportadores preservan campo enrichment (indice 5 en details)
    - Fusion automatica de empresas duplicadas entre buzones
 
-6. **Pipeline automatico Gmail → Dashboard (v1.3.0)**
-   - Google Apps Script escanea buzones de Salvador y Leticia diariamente (trigger 03:00-04:00)
-   - Autenticacion via Service Account + OAuth2 + delegacion de dominio
+8. **Pipeline automatico Gmail -> Dashboard (v1.6.0 — CORREGIDO 27-feb)**
+   - Google Apps Script escanea buzones de Salvador y Leticia diariamente (trigger ~03:12 UTC)
+   - Autenticacion via Service Account + OAuth2 (tokens por usuario)
    - Emails nuevos en Google Sheet (tab `raw_emails`) con status `pending`
-   - GitHub Actions se dispara automaticamente
+   - GitHub Actions (04:00 UTC) procesa pendientes y commitea JSONs
    - Filtro de relevancia con IA: Gemini descarta emails no comerciales
-   - Clasificacion automatica y fusion incremental
+   - Clasificacion automatica y fusion incremental con datos existentes
    - Vercel auto-despliega al detectar cambios en `main`
+   - **Modo `--reprocess`**: releer emails ya marcados como "done" (backfill)
+   - **Dispatch manual** con opcion `reprocess=true` desde GitHub Actions UI
+
+   **Problemas resueltos (27-feb-2026):**
+   - `companies_full.json` estaba en `.gitignore` — el Action partia de cero cada vez. Corregido: ahora trackeado en git.
+   - Cron del Action era 03:00 UTC (antes del GAS). Corregido a 04:00 UTC.
+   - 162 emails perdidos recuperados via `--reprocess` (23 empresas nuevas + 54 actualizadas).
 
    **Infraestructura configurada:**
    - Google Cloud project: `alter5-ai-crm`
-   - Service Account con delegacion de dominio (scopes: gmail.readonly + spreadsheets)
-   - Google Sheet con 3 tabs: `raw_emails`, `config`, `ai_classifications`
-   - GitHub Secrets: `GOOGLE_SERVICE_ACCOUNT_JSON`, `GEMINI_API_KEY`, `GOOGLE_SHEET_ID`, `GH_PAT_WORKFLOW`
+   - Service Account con tokens OAuth2 por usuario (scopes: gmail.readonly + spreadsheets)
+   - Google Sheet `alter5-bi-pipeline` con 3 tabs: `raw_emails`, `config`, `ai_classifications`
+   - GitHub Secrets: `GOOGLE_SERVICE_ACCOUNT_JSON`, `GEMINI_API_KEY`, `GOOGLE_SHEET_ID`, `AIRTABLE_PAT`
 
-7. **Deploy y versioning**
-   - Git repository: `https://github.com/salvac12/alter5-bi.git`
-   - Branch: `main`
-   - Deploy en Vercel (auto-deploy on push)
-   - Panel Vercel: `https://vercel.com/salvas-workspaces-projects/alter5-bi`
+9. **Serverless Functions (Vercel)**
+   - `api/notify-task.js` — Notificaciones email via Resend API (asignacion de tareas)
+   - `api/fetch-gdoc.js` — Proxy CORS para Google Docs (sin commitear, pendiente)
+
+10. **Deploy y versioning**
+    - Git repository: `https://github.com/salvac12/alter5-bi.git`
+    - Branch: `main`
+    - Deploy en Vercel (auto-deploy on push)
+    - Panel Vercel: `https://vercel.com/salvas-workspaces-projects/alter5-bi`
 
 ---
 
@@ -98,42 +127,58 @@ Dashboard de Business Intelligence para analisis y clasificacion de la red de co
 alter5-bi/
 ├── .github/
 │   └── workflows/
-│       └── process-emails.yml    # Pipeline automatico Gmail
+│       └── process-emails.yml    # Pipeline automatico Gmail (04:00 UTC + dispatch manual)
+├── api/
+│   ├── notify-task.js            # Serverless: notificaciones email (Resend)
+│   └── fetch-gdoc.js             # Serverless: proxy CORS Google Docs (sin commitear)
 ├── data_sources/                  # Excel originales (.gitignore)
-├── docs/
-│   ├── plan-mejora-clasificacion.md
-│   └── product-matching-methodology.md
 ├── scripts/
 │   ├── import_mailbox.py          # Importador manual de buzones
 │   ├── import_enriched.py         # Importador de datos enriquecidos v2 (Gemini)
 │   ├── import_campaign.py         # Importador de datos de campana
-│   ├── process_sheet_emails.py    # Pipeline automatico (Sheet → JSON)
+│   ├── process_sheet_emails.py    # Pipeline automatico (Sheet -> Gemini -> JSON, soporta --reprocess)
+│   ├── sync_airtable_opportunities.py  # Airtable -> opportunities.json
+│   ├── create_prospects_table.py  # Crear tabla Prospects en Airtable (una vez)
 │   ├── reclassify_products.py     # Reclasificacion de productos
 │   └── gas/
-│       ├── scanMailboxes.gs       # Google Apps Script
+│       ├── scanMailboxes.gs       # Google Apps Script (2 buzones: Salvador + Leticia)
 │       └── README.md
 ├── src/
-│   ├── App.jsx                    # Estado global, filtros, layout
+│   ├── App.jsx                    # Estado global, filtros, layout, 3 tabs
 │   ├── main.jsx
 │   ├── index.css
 │   ├── components/
 │   │   ├── UI.jsx                 # Badge, KPI, FilterChip, ScoreBar
-│   │   ├── Sidebar.jsx            # Filtros (sector, tipo, subtipo, fase, producto)
+│   │   ├── Sidebar.jsx            # Filtros (7 dimensiones)
 │   │   ├── CompanyTable.jsx       # Tabla ordenable y paginada
 │   │   ├── DetailPanel.jsx        # Ficha detallada + enrichment IA
-│   │   └── EmployeeTabs.jsx       # Tabs por buzon
+│   │   ├── EmployeeTabs.jsx       # Tabs por buzon
+│   │   ├── ProspectsView.jsx      # Kanban Prospects (5 columnas)
+│   │   ├── ProspectPanel.jsx      # CRUD Prospects slide-in
+│   │   ├── ProspectTasks.jsx      # Gestion tareas con asignacion
+│   │   ├── KanbanView.jsx         # Kanban Pipeline (9 columnas)
+│   │   └── OpportunityPanel.jsx   # CRUD Opportunities slide-in
 │   ├── utils/
-│   │   ├── constants.js           # SECTORS, TIPOS, SUBTIPOS_EMPRESA, FASES_COMERCIALES, MARKET_ROLES, PRODUCTS
-│   │   ├── data.js                # parseCompanies(), calculateProductMatches() con IA
-│   │   └── companyData.js         # localStorage management
+│   │   ├── constants.js           # Taxonomia, productos, scoring weights
+│   │   ├── data.js                # Parsing, scoring, product matching, CSV export
+│   │   ├── companyData.js         # localStorage management
+│   │   ├── airtable.js            # REST client Airtable Opportunities
+│   │   ├── airtableProspects.js   # REST client Airtable Prospects (sanitiza linked records)
+│   │   ├── airtableTasks.js       # Sync tareas con Airtable
+│   │   └── gemini.js              # Integracion Gemini AI
 │   └── data/
-│       ├── companies.json         # Datos compactos con enrichment (auto-generado)
-│       ├── companies_full.json    # Datos completos con sources (auto-generado)
-│       └── employees.json         # Registro de empleados
+│       ├── companies.json         # Datos compactos (~8MB, trackeado en git)
+│       ├── companies_full.json    # Datos completos (~15MB, trackeado en git)
+│       ├── employees.json         # Registro de empleados
+│       └── opportunities.json     # Snapshot oportunidades Airtable
 ├── package.json
 ├── vite.config.js
 ├── vercel.json
-└── ESTADO_PROYECTO.md
+├── requirements.txt               # Python: gspread, google-auth, google-generativeai
+├── CLAUDE.md                      # Instrucciones para Claude Code
+├── ESTADO_PROYECTO.md             # Este archivo
+├── README.md
+└── DEPLOY.md
 ```
 
 ---
@@ -172,8 +217,8 @@ alter5-bi/
 ### Desarrollo
 ```bash
 npm install
-npm run dev           # Dev server → localhost:5173
-npm run build         # Build produccion → dist/
+npm run dev           # Dev server -> localhost:5173
+npm run build         # Build produccion -> dist/
 npm run preview       # Preview del build (evita CSP issues)
 ```
 
@@ -187,6 +232,12 @@ python scripts/import_enriched.py ~/Downloads/analisis_contactos_NAME_v2.xlsx
 
 # Datos de campana
 python scripts/import_campaign.py campaign_export.csv
+```
+
+### Pipeline Gmail (manual)
+```bash
+# Reprocesar emails ya marcados como done (backfill)
+# Ir a GitHub Actions -> Process Gmail Emails -> Run workflow -> reprocess=true
 ```
 
 ### Deploy
@@ -209,53 +260,42 @@ git push origin main   # Vercel auto-deploy
 
 ## Historial de Versiones
 
+### v1.6.0 (27/02/2026) - Fix pipeline Gmail + Tasks linked record
+- **Pipeline Gmail corregido**: `companies_full.json` sacado del `.gitignore` y trackeado en git para que el GitHub Action tenga la base completa
+- **Cron ajustado**: de 03:00 a 04:00 UTC (despues del GAS que corre a ~03:12)
+- **Modo `--reprocess`**: nuevo flag para releer emails ya marcados como "done" en la Sheet
+- **Dispatch manual con opcion reprocess** en GitHub Actions UI
+- **162 emails recuperados**: 23 empresas nuevas + 54 actualizadas (total: 3,317 empresas)
+- **Fix Tasks linked record**: campo `Tasks` en BETA-Prospects cambiado a linked record en Airtable; eliminado del payload PATCH/POST
+- **Sanitizacion de linked records**: guard general en updateProspect/createProspect que filtra arrays de record IDs
+
+### v1.5.1 (26/02/2026) - Multi-contactos Prospects
+- Soporte multi-contactos por prospect (JSON array en campo Contacts)
+- Contact Email mantiene primer email por backward compat
+- Subproductos en Product (Corporate Debt, Project Finance, etc.)
+
 ### v1.5.0 (22/02/2026) - Market Roles
-- Soporte completo para Market Roles (6 categorias: Borrower, Seller M&A, Buyer Investor M&A, Debt Investor, Equity Investor, Partner & Services)
-- `import_enriched.py` lee columna "Market Roles" del Excel y guarda como `enrichment.mr` (retrocompatible)
-- Constante `MARKET_ROLES` con 6 roles, cada uno con color asignado
+- Soporte completo para Market Roles (6 categorias)
 - Nuevo filtro "Market Role" en sidebar con chips coloreados y contadores
-- Badges de market roles en DetailPanel (zona de tags junto a subtipo y fase)
-- Busqueda incluye market roles
-- Filtrado multi-select: empresas con AL MENOS uno de los roles seleccionados
-- Preparado para recibir datos: cuando lleguen los Excel con columna "Market Roles", solo hay que correr `import_enriched.py`
+- Badges de market roles en DetailPanel
 
 ### v1.4.0 (22/02/2026) - Datos enriquecidos v2 con IA
 - Script `import_enriched.py` para importar analisis Gemini v2
-- 1,882 empresas enriquecidas (1,503 Guillermo + 682 Leticia, con solapamiento)
-- Campos nuevos: subtipo empresa, fase comercial, productos potenciales IA, senales clave
+- 1,882 empresas enriquecidas (1,503 Guillermo + 682 Leticia)
 - Filtros de subtipo y fase comercial en sidebar
-- Badges de subtipo (morado) y fase (coloreado) en panel de detalle
-- Productos IA con nivel de confianza y senales clave como chips
-- Scoring de productos usa clasificacion IA directa (alta=90, media=60, baja=30)
-- Contexto ampliado de 150 a 500 caracteres
-- Ordenamiento por score descendente por defecto
-- Busqueda incluye subtipo y fase
-- Todos los exportadores (mailbox, campaign, enriched) preservan enrichment
 
-### v1.3.0 (22/02/2026) - Pipeline automatico Gmail → Dashboard
-- Google Apps Script escanea buzones via Gmail API + OAuth2
-- Service Account con delegacion de dominio
-- Google Sheet como intermediario
-- GitHub Actions workflow con filtro de relevancia IA (Gemini)
-- Clasificacion automatica y fusion incremental
+### v1.3.0 (22/02/2026) - Pipeline automatico Gmail -> Dashboard
+- Google Apps Script + GitHub Actions + Gemini clasificacion
 - Deploy automatico via Vercel
 
 ### v1.2.0 (20/02/2026) - Gestion avanzada de empresas y contactos
-- Sistema de eliminacion de empresas con modal de confirmacion
-- Edicion completa de contactos
-- Sector editable con desplegable
-- Website clickable
+- Sistema de eliminacion, edicion de contactos, sector editable
 
 ### v1.1.0 (20/02/2026) - Sistema de edicion y cualificacion
-- Campos editables manuales
-- Cualificacion automatica de pais y tamano
-- Almacenamiento persistente en localStorage
+- Campos editables, cualificacion automatica, localStorage
 
 ### v1.0.0 (20/02/2026) - Dashboard inicial
-- Sistema de scoring multi-dimensional
-- Soporte multi-buzon (3 buzones)
-- Filtros, tabla ordenable, panel de detalle
-- Deploy en Vercel
+- Sistema de scoring, soporte multi-buzon, deploy Vercel
 
 ---
 
@@ -264,14 +304,14 @@ git push origin main   # Vercel auto-deploy
 ### Alta Prioridad
 - [ ] Procesar Market Roles en Colab con Gemini y correr `import_enriched.py` con los Excel resultantes
 - [ ] Analisis enriquecido v2 para Salvador (completar los 3 buzones)
-- [ ] Integrar historico_trimestral enriquecido en el timeline del detalle
-- [ ] Exportar campos enriquecidos (incl. market roles) en el CSV
+- [ ] Commitear `api/fetch-gdoc.js` (serverless function activa pero sin trackear)
+- [ ] Renovar token `AIRTABLE_PAT` en GitHub Secrets (expiro ~26-feb)
 
 ### Media Prioridad
+- [ ] Adaptar lectura de Tasks en `normalizeProspect` al nuevo formato linked record
+- [ ] Integrar historico_trimestral enriquecido en el timeline del detalle
+- [ ] Exportar campos enriquecidos (incl. market roles) en el CSV
 - [ ] Graficos de distribucion (sector, subtipo, fase)
-- [ ] Filtro por rango de fechas
-- [ ] Integracion con LinkedIn para cualificacion de tamano
-- [ ] Sincronizacion bidireccional con Airtable
 
 ### Baja Prioridad
 - [ ] Sistema de notificaciones para relaciones en riesgo
@@ -280,5 +320,5 @@ git push origin main   # Vercel auto-deploy
 
 ---
 
-**Ultima actualizacion:** 22 de febrero de 2026
+**Ultima actualizacion:** 27 de febrero de 2026
 **Actualizado por:** Claude Code (Anthropic)
