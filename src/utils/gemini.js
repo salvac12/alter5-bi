@@ -107,6 +107,174 @@ ${notes}`;
   }
 }
 
+// ── Cerebro AI ──────────────────────────────────────────────────────────────
+
+import { fetchRelevantKnowledge, saveKnowledge } from "./airtableCerebro";
+
+const STOP_WORDS = new Set([
+  // Articles, prepositions, pronouns
+  "a", "de", "el", "la", "los", "las", "un", "una", "que", "en", "con",
+  "por", "para", "del", "al", "es", "no", "si", "se", "lo", "le", "me",
+  "nos", "quien", "como", "donde", "cuando", "cuales", "cuantos", "hay",
+  "tiene", "tienen", "hemos", "fue", "son", "esta", "este", "estan",
+  "que", "quien", "como", "donde", "cuando", "cuales", "mas", "muy",
+  // Conversational / question meta-words
+  "dame", "dime", "muestrame", "lista", "listado", "todos", "todas",
+  "empresas", "empresa", "cual", "cuantas", "sobre", "entre",
+  "desde", "hasta", "pero", "sin", "ser", "estar", "han", "haber",
+  "sido", "era", "eso", "esa", "ese", "estos", "estas", "esos", "esas",
+  "otro", "otra", "otros", "otras", "todo", "toda", "cada", "mismo",
+  "algo", "algun", "alguna", "algunos", "algunas", "bien", "mal",
+  "asi", "aqui", "ahi", "alli", "ahora", "antes", "despues", "hoy",
+  "solo", "aun", "menos", "tan", "tanto", "tanta",
+  "nuestro", "nuestra", "nuestros", "nuestras",
+  "hecho", "hacer", "hace", "hacen", "hizo",
+  "puede", "pueden", "podemos", "podria", "deberia",
+  "quiero", "quiere", "necesito", "necesita",
+  "buscar", "busca", "encontrar", "mostrar", "muestra", "ver",
+  "mail", "mails", "email", "emails", "correo", "correos",
+  "analizar", "analizando", "analisis", "revisar", "revisando",
+  "informacion", "info", "datos", "dato", "resultado", "resultados",
+]);
+
+/**
+ * Cerebro AI: natural-language question over the full company dataset.
+ * Phase 1: local keyword search to find top 30 matches.
+ * Phase 2: send context to Gemini for a structured answer.
+ *
+ * @param {string} question
+ * @param {Array} companies — full parsed companies array
+ * @returns {{ answer: string, matchedCompanies: Array }}
+ */
+export async function queryCerebro(question, companies) {
+  // Phase 1 — keyword extraction (normalize accents, filter stop words)
+  const keywords = question
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .split(/\W+/)
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+
+  if (keywords.length === 0) {
+    return {
+      answer: "No he podido extraer terminos de busqueda de tu pregunta. Intenta reformularla.",
+      matchedCompanies: [],
+    };
+  }
+
+  // Build keyword variants for simple stemming (plural handling)
+  // "sheets" -> ["sheets", "sheet"], "inversiones" -> ["inversiones", "inversion"]
+  const keywordVariants = keywords.map(kw => {
+    const variants = [kw];
+    if (kw.endsWith("s")) variants.push(kw.slice(0, -1));
+    if (kw.endsWith("es") && kw.length > 4) variants.push(kw.slice(0, -2));
+    return variants;
+  });
+
+  // Score each company against keywords (any variant match counts)
+  const scored = companies.map(c => {
+    const fields = [
+      c.name || "",
+      c.domain || "",
+      c.group || "",
+      c.companyType || "",
+      c.sectors || "",
+      c.detail?.context || "",
+      ...(c.senales || []),
+      ...(c.marketRoles || []),
+      (c.productosIA || []).map(p => p.p || "").join(" "),
+      c.detail?.enrichment?.fc || "",
+      c.detail?.enrichment?.st || "",
+      ...(c.detail?.subjects || []),
+      ...(c.detail?.datedSubjects || []).map(ds => (ds.subject || "") + " " + (ds.extract || "")),
+      ...(c.detail?.timeline || []).map(t => t.summary || ""),
+    ];
+    const text = fields.join(" ").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const score = keywordVariants.reduce((s, variants) =>
+      s + (variants.some(v => text.includes(v)) ? 1 : 0), 0);
+    return { company: c, score };
+  }).filter(s => s.score > 0);
+
+  scored.sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) {
+    return {
+      answer: "No he encontrado empresas que coincidan con tu busqueda. Prueba con otros terminos.",
+      matchedCompanies: [],
+    };
+  }
+
+  // Keep ALL matches for company cards, send top 50 to Gemini for analysis
+  const allMatches = scored.map(m => m.company);
+  const topForGemini = scored.slice(0, 50);
+
+  // Phase 2 — fetch relevant past Q&A from knowledge base (non-blocking on error)
+  let knowledgeContext = "";
+  try {
+    const pastKnowledge = await fetchRelevantKnowledge(keywords, 5);
+    if (pastKnowledge.length > 0) {
+      knowledgeContext = "\n\nCONTEXTO DE CONSULTAS ANTERIORES (base de conocimiento del equipo):\n" +
+        pastKnowledge.map((k, i) =>
+          `${i + 1}. Pregunta: "${k.question}" (${k.matchCount} empresas encontradas)\n   Respuesta: ${k.answer.slice(0, 400)}${k.answer.length > 400 ? "..." : ""}`
+        ).join("\n");
+    }
+  } catch (err) {
+    console.warn("Knowledge base fetch failed (continuing without):", err.message);
+  }
+
+  // Phase 3 — build context for Gemini (compact to fit more companies)
+  const contextEmpresas = topForGemini.map(({ company: c }) => ({
+    empresa: c.name,
+    dominio: c.domain,
+    grupo: c.group,
+    tipo: c.companyType,
+    market_roles: c.marketRoles,
+    fase: c.detail?.enrichment?.fc || "",
+    subtipo: c.detail?.enrichment?.st || "",
+    productos: c.productosIA || [],
+    senales: c.senales || [],
+    contexto: (c.detail?.context || "").slice(0, 200),
+    interacciones: c.interactions,
+    ultima_fecha: c.lastDate,
+    estado: c.status,
+  }));
+
+  const prompt = `Eres el asistente de inteligencia comercial de Alter5, una fintech espanola de financiacion de proyectos renovables.
+
+El usuario pregunta: "${question}"
+
+He encontrado ${allMatches.length} empresas relevantes en la base de datos (${companies.length} total). Te muestro las ${topForGemini.length} con mas coincidencias:
+
+${JSON.stringify(contextEmpresas, null, 1)}
+${knowledgeContext}
+
+INSTRUCCIONES:
+- Responde de forma clara, estructurada y directa a la pregunta
+- Menciona que se han encontrado ${allMatches.length} empresas relevantes en total
+- Si hay multiples resultados, lista las mas importantes con: nombre, dato clave, y contexto
+- Agrupa por categorias si tiene sentido (por tipo, por fase, por estado, etc.)
+- Usa los datos reales de las empresas (no inventes)
+- Si tienes contexto de consultas anteriores, usalo para dar una respuesta mas completa y coherente con lo que el equipo ya ha preguntado
+- Si no hay suficiente informacion para responder con certeza, dilo
+- Responde en espanol
+- NO uses formato markdown con #. Usa texto plano con saltos de linea`;
+
+  const rawAnswer = await callGemini(prompt, 0.2);
+  const answer = rawAnswer.trim();
+
+  // Phase 4 — save Q&A to knowledge base (fire-and-forget, don't block the response)
+  const matchedDomains = allMatches.map(c => c.domain);
+  const savePromise = saveKnowledge({
+    question,
+    answer,
+    keywords,
+    matchedDomains,
+    matchCount: allMatches.length,
+  }).catch(() => null);
+
+  // Return result immediately; recordId resolves shortly after
+  return { answer, matchedCompanies: allMatches, savePromise };
+}
+
 /**
  * Attempt to fetch text content from a public Google Doc.
  * Only works with publicly shared docs (CORS limitations).

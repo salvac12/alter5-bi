@@ -11,6 +11,7 @@ import KanbanView from './components/KanbanView';
 import OpportunityPanel from './components/OpportunityPanel';
 import ProspectsView from './components/ProspectsView';
 import ProspectPanel from './components/ProspectPanel';
+import CerebroSearch from './components/CerebroSearch';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride } from './utils/companyData';
 
 export default function App() {
@@ -86,6 +87,7 @@ export default function App() {
   const [sortBy, setSortBy] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
+  const [showCerebro, setShowCerebro] = useState(false);
   const [page, setPage] = useState(0);
 
   const productMatches = useMemo(() => calculateProductMatches(companies), [companies]);
@@ -352,6 +354,18 @@ export default function App() {
             >
               CSV ({filtered.length})
             </button>
+            <button
+              onClick={() => setShowCerebro(true)}
+              style={{
+                padding: "7px 16px", borderRadius: 6, border: "none",
+                background: "linear-gradient(135deg, #8B5CF6, #3B82F6)",
+                color: "#FFFFFF", fontSize: 12, fontWeight: 700,
+                cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
+                letterSpacing: "-0.2px", display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              &#129504; Cerebro
+            </button>
           </div>
         )}
       </div>
@@ -474,6 +488,18 @@ export default function App() {
           onSaved={handleProspectSaved}
           onDeleted={handleProspectDeleted}
           onConverted={handleProspectConverted}
+        />
+      )}
+
+      {/* ── Cerebro AI overlay ── */}
+      {showCerebro && (
+        <CerebroSearch
+          companies={companies}
+          onClose={() => setShowCerebro(false)}
+          onSelectCompany={(company) => {
+            setShowCerebro(false);
+            setSelected(company);
+          }}
         />
       )}
     </div>

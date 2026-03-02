@@ -1,12 +1,12 @@
 # Estado del Proyecto - Alter5 BI
-**Fecha actualizacion:** 27 de febrero de 2026
-**Ultima modificacion:** Fix pipeline Gmail + campo Tasks linked record
+**Fecha actualizacion:** 2 de marzo de 2026
+**Ultima modificacion:** Cerebro AI — buscador inteligente + base de conocimiento Airtable
 
 ---
 
 ## Resumen Ejecutivo
 
-Dashboard de Business Intelligence para analisis y clasificacion de la red de contactos empresariales de Alter5, con sistema de scoring multi-dimensional, gestion multi-buzon, enriquecimiento de datos con Gemini, y pipeline automatico Gmail -> Dashboard.
+Dashboard de Business Intelligence para analisis y clasificacion de la red de contactos empresariales de Alter5, con sistema de scoring multi-dimensional, gestion multi-buzon, enriquecimiento de datos con Gemini, pipeline automatico Gmail -> Dashboard, y **Cerebro AI** — buscador inteligente con lenguaje natural y base de conocimiento organizacional.
 
 ---
 
@@ -119,6 +119,35 @@ Dashboard de Business Intelligence para analisis y clasificacion de la red de co
     - Deploy en Vercel (auto-deploy on push)
     - Panel Vercel: `https://vercel.com/salvas-workspaces-projects/alter5-bi`
 
+11. **Cerebro AI — Buscador inteligente con lenguaje natural (v1.7.0)**
+    - Overlay modal accesible desde boton en la barra de navegacion (vista Empresas)
+    - Busqueda en lenguaje natural en espanol sobre las 3,317 empresas
+    - **Arquitectura de 4 fases:**
+      1. **Keyword extraction**: normaliza acentos, filtra stop words (140+ palabras en espanol), stemming basico de plurales
+      2. **Knowledge retrieval**: busca Q&A relevantes en Airtable (base de conocimiento organizacional)
+      3. **Gemini analysis**: envia top 50 empresas + contexto de conocimiento previo a Gemini 2.5 Flash
+      4. **Knowledge save**: guarda pregunta + respuesta en Airtable (fire-and-forget, no bloquea)
+    - **Busqueda exhaustiva**: recorre TODOS los campos de cada empresa (nombre, dominio, grupo, tipo, sector, contexto, senales, market roles, productos IA, subjects, dated_subjects, timeline)
+    - **Stemming espanol**: "sheets" matchea "sheet", "inversiones" matchea "inversion"
+    - Devuelve TODAS las empresas que coinciden como tarjetas clickables (no solo las mencionadas por Gemini)
+    - Tarjetas muestran: nombre, subtipo (badge morado), estado (Activa/Dormida/Perdida), emails, fase comercial
+    - Click en tarjeta abre la ficha detallada de la empresa
+    - 6 ejemplos de busqueda pre-configurados como chips clickables
+    - Atajos de teclado: Enter para buscar, Escape para cerrar
+
+    **Base de conocimiento organizacional (Airtable):**
+    - Tabla `Cerebro-Knowledge` (ID: `tbliZ7zNci5TUCAhj`) en base `appVu3TvSZ1E4tj0J`
+    - Campos: Question, Answer, Keywords, MatchedDomains, MatchCount, Useful, NotUseful, CreatedAt
+    - Cache en memoria con TTL de 5 minutos (evita re-fetch en cada query)
+    - Paginacion completa para datasets grandes
+    - Entradas marcadas "NotUseful" se excluyen automaticamente del contexto futuro
+    - Entradas marcadas "Useful" reciben boost en scoring de relevancia
+
+    **Sistema de feedback:**
+    - Botones thumbs up/down en cada respuesta
+    - Feedback se guarda en Airtable (PATCH al record de la consulta)
+    - Texto contextual: "Esta respuesta fue util?" -> "Gracias por el feedback" / "Se usara para mejorar"
+
 ---
 
 ## Estructura del Proyecto
@@ -139,6 +168,7 @@ alter5-bi/
 │   ├── process_sheet_emails.py    # Pipeline automatico (Sheet -> Gemini -> JSON, soporta --reprocess)
 │   ├── sync_airtable_opportunities.py  # Airtable -> opportunities.json
 │   ├── create_prospects_table.py  # Crear tabla Prospects en Airtable (una vez)
+│   ├── create_cerebro_table.py    # Crear tabla Cerebro-Knowledge en Airtable (una vez, YA EJECUTADO)
 │   ├── reclassify_products.py     # Reclasificacion de productos
 │   └── gas/
 │       ├── scanMailboxes.gs       # Google Apps Script (2 buzones: Salvador + Leticia)
@@ -153,6 +183,7 @@ alter5-bi/
 │   │   ├── CompanyTable.jsx       # Tabla ordenable y paginada
 │   │   ├── DetailPanel.jsx        # Ficha detallada + enrichment IA
 │   │   ├── EmployeeTabs.jsx       # Tabs por buzon
+│   │   ├── CerebroSearch.jsx      # Cerebro AI: overlay de busqueda inteligente
 │   │   ├── ProspectsView.jsx      # Kanban Prospects (5 columnas)
 │   │   ├── ProspectPanel.jsx      # CRUD Prospects slide-in
 │   │   ├── ProspectTasks.jsx      # Gestion tareas con asignacion
@@ -165,7 +196,8 @@ alter5-bi/
 │   │   ├── airtable.js            # REST client Airtable Opportunities
 │   │   ├── airtableProspects.js   # REST client Airtable Prospects (sanitiza linked records)
 │   │   ├── airtableTasks.js       # Sync tareas con Airtable
-│   │   └── gemini.js              # Integracion Gemini AI
+│   │   ├── airtableCerebro.js     # REST client Airtable Cerebro-Knowledge (base de conocimiento)
+│   │   └── gemini.js              # Integracion Gemini AI + queryCerebro()
 │   └── data/
 │       ├── companies.json         # Datos compactos (~8MB, trackeado en git)
 │       ├── companies_full.json    # Datos completos (~15MB, trackeado en git)
@@ -260,6 +292,21 @@ git push origin main   # Vercel auto-deploy
 
 ## Historial de Versiones
 
+### v1.7.0 (02/03/2026) - Cerebro AI: buscador inteligente + base de conocimiento
+- **Cerebro AI**: nueva funcionalidad de busqueda en lenguaje natural sobre todas las empresas
+- **Overlay modal**: accesible desde boton en nav bar, con input de texto + 6 ejemplos como chips
+- **Busqueda en 4 fases**: keyword extraction -> knowledge retrieval -> Gemini analysis -> knowledge save
+- **140+ stop words** en espanol para filtrar ruido de preguntas conversacionales
+- **Stemming basico** para plurales: "sheets" matchea "sheet", "inversiones" matchea "inversion"
+- **Busqueda exhaustiva**: recorre nombre, dominio, grupo, tipo, sector, contexto, senales, market roles, productos IA, subjects, dated_subjects, timeline
+- **Todas las empresas como tarjetas**: devuelve TODAS las coincidencias, no solo las mencionadas por Gemini
+- **Base de conocimiento organizacional** en Airtable (tabla `Cerebro-Knowledge`, ID: `tbliZ7zNci5TUCAhj`)
+- **RAG sobre Q&A previos**: consultas anteriores se inyectan como contexto en el prompt de Gemini
+- **Sistema de feedback**: thumbs up/down que mejora las respuestas futuras (Useful boost, NotUseful exclusion)
+- **Cache en memoria** con TTL de 5 minutos para la knowledge base
+- **Script `create_cerebro_table.py`**: creacion one-shot de la tabla en Airtable (ya ejecutado)
+- **Nuevos archivos**: `CerebroSearch.jsx`, `airtableCerebro.js`, `create_cerebro_table.py`
+
 ### v1.6.0 (27/02/2026) - Fix pipeline Gmail + Tasks linked record
 - **Pipeline Gmail corregido**: `companies_full.json` sacado del `.gitignore` y trackeado en git para que el GitHub Action tenga la base completa
 - **Cron ajustado**: de 03:00 a 04:00 UTC (despues del GAS que corre a ~03:12)
@@ -301,7 +348,14 @@ git push origin main   # Vercel auto-deploy
 
 ## Proximos Pasos
 
-### Alta Prioridad
+### Alta Prioridad — Cerebro AI
+- [ ] **Probar Cerebro en produccion** (Vercel) — verificar que la API key de Gemini y el PAT de Airtable funcionan
+- [ ] **Revocar el PAT de Airtable expuesto en la sesion** y crear uno nuevo (el token fue compartido en chat)
+- [ ] **Actualizar `VITE_AIRTABLE_PAT`** en Vercel Environment Variables si se renueva el token
+- [ ] Verificar que la tabla `Cerebro-Knowledge` se puebla correctamente con Q&A
+- [ ] Iterar sobre la calidad de respuestas del Cerebro con queries reales del equipo
+
+### Alta Prioridad — Datos
 - [ ] Procesar Market Roles en Colab con Gemini y correr `import_enriched.py` con los Excel resultantes
 - [ ] Analisis enriquecido v2 para Salvador (completar los 3 buzones)
 - [ ] Commitear `api/fetch-gdoc.js` (serverless function activa pero sin trackear)
@@ -312,6 +366,7 @@ git push origin main   # Vercel auto-deploy
 - [ ] Integrar historico_trimestral enriquecido en el timeline del detalle
 - [ ] Exportar campos enriquecidos (incl. market roles) en el CSV
 - [ ] Graficos de distribucion (sector, subtipo, fase)
+- [ ] Cerebro: captura de metadatos de adjuntos en el pipeline Gmail (investigado, pendiente implementacion)
 
 ### Baja Prioridad
 - [ ] Sistema de notificaciones para relaciones en riesgo
@@ -320,5 +375,5 @@ git push origin main   # Vercel auto-deploy
 
 ---
 
-**Ultima actualizacion:** 27 de febrero de 2026
+**Ultima actualizacion:** 2 de marzo de 2026
 **Actualizado por:** Claude Code (Anthropic)
