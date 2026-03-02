@@ -4,21 +4,7 @@
 
 ---
 
-## 1. URGENTE: Seguridad del token Airtable
-
-Durante la sesion se compartio un PAT de Airtable en el chat para crear la tabla `Cerebro-Knowledge`. Este token debe ser revocado y reemplazado:
-
-1. Ir a https://airtable.com/create/tokens
-2. Revocar el token `pataT1lg...` (el que se compartio en la sesion)
-3. Crear un nuevo token con los mismos scopes: `data.records:read`, `data.records:write`, `schema.bases:read`, `schema.bases:write`
-4. Actualizar en:
-   - **Vercel** -> Settings -> Environment Variables -> `VITE_AIRTABLE_PAT`
-   - **GitHub Secrets** -> `AIRTABLE_PAT` (para el pipeline de Gmail)
-   - **`.env` local** (si existe)
-
----
-
-## 2. Probar el Cerebro AI en produccion
+## 1. Probar el Cerebro AI en produccion
 
 Una vez desplegado en Vercel (el push de este commit activa auto-deploy):
 
@@ -50,7 +36,7 @@ Una vez desplegado en Vercel (el push de este commit activa auto-deploy):
 
 ---
 
-## 3. Lo que se hizo en esta sesion (resumen)
+## 2. Lo que se hizo en esta sesion (resumen)
 
 ### Cerebro AI — Busqueda inteligente (NUEVO)
 - **`src/components/CerebroSearch.jsx`** — Overlay modal completo con:
@@ -86,7 +72,7 @@ Una vez desplegado en Vercel (el push de este commit activa auto-deploy):
 
 ---
 
-## 4. Mejoras futuras del Cerebro
+## 3. Mejoras futuras del Cerebro
 
 ### Corto plazo
 - [ ] Mejorar stemming espanol (actualmente solo maneja plurales con -s/-es)
@@ -106,7 +92,7 @@ Una vez desplegado en Vercel (el push de este commit activa auto-deploy):
 
 ---
 
-## 5. Otros pendientes (pre-existentes)
+## 4. Otros pendientes (pre-existentes)
 
 - [ ] Procesar Market Roles en Colab con Gemini
 - [ ] Analisis enriquecido v2 para Salvador

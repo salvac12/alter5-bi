@@ -350,8 +350,6 @@ git push origin main   # Vercel auto-deploy
 
 ### Alta Prioridad — Cerebro AI
 - [ ] **Probar Cerebro en produccion** (Vercel) — verificar que la API key de Gemini y el PAT de Airtable funcionan
-- [ ] **Revocar el PAT de Airtable expuesto en la sesion** y crear uno nuevo (el token fue compartido en chat)
-- [ ] **Actualizar `VITE_AIRTABLE_PAT`** en Vercel Environment Variables si se renueva el token
 - [ ] Verificar que la tabla `Cerebro-Knowledge` se puebla correctamente con Q&A
 - [ ] Iterar sobre la calidad de respuestas del Cerebro con queries reales del equipo
 
