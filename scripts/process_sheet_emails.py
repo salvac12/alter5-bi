@@ -666,6 +666,15 @@ def process_pipeline(reprocess=False):
     employees = existing_data.get("employees", [])
     print(f"  → {len(all_companies)} empresas existentes")
 
+    # Load blocklist to skip blocked domains
+    blocklist_path = os.path.join(PROJECT_DIR, "src", "data", "blocklist.json")
+    blocked_domains = set()
+    if os.path.exists(blocklist_path):
+        with open(blocklist_path, "r", encoding="utf-8") as f:
+            blocked_domains = set(json.load(f).get("domains", []))
+        if blocked_domains:
+            print(f"  → {len(blocked_domains)} dominios en blocklist")
+
     # 5. Classify NEW domains with Gemini
     print("  [5/7] Clasificando empresas nuevas con IA...")
     new_domains = [
@@ -697,6 +706,8 @@ def process_pipeline(reprocess=False):
     updated_count = 0
 
     for domain, data in grouped.items():
+        if domain in blocked_domains:
+            continue
         # Build per-employee company records and merge each one
         for emp_id, emp_stats in data["employees"].items():
             contacts_list = []

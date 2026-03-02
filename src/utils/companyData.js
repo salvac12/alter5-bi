@@ -7,6 +7,24 @@ const STORAGE_KEY = 'alter5_company_data';
 const HIDDEN_COMPANIES_KEY = 'alter5_hidden_companies';
 const ENRICHMENT_OVERRIDES_KEY = 'alter5_enrichment_overrides';
 
+// Personal email domains (mirrors PERSONAL_DOMAINS in process_sheet_emails.py)
+const PERSONAL_DOMAINS = new Set([
+  "gmail.com", "hotmail.com", "yahoo.com", "outlook.com",
+  "live.com", "icloud.com", "yahoo.es", "hotmail.es",
+  "googlemail.com", "protonmail.com", "me.com", "msn.com",
+]);
+
+/**
+ * Detect if a company is suspicious (candidate for cleanup)
+ * @returns {'personal_domain'|'low_value'|'no_enrichment'|null}
+ */
+export function isSuspiciousCompany(company) {
+  if (PERSONAL_DOMAINS.has(company.domain)) return 'personal_domain';
+  if (company.interactions <= 2 && company.group === 'Other') return 'low_value';
+  if ((!company.group || company.group === 'Other') && (!company.companyType || company.companyType === 'Other')) return 'no_enrichment';
+  return null;
+}
+
 /**
  * Obtener todos los datos manuales de empresas
  */

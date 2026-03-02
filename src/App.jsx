@@ -12,7 +12,9 @@ import OpportunityPanel from './components/OpportunityPanel';
 import ProspectsView from './components/ProspectsView';
 import ProspectPanel from './components/ProspectPanel';
 import CerebroSearch from './components/CerebroSearch';
-import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride } from './utils/companyData';
+import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
+import CleanupToolbar from './components/CleanupToolbar';
+import blocklist from './data/blocklist.json';
 
 export default function App() {
   const allCompanies = useMemo(() => parseCompanies(), []);
@@ -57,10 +59,13 @@ export default function App() {
     }
   }, []);
 
-  // Filtrar empresas ocultas y aplicar enrichment overrides
+  const blockedDomains = useMemo(() => new Set(blocklist.domains || []), []);
+
+  // Filtrar empresas ocultas, bloqueadas, y aplicar enrichment overrides
   const companies = useMemo(() => {
     return allCompanies
       .filter(c => !hiddenCompanies.includes(c.domain))
+      .filter(c => !blockedDomains.has(c.domain))
       .map(c => {
         const ov = enrichmentOverrides[c.domain];
         if (!ov) return c;
@@ -71,7 +76,7 @@ export default function App() {
           companyType: ov.tp !== undefined ? ov.tp : c.companyType,
         };
       });
-  }, [allCompanies, hiddenCompanies, enrichmentOverrides]);
+  }, [allCompanies, hiddenCompanies, blockedDomains, enrichmentOverrides]);
 
   const employees = useMemo(() => getEmployees(companies), [companies]);
 
@@ -88,6 +93,8 @@ export default function App() {
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
   const [showCerebro, setShowCerebro] = useState(false);
+  const [cleanupMode, setCleanupMode] = useState(false);
+  const [cleanupSelection, setCleanupSelection] = useState(new Set());
   const [page, setPage] = useState(0);
 
   const productMatches = useMemo(() => calculateProductMatches(companies), [companies]);
@@ -200,6 +207,59 @@ export default function App() {
       setSelected(null);
     }
     return success;
+  };
+
+  // ── Cleanup handlers ──
+  const handleToggleCleanup = (domain) => {
+    setCleanupSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(domain)) next.delete(domain);
+      else next.add(domain);
+      return next;
+    });
+  };
+
+  const suspiciousMap = useMemo(() => {
+    const map = new Map();
+    filtered.forEach(c => {
+      const reason = isSuspiciousCompany(c);
+      if (reason) map.set(c.domain, reason);
+    });
+    return map;
+  }, [filtered]);
+
+  const handleSelectSuspicious = () => {
+    setCleanupSelection(prev => {
+      const next = new Set(prev);
+      filtered.forEach(c => {
+        if (isSuspiciousCompany(c)) next.add(c.domain);
+      });
+      return next;
+    });
+  };
+
+  const handleSelectPage = () => {
+    setCleanupSelection(prev => {
+      const next = new Set(prev);
+      paginated.forEach(c => next.add(c.domain));
+      return next;
+    });
+  };
+
+  const handleExportBlocklist = () => {
+    const existingDomains = new Set(blocklist.domains || []);
+    cleanupSelection.forEach(d => existingDomains.add(d));
+    const data = {
+      domains: [...existingDomains].sort(),
+      updatedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "blocklist.json";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // ── Pipeline handlers ──
@@ -366,6 +426,22 @@ export default function App() {
             >
               &#129504; Cerebro
             </button>
+            <button
+              onClick={() => { setCleanupMode(m => !m); setCleanupSelection(new Set()); }}
+              style={{
+                padding: "7px 16px", borderRadius: 6,
+                border: cleanupMode ? "none" : "1px solid #E2E8F0",
+                background: cleanupMode
+                  ? "linear-gradient(135deg, #EF4444, #F59E0B)"
+                  : "#F7F9FC",
+                color: cleanupMode ? "#FFFFFF" : "#6B7F94",
+                fontSize: 12, fontWeight: 700,
+                cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
+                letterSpacing: "-0.2px",
+              }}
+            >
+              {cleanupMode ? "Limpieza ON" : "Limpieza"}
+            </button>
           </div>
         )}
       </div>
@@ -419,6 +495,20 @@ export default function App() {
               {filtered.length} empresas · Pagina {page + 1}/{totalPages || 1}
             </div>
 
+            {/* Cleanup Toolbar */}
+            {cleanupMode && (
+              <CleanupToolbar
+                selectionCount={cleanupSelection.size}
+                filteredCount={filtered.length}
+                suspiciousCount={suspiciousMap.size}
+                onSelectSuspicious={handleSelectSuspicious}
+                onSelectPage={handleSelectPage}
+                onClearSelection={() => setCleanupSelection(new Set())}
+                onExport={handleExportBlocklist}
+                onExit={() => { setCleanupMode(false); setCleanupSelection(new Set()); }}
+              />
+            )}
+
             {/* Table */}
             <CompanyTable
               companies={paginated}
@@ -426,6 +516,10 @@ export default function App() {
               onSelect={setSelected} selected={selected}
               page={page} totalPages={totalPages} setPage={setPage}
               productMatches={productMatches}
+              cleanupMode={cleanupMode}
+              cleanupSelection={cleanupSelection}
+              onToggleCleanup={handleToggleCleanup}
+              suspiciousMap={suspiciousMap}
             />
           </div>
         </div>

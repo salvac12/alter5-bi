@@ -1,6 +1,7 @@
 import { StatusBadge } from './UI';
 import { getBestProductMatch } from '../utils/data';
 import { MARKET_ROLES, COMPANY_GROUPS } from '../utils/constants';
+import { SUSPECT_LABELS } from './CleanupToolbar';
 
 const GROUP_COLOR_MAP = Object.fromEntries(COMPANY_GROUPS.map(g => [g.id, g.color]));
 
@@ -20,6 +21,7 @@ const COLUMNS = [
 export default function CompanyTable({
   companies, sortBy, sortDir, onSort, onSelect, selected,
   page, totalPages, setPage, productMatches,
+  cleanupMode, cleanupSelection, onToggleCleanup, suspiciousMap,
 }) {
   const SortIcon = ({ col }) => {
     if (sortBy !== col) {
@@ -43,6 +45,9 @@ export default function CompanyTable({
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr>
+            {cleanupMode && (
+              <th style={{ padding: "16px 8px", width: 36, borderBottom: "2px solid #E2E8F0" }} />
+            )}
             {COLUMNS.map((col, i) => {
               const isActive = sortBy === col.key;
               const isSortable = col.sortable;
@@ -90,19 +95,27 @@ export default function CompanyTable({
         <tbody>
           {companies.map((c, i) => {
             const isSelected = selected?.idx === c.idx;
+            const isChecked = cleanupMode && cleanupSelection?.has(c.domain);
+            const suspectReason = cleanupMode && suspiciousMap?.get(c.domain);
 
             return (
               <tr key={c.idx}
-                onClick={() => onSelect(c)}
+                onClick={() => cleanupMode ? onToggleCleanup(c.domain) : onSelect(c)}
                 className="row-hover fade-in"
                 style={{
                   cursor: "pointer",
-                  background: isSelected
-                    ? "linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.03) 100%)"
-                    : "#FFFFFF",
+                  background: isChecked
+                    ? "rgba(239, 68, 68, 0.06)"
+                    : isSelected
+                      ? "linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.03) 100%)"
+                      : "#FFFFFF",
                   animationDelay: `${i * 12}ms`,
                   borderBottom: "1px solid #F1F5F9",
-                  borderLeft: isSelected ? "4px solid #3B82F6" : "4px solid transparent",
+                  borderLeft: isChecked
+                    ? "4px solid #EF4444"
+                    : suspectReason
+                      ? "4px solid #F59E0B"
+                      : isSelected ? "4px solid #3B82F6" : "4px solid transparent",
                   transition: "all 0.15s ease",
                 }}
                 onMouseEnter={(e) => {
@@ -122,6 +135,19 @@ export default function CompanyTable({
                   }
                 }}
               >
+              {/* Cleanup checkbox */}
+              {cleanupMode && (
+                <td style={{ padding: "10px 8px", width: 36, textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked || false}
+                    onChange={() => onToggleCleanup(c.domain)}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ width: 16, height: 16, cursor: "pointer", accentColor: "#EF4444" }}
+                  />
+                </td>
+              )}
+
               {/* Score */}
               <td style={{ padding: "10px" }}>
                 <ScoreChip score={c.score} />
@@ -129,7 +155,19 @@ export default function CompanyTable({
 
               {/* Company */}
               <td style={{ padding: "10px" }}>
-                <div style={{ fontWeight: 600, color: "#1A2B3D", fontSize: 13, lineHeight: 1.3 }}>{c.name}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ fontWeight: 600, color: "#1A2B3D", fontSize: 13, lineHeight: 1.3 }}>{c.name}</div>
+                  {cleanupMode && suspectReason && (
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4,
+                      background: SUSPECT_LABELS[suspectReason].color + "18",
+                      color: SUSPECT_LABELS[suspectReason].color,
+                      whiteSpace: "nowrap",
+                    }}>
+                      {SUSPECT_LABELS[suspectReason].text}
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: 11, color: "#6B7F94", fontWeight: 400 }}>{c.domain}</div>
               </td>
 
