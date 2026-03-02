@@ -70,7 +70,7 @@ PERSONAL_DOMAINS = {
     "googlemail.com", "protonmail.com", "me.com", "msn.com",
 }
 
-GEMINI_BATCH_SIZE = 10
+GEMINI_BATCH_SIZE = 6
 GEMINI_RPM_DELAY = 4.5  # seconds between calls to stay under 15 req/min
 
 
@@ -265,6 +265,12 @@ def classify_domains_with_gemini(domains_with_context):
 
         prompt = f"""Eres un analista de Alter-5, empresa de consultoría especializada en financiación de proyectos de energía renovable.
 
+Alter5 ofrece estos productos:
+- Prestamo Construccion: deuda para construir proyectos utility-scale (solar FV, eólico, BESS). Cliente típico: developer, IPP o fondo con proyectos greenfield o RTB.
+- Refinanciacion: sustitución de deuda existente en proyectos ya operativos por mejores condiciones.
+- Colocacion Inversores: distribución de tramos de deuda o equity a inversores institucionales, fondos y family offices.
+- Advisory / M&A: asesoramiento en compraventa, valoración y due diligence de proyectos y activos renovables.
+
 Clasifica estas empresas por su dominio web, los asuntos de email y los fragmentos de conversación.
 
 Para cada empresa determina:
@@ -278,12 +284,16 @@ Para cada empresa determina:
 3. deal_stage (solo si group es "Capital Seeker"): una de [{", ".join(DEAL_STAGES)}]
    Si NO es Capital Seeker, dejar como null.
 4. market_roles (roles de mercado, puede ser MÁS DE UNO): subconjunto de [{", ".join(MARKET_ROLES_LIST)}]
+5. subtipo: subtipo específico de empresa. Uno de: Developer, IPP, Utility, Asset Owner, Corporate, Fondo Renovable, Inversor Institucional, Banco/Entidad Financiera, Family Office, Infrastructure Fund, Asesor Legal, Asesor Financiero, Asesor Técnico, EPC/Proveedor, Consultor, Plataforma/Tech, Administración Pública, Asociación, Otro.
+6. productos_potenciales: array de productos Alter5 que la empresa podría necesitar, SOLO si hay evidencia en los emails. Formato: [{{"p": "nombre_producto", "c": "alta|media|baja"}}]. Productos posibles: Prestamo Construccion, Refinanciacion, Colocacion Inversores, Advisory / M&A. Dejar array vacío si no hay evidencia clara.
+7. senales_clave: array de hechos concretos detectados en los emails (ej: "Term sheet enviado", "NDA firmado", "Pipeline 200MW", "Reunión presencial", "Due diligence en curso"). Solo hechos, no opiniones. Dejar array vacío si no hay señales claras.
+8. fase_comercial: una de [Primer contacto, Exploracion, Negociacion, Cliente activo, Dormido, Descartado]
 
 Empresas:
 {chr(10).join(lines)}
 
 Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato exacto:
-{{"dominio1.com": {{"group": "...", "type": "...", "deal_stage": "..." o null, "market_roles": ["..."]}}, "dominio2.com": {{...}}}}"""
+{{"dominio1.com": {{"group": "...", "type": "...", "deal_stage": "..." o null, "market_roles": ["..."], "subtipo": "...", "productos_potenciales": [{{"p": "...", "c": "..."}}], "senales_clave": ["..."], "fase_comercial": "..."}}, "dominio2.com": {{...}}}}"""
 
         try:
             response = model.generate_content(prompt)
@@ -329,6 +339,23 @@ Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato exacto
                     }
                     if deal_stage:
                         enrichment["ds"] = deal_stage
+
+                    # New enrichment fields
+                    subtipo = entry.get("subtipo", "")
+                    if subtipo:
+                        enrichment["st"] = subtipo
+
+                    productos = entry.get("productos_potenciales", [])
+                    if productos and isinstance(productos, list):
+                        enrichment["pp"] = productos
+
+                    senales = entry.get("senales_clave", [])
+                    if senales and isinstance(senales, list):
+                        enrichment["sc"] = senales
+
+                    fase = entry.get("fase_comercial", "")
+                    if fase:
+                        enrichment["fc"] = fase
 
                     results[domain] = {
                         "group": group,
