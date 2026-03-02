@@ -17,6 +17,9 @@ export default function CleanupToolbar({
   onClearSelection,
   onExport,
   onExit,
+  cleanupFilter,
+  onShowAll,
+  onShowSelected,
 }) {
   const [showInstructions, setShowInstructions] = useState(false);
 
@@ -39,17 +42,37 @@ export default function CleanupToolbar({
             Modo Limpieza
           </span>
           <span style={{ fontSize: 12, color: "#6B7F94" }}>
-            {selectionCount} seleccionadas de {filteredCount} filtradas
-            ({suspiciousCount} sospechosas)
+            {selectionCount} seleccionadas
+            {cleanupFilter
+              ? ` · Mostrando ${filteredCount} ${cleanupFilter === 'suspicious' ? 'sospechosas' : 'seleccionadas'}`
+              : ` de ${filteredCount} · ${suspiciousCount} sospechosas`}
           </span>
         </div>
 
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <ToolbarBtn onClick={onSelectSuspicious} color="#EF4444">
-            Seleccionar sospechosas
+          <ToolbarBtn
+            onClick={onSelectSuspicious}
+            color="#EF4444"
+            active={cleanupFilter === 'suspicious'}
+          >
+            Solo sospechosas
           </ToolbarBtn>
-          <ToolbarBtn onClick={onSelectPage} color="#F59E0B">
-            Seleccionar pagina
+          {selectionCount > 0 && (
+            <ToolbarBtn
+              onClick={onShowSelected}
+              color="#F59E0B"
+              active={cleanupFilter === 'selected'}
+            >
+              Solo seleccionadas ({selectionCount})
+            </ToolbarBtn>
+          )}
+          {cleanupFilter && (
+            <ToolbarBtn onClick={onShowAll} color="#10B981">
+              Mostrar todas
+            </ToolbarBtn>
+          )}
+          <ToolbarBtn onClick={onSelectPage} color="#8B5CF6">
+            Marcar pagina
           </ToolbarBtn>
           <ToolbarBtn onClick={onClearSelection} color="#6B7F94">
             Limpiar seleccion
@@ -95,15 +118,15 @@ export default function CleanupToolbar({
   );
 }
 
-function ToolbarBtn({ children, onClick, color, outline }) {
+function ToolbarBtn({ children, onClick, color, outline, active }) {
   return (
     <button
       onClick={onClick}
       style={{
         padding: "5px 12px",
         borderRadius: 6,
-        border: outline ? `1px solid ${color}40` : "none",
-        background: outline ? "transparent" : color + "15",
+        border: active ? `2px solid ${color}` : outline ? `1px solid ${color}40` : "none",
+        background: active ? color + "25" : outline ? "transparent" : color + "15",
         color: color,
         fontSize: 11,
         fontWeight: 600,

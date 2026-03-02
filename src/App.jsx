@@ -95,6 +95,7 @@ export default function App() {
   const [showCerebro, setShowCerebro] = useState(false);
   const [cleanupMode, setCleanupMode] = useState(false);
   const [cleanupSelection, setCleanupSelection] = useState(new Set());
+  const [cleanupFilter, setCleanupFilter] = useState(null); // null | 'suspicious' | 'selected'
   const [page, setPage] = useState(0);
 
   const productMatches = useMemo(() => calculateProductMatches(companies), [companies]);
@@ -136,6 +137,13 @@ export default function App() {
       });
     }
 
+    // Cleanup mode filters
+    if (cleanupMode && cleanupFilter === 'suspicious') {
+      list = list.filter(c => isSuspiciousCompany(c));
+    } else if (cleanupMode && cleanupFilter === 'selected') {
+      list = list.filter(c => cleanupSelection.has(c.domain));
+    }
+
     return [...list].sort((a, b) => {
       const m = sortDir === "desc" ? -1 : 1;
       if (sortBy === "name") return m * a.name.localeCompare(b.name);
@@ -147,7 +155,7 @@ export default function App() {
       }
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selTypes, selStatus, selMarketRoles, selPipeline, selProduct, productMatches, sortBy, sortDir]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selTypes, selStatus, selMarketRoles, selPipeline, selProduct, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -221,21 +229,24 @@ export default function App() {
 
   const suspiciousMap = useMemo(() => {
     const map = new Map();
-    filtered.forEach(c => {
+    companies.forEach(c => {
       const reason = isSuspiciousCompany(c);
       if (reason) map.set(c.domain, reason);
     });
     return map;
-  }, [filtered]);
+  }, [companies]);
 
   const handleSelectSuspicious = () => {
+    // Select all suspicious + filter to show only them
     setCleanupSelection(prev => {
       const next = new Set(prev);
-      filtered.forEach(c => {
+      companies.forEach(c => {
         if (isSuspiciousCompany(c)) next.add(c.domain);
       });
       return next;
     });
+    setCleanupFilter('suspicious');
+    setPage(0);
   };
 
   const handleSelectPage = () => {
@@ -427,7 +438,7 @@ export default function App() {
               &#129504; Cerebro
             </button>
             <button
-              onClick={() => { setCleanupMode(m => !m); setCleanupSelection(new Set()); }}
+              onClick={() => { setCleanupMode(m => !m); setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
               style={{
                 padding: "7px 16px", borderRadius: 6,
                 border: cleanupMode ? "none" : "1px solid #E2E8F0",
@@ -503,9 +514,12 @@ export default function App() {
                 suspiciousCount={suspiciousMap.size}
                 onSelectSuspicious={handleSelectSuspicious}
                 onSelectPage={handleSelectPage}
-                onClearSelection={() => setCleanupSelection(new Set())}
+                onClearSelection={() => { setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
                 onExport={handleExportBlocklist}
-                onExit={() => { setCleanupMode(false); setCleanupSelection(new Set()); }}
+                onExit={() => { setCleanupMode(false); setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
+                cleanupFilter={cleanupFilter}
+                onShowAll={() => { setCleanupFilter(null); setPage(0); }}
+                onShowSelected={() => { setCleanupFilter('selected'); setPage(0); }}
               />
             )}
 
