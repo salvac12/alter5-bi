@@ -211,6 +211,16 @@ export function getAllEnrichmentOverrides() {
 }
 
 /**
+ * Check if the current user can hide a company
+ * Admin can hide any company. Non-admin can only hide companies where they have emails.
+ */
+export function canHideCompany(company, currentUser) {
+  if (!currentUser) return false;
+  if (currentUser.isAdmin) return true;
+  return Array.isArray(company.employees) && company.employees.includes(currentUser.id);
+}
+
+/**
  * Guardar override de enrichment para una empresa
  * @param {string} domain
  * @param {{ mr?: string[], grp?: string, tp?: string, role?: string, seg?: string, tp2?: string, act?: string[], tech?: string[], geo?: string[] }} overrides

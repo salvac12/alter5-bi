@@ -12,7 +12,9 @@ import OpportunityPanel from './components/OpportunityPanel';
 import ProspectsView from './components/ProspectsView';
 import ProspectPanel from './components/ProspectPanel';
 import CerebroSearch from './components/CerebroSearch';
+import UserSelector from './components/UserSelector';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
+import { getCurrentUser } from './utils/userConfig';
 import CleanupToolbar from './components/CleanupToolbar';
 import blocklist from './data/blocklist.json';
 
@@ -20,6 +22,10 @@ export default function App() {
   const allCompanies = useMemo(() => parseCompanies(), []);
   const [hiddenCompanies, setHiddenCompanies] = useState(() => getHiddenCompanies());
   const [enrichmentOverrides, setEnrichmentOverrides] = useState(() => getAllEnrichmentOverrides());
+
+  // ── User identity ──
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const [showUserSelector, setShowUserSelector] = useState(false);
 
   // ── View state: "empresas" | "pipeline" | "prospects" ──
   const [activeView, setActiveView] = useState("empresas");
@@ -412,7 +418,44 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right: Search + CSV (only in empresas view) */}
+        {/* Right: User chip + Search + CSV */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* User chip */}
+          {currentUser && (
+            <button
+              onClick={() => setShowUserSelector(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "5px 12px 5px 6px", borderRadius: 20,
+                border: "1px solid #E2E8F0", background: "#F7F9FC",
+                cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#3B82F6"; e.currentTarget.style.background = "#EFF6FF"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.background = "#F7F9FC"; }}
+            >
+              <div style={{
+                width: 24, height: 24, borderRadius: "50%",
+                background: "linear-gradient(135deg, #3B82F6, #10B981)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, fontWeight: 800, color: "#FFFFFF",
+              }}>
+                {currentUser.name.split(' ').map(w => w[0]).join('').toUpperCase()}
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#1A2B3D" }}>
+                {currentUser.name.split(' ')[0]}
+              </span>
+              {currentUser.isAdmin && (
+                <span style={{
+                  fontSize: 8, fontWeight: 800, color: "#F59E0B",
+                  background: "#FEF3C7", padding: "1px 5px", borderRadius: 4,
+                }}>ADMIN</span>
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Search + CSV (only in empresas view) */}
         {activeView === "empresas" && (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input
@@ -581,6 +624,7 @@ export default function App() {
             onDelete={handleDeleteCompany}
             onEnrichmentSave={handleEnrichmentSave}
             productMatches={productMatches}
+            currentUser={currentUser}
           />
         </>
       )}
@@ -623,6 +667,17 @@ export default function App() {
           onSelectCompany={(company) => {
             setShowCerebro(false);
             setSelected(company);
+          }}
+        />
+      )}
+
+      {/* User selector: overlay on first use, dropdown when changing */}
+      {(!currentUser || showUserSelector) && (
+        <UserSelector
+          currentUser={currentUser}
+          onSelect={(user) => {
+            if (user) setCurrentUser(user);
+            setShowUserSelector(false);
           }}
         />
       )}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
-import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides } from '../utils/companyData';
+import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides, canHideCompany } from '../utils/companyData';
 import { COUNTRIES, COMPANY_SIZES, COMPANY_ROLES, COMPANY_TYPES, ORIGINACION_SEGMENTS, COMPANY_TYPES_V2, CORPORATE_ACTIVITIES, TECHNOLOGIES, ASSET_PHASES, GEOGRAPHIES, COMMERCIAL_PHASES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
@@ -27,7 +27,7 @@ function contactPriorityInfo(role) {
   return { rank: 4, label: role, color: "#94A3B8" };
 }
 
-export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSave, productMatches }) {
+export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSave, productMatches, currentUser }) {
   if (!company) return null;
   const c = company;
   const det = c.detail;
@@ -1867,49 +1867,69 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
           paddingTop: 20,
           borderTop: "1px solid #1B3A5C",
         }}>
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={isEditing}
-            style={{
-              width: "100%",
-              background: isEditing ? "#1B3A5C" : "#EF4444",
-              border: "none",
-              color: isEditing ? "#6B7F94" : "#FFFFFF",
-              padding: "10px 16px",
-              borderRadius: 8,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: isEditing ? "not-allowed" : "pointer",
-              fontFamily: "inherit",
-              opacity: isEditing ? 0.5 : 1,
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              if (!isEditing) {
-                e.currentTarget.style.background = "#DC2626";
-                e.currentTarget.style.transform = "translateY(-1px)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isEditing) {
-                e.currentTarget.style.background = "#EF4444";
-                e.currentTarget.style.transform = "translateY(0)";
-              }
-            }}
-          >
-            🗑️ Eliminar empresa
-          </button>
-          {isEditing && (
-            <p style={{
-              fontSize: 11,
-              color: "#6B7F94",
-              textAlign: "center",
-              marginTop: 8,
-              marginBottom: 0,
-            }}>
-              Guarda o cancela los cambios antes de eliminar
-            </p>
-          )}
+          {(() => {
+            const canHide = canHideCompany(c, currentUser);
+            const disabled = isEditing || !canHide;
+            return (
+              <>
+                <button
+                  onClick={() => canHide && setShowDeleteConfirm(true)}
+                  disabled={disabled}
+                  title={!canHide ? "Solo un admin o el dueño del buzón puede ocultar esta empresa" : undefined}
+                  style={{
+                    width: "100%",
+                    background: disabled ? "#1B3A5C" : "#EF4444",
+                    border: "none",
+                    color: disabled ? "#6B7F94" : "#FFFFFF",
+                    padding: "10px 16px",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    opacity: disabled ? 0.5 : 1,
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!disabled) {
+                      e.currentTarget.style.background = "#DC2626";
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!disabled) {
+                      e.currentTarget.style.background = "#EF4444";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }
+                  }}
+                >
+                  🗑️ Ocultar empresa
+                </button>
+                {isEditing && (
+                  <p style={{
+                    fontSize: 11,
+                    color: "#6B7F94",
+                    textAlign: "center",
+                    marginTop: 8,
+                    marginBottom: 0,
+                  }}>
+                    Guarda o cancela los cambios antes de ocultar
+                  </p>
+                )}
+                {!canHide && !isEditing && (
+                  <p style={{
+                    fontSize: 11,
+                    color: "#F59E0B",
+                    textAlign: "center",
+                    marginTop: 8,
+                    marginBottom: 0,
+                  }}>
+                    Solo un admin o el dueño del buzón puede ocultar esta empresa
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </div>
         </>)}
       </div>
@@ -1950,7 +1970,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               gap: 10,
             }}>
               <span style={{ fontSize: 28 }}>⚠️</span>
-              Confirmar eliminación
+              Confirmar ocultación
             </div>
             <p style={{
               fontSize: 14,
@@ -1958,8 +1978,8 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
               lineHeight: 1.6,
               marginBottom: 20,
             }}>
-              ¿Estás seguro de que deseas eliminar <strong style={{ color: "#FFFFFF" }}>{c.name}</strong>?
-              Esta acción ocultará la empresa de la vista pero se puede restaurar desde localStorage.
+              ¿Estás seguro de que deseas ocultar <strong style={{ color: "#FFFFFF" }}>{c.name}</strong>?
+              La empresa desaparecerá de la vista pero se puede restaurar desde localStorage.
             </p>
             <div style={{
               display: "flex",
@@ -2017,7 +2037,7 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
                   e.currentTarget.style.background = "#EF4444";
                 }}
               >
-                🗑️ Eliminar
+                🗑️ Ocultar
               </button>
             </div>
           </div>
