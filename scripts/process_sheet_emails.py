@@ -43,15 +43,36 @@ from import_mailbox import merge_company, export_to_compact, get_data_paths
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-COMPANY_GROUPS = ["Capital Seeker", "Investor", "Services", "Other"]
+# v2 taxonomy
+COMPANY_ROLES = ["Originación", "Inversión", "Ecosistema", "No relevante"]
+ORIGINACION_SEGMENTS = ["Project Finance", "Corporate Finance"]
+COMPANY_TYPES_V2 = {
+    "Originación > Project Finance": ["Developer", "IPP", "Developer + IPP"],
+    "Originación > Corporate Finance": [],
+    "Inversión > Deuda": ["Fondo de deuda", "Banco", "Bonista / Institucional"],
+    "Inversión > Equity": ["Fondo de infraestructura", "Private equity", "Fondo renovable", "IPP comprador", "Utility compradora"],
+    "Ecosistema": ["Asesor legal", "Asesor técnico", "Consultor de precios", "Asset manager", "Ingeniería", "Asesor financiero", "Asociación / Institución"],
+}
+CORPORATE_ACTIVITIES = [
+    "Autoconsumo industrial/comercial", "Movilidad / Cargadores EV",
+    "EPC / Construcción renovable", "Almacenamiento / BESS distribuido",
+    "Data centers", "Electrointensivo", "Biogás / Biometano",
+    "Hidrógeno verde", "Eficiencia energética", "Calor renovable / Biomasa",
+    "Redes / Infraestructura eléctrica", "Agritech / Agrovoltaica",
+]
+TECHNOLOGIES = ["Solar", "Eólica", "BESS", "Biogás", "Hidrógeno", "Otra"]
+GEOGRAPHIES = ["España", "Portugal", "Italia", "Francia", "Alemania", "UK", "Otro"]
+COMMERCIAL_PHASES = ["Sin contactar", "Primer contacto", "Exploración", "Negociación", "Cliente activo", "Dormido"]
+ASSET_PHASES = ["Desarrollo", "RTB", "Construcción", "Operativo"]
 
+# Legacy (kept for backward compat in enrichment output)
+COMPANY_GROUPS = ["Capital Seeker", "Investor", "Services", "Other"]
 COMPANY_TYPES = {
     "Capital Seeker": ["Developer", "IPP", "Utility", "Asset Owner", "Corporate"],
     "Investor": ["Renewable Fund", "Institutional Investor", "Bank", "Family Office", "Infrastructure Fund"],
     "Services": ["Legal Advisor", "Financial Advisor", "Technical Advisor", "EPC / Contractor", "Consultant", "Platform / Tech"],
     "Other": ["Public Institution", "Association", "Other"],
 }
-
 ALL_COMPANY_TYPES = [t for types in COMPANY_TYPES.values() for t in types]
 
 DEAL_STAGES = [
@@ -63,6 +84,14 @@ MARKET_ROLES_LIST = [
     "Borrower", "Seller (M&A)", "Buyer Investor (M&A)",
     "Debt Investor", "Equity Investor", "Partner & Services",
 ]
+
+# Mapping v2 role -> legacy group
+ROLE_TO_LEGACY_GROUP = {
+    "Originación": "Capital Seeker",
+    "Inversión": "Investor",
+    "Ecosistema": "Services",
+    "No relevante": "Other",
+}
 
 PERSONAL_DOMAINS = {
     "gmail.com", "hotmail.com", "yahoo.com", "outlook.com",
@@ -223,13 +252,13 @@ Los números son los índices de cada email. Todos los emails deben aparecer en 
 
 
 def classify_domains_with_gemini(domains_with_context):
-    """Classify a list of domains into group + type + enrichment using Gemini.
+    """Classify domains using v2 taxonomy (role → segment → type → activities).
 
     Args:
         domains_with_context: list of (domain, [subjects], [snippets]) tuples
 
     Returns:
-        dict of domain -> {"group": str, "type": str, "enrichment": {"grp","tp","ds","mr"} | None}
+        dict of domain -> {"group": str, "type": str, "enrichment": {...} | None}
     """
     default = {"group": "Other", "type": "Other", "enrichment": None}
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -247,12 +276,6 @@ def classify_domains_with_gemini(domains_with_context):
 
     results = {}
 
-    # Build type descriptions for prompt
-    type_lines = []
-    for grp, types in COMPANY_TYPES.items():
-        type_lines.append(f"  {grp}: [{', '.join(types)}]")
-    types_block = "\n".join(type_lines)
-
     # Process in batches
     for batch_start in range(0, len(domains_with_context), GEMINI_BATCH_SIZE):
         batch = domains_with_context[batch_start:batch_start + GEMINI_BATCH_SIZE]
@@ -263,37 +286,48 @@ def classify_domains_with_gemini(domains_with_context):
             snip_text = " // ".join(snippets[:3])[:300]
             lines.append(f"- {domain}: subjects=[{subj_text}] snippets=[{snip_text}]")
 
-        prompt = f"""Eres un analista de Alter-5, empresa de consultoría especializada en financiación de proyectos de energía renovable.
+        prompt = f"""Eres un analista de Alter5, consultora de financiación de energías renovables en Europa.
 
-Alter5 ofrece estos productos:
-- Prestamo Construccion: deuda para construir proyectos utility-scale (solar FV, eólico, BESS). Cliente típico: developer, IPP o fondo con proyectos greenfield o RTB.
-- Refinanciacion: sustitución de deuda existente en proyectos ya operativos por mejores condiciones.
-- Colocacion Inversores: distribución de tramos de deuda o equity a inversores institucionales, fondos y family offices.
-- Advisory / M&A: asesoramiento en compraventa, valoración y due diligence de proyectos y activos renovables.
+Alter5 INTERMEDIA: conecta empresas que buscan capital con inversores que lo aportan.
+Productos: Préstamo Construcción, Refinanciación, Colocación Inversores, Advisory / M&A.
 
-Clasifica estas empresas por su dominio web, los asuntos de email y los fragmentos de conversación.
+## ÁRBOL DE DECISIÓN — sigue estos pasos en orden:
 
-Para cada empresa determina:
-1. group (grupo de empresa): una de [{", ".join(COMPANY_GROUPS)}]
-   - Capital Seeker: empresas que buscan financiación (developers, IPPs, utilities, asset owners)
-   - Investor: proveedores de capital (bancos, fondos, family offices, institucionales)
-   - Services: asesores, consultores, EPC, legal, técnicos
-   - Other: asociaciones, instituciones públicas, no clasificados
-2. type (tipo de empresa, según el grupo):
-{types_block}
-3. deal_stage (solo si group es "Capital Seeker"): una de [{", ".join(DEAL_STAGES)}]
-   Si NO es Capital Seeker, dejar como null.
-4. market_roles (roles de mercado, puede ser MÁS DE UNO): subconjunto de [{", ".join(MARKET_ROLES_LIST)}]
-5. subtipo: subtipo específico de empresa. Uno de: Developer, IPP, Utility, Asset Owner, Corporate, Fondo Renovable, Inversor Institucional, Banco/Entidad Financiera, Family Office, Infrastructure Fund, Asesor Legal, Asesor Financiero, Asesor Técnico, EPC/Proveedor, Consultor, Plataforma/Tech, Administración Pública, Asociación, Otro.
-6. productos_potenciales: array de productos Alter5 que la empresa podría necesitar, SOLO si hay evidencia en los emails. Formato: [{{"p": "nombre_producto", "c": "alta|media|baja"}}]. Productos posibles: Prestamo Construccion, Refinanciacion, Colocacion Inversores, Advisory / M&A. Dejar array vacío si no hay evidencia clara.
-7. senales_clave: array de hechos concretos detectados en los emails (ej: "Term sheet enviado", "NDA firmado", "Pipeline 200MW", "Reunión presencial", "Due diligence en curso"). Solo hechos, no opiniones. Dejar array vacío si no hay señales claras.
-8. fase_comercial: una de [Primer contacto, Exploracion, Negociacion, Cliente activo, Dormido, Descartado]
+### Paso 1: ROLE (obligatorio)
+Elige UNO:
+- "Originación" — empresas que buscan financiación (developers, IPPs, utilities, corporates en transición energética)
+- "Inversión" — aportan capital (bancos, fondos de deuda, fondos de equity, family offices, institucionales)
+- "Ecosistema" — asesores, consultores, legales, técnicos, asset managers, asociaciones
+- "No relevante" — newsletters, herramientas SaaS, CRM, marketing, reclutiamiento, dominios genéricos sin relación con energía/finanzas
 
-Empresas:
+### Paso 2: SEGMENT (solo si role="Originación", si no dejar "")
+- "Project Finance" — proyectos utility-scale: developers de solar/eólico/BESS, IPPs, utilities con pipeline de proyectos
+- "Corporate Finance" — empresas de transición energética que necesitan deuda corporativa (autoconsumo, EV, EPC, biogás, hidrógeno, etc.)
+
+### Paso 3: TYPE (según contexto)
+Si Originación > Project Finance: uno de [{", ".join(COMPANY_TYPES_V2["Originación > Project Finance"])}]
+Si Originación > Corporate Finance: dejar ""
+Si Inversión: uno de [{", ".join(COMPANY_TYPES_V2["Inversión > Deuda"] + COMPANY_TYPES_V2["Inversión > Equity"])}]
+Si Ecosistema: uno de [{", ".join(COMPANY_TYPES_V2["Ecosistema"])}]
+Si No relevante: dejar ""
+
+### Paso 4: ACTIVITIES (solo si role="Originación" y segment="Corporate Finance", si no dejar [])
+Array de actividades aplicables: {json.dumps(CORPORATE_ACTIVITIES, ensure_ascii=False)}
+
+### Paso 5: ATRIBUTOS adicionales
+- technologies: subconjunto de {json.dumps(TECHNOLOGIES, ensure_ascii=False)}
+- geography: subconjunto de {json.dumps(GEOGRAPHIES, ensure_ascii=False)}
+- market_roles: subconjunto de [{", ".join(MARKET_ROLES_LIST)}]
+- productos_potenciales: [{{"p": "nombre", "c": "alta|media|baja"}}] SOLO con evidencia en emails. Productos: Prestamo Construccion, Refinanciacion, Colocacion Inversores, Advisory / M&A.
+- senales_clave: hechos concretos de emails (ej: "Pipeline 200MW", "NDA firmado"). Array vacío si no hay.
+- fase_comercial: una de {json.dumps(COMMERCIAL_PHASES, ensure_ascii=False)}
+
+## EMPRESAS A CLASIFICAR:
 {chr(10).join(lines)}
 
-Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato exacto:
-{{"dominio1.com": {{"group": "...", "type": "...", "deal_stage": "..." o null, "market_roles": ["..."], "subtipo": "...", "productos_potenciales": [{{"p": "...", "c": "..."}}], "senales_clave": ["..."], "fase_comercial": "..."}}, "dominio2.com": {{...}}}}"""
+## FORMATO DE RESPUESTA
+Responde SOLO con JSON válido, sin markdown ni explicaciones:
+{{"dominio.com": {{"role": "...", "segment": "...", "type": "...", "activities": [...], "technologies": [...], "geography": [...], "market_roles": [...], "productos_potenciales": [...], "senales_clave": [...], "fase_comercial": "..."}}}}"""
 
         try:
             response = model.generate_content(prompt)
@@ -309,42 +343,67 @@ Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato exacto
             for domain, _, _ in batch:
                 if domain in parsed:
                     entry = parsed[domain]
-                    group = entry.get("group", "Other")
-                    comp_type = entry.get("type", "Other")
-                    deal_stage = entry.get("deal_stage")
+                    role = entry.get("role", "No relevante")
+                    segment = entry.get("segment", "")
+                    comp_type = entry.get("type", "")
+                    activities = entry.get("activities", [])
+                    technologies = entry.get("technologies", [])
+                    geography = entry.get("geography", [])
                     market_roles = entry.get("market_roles", [])
 
-                    # Validate group
-                    if group not in COMPANY_GROUPS:
-                        group = "Other"
+                    # Validate role
+                    if role not in COMPANY_ROLES:
+                        role = "No relevante"
 
-                    # Validate type belongs to group
-                    valid_types = COMPANY_TYPES.get(group, [])
-                    if comp_type not in valid_types:
-                        comp_type = valid_types[-1] if valid_types else "Other"
+                    # Validate segment
+                    if role != "Originación":
+                        segment = ""
+                    elif segment and segment not in ORIGINACION_SEGMENTS:
+                        segment = ""
 
-                    # Validate deal stage (only for Capital Seekers)
-                    if group != "Capital Seeker":
-                        deal_stage = None
-                    elif deal_stage and deal_stage not in DEAL_STAGES:
-                        deal_stage = "Prospect"
+                    # Validate type
+                    if role == "Originación" and segment == "Project Finance":
+                        valid_types = COMPANY_TYPES_V2["Originación > Project Finance"]
+                    elif role == "Inversión":
+                        valid_types = COMPANY_TYPES_V2["Inversión > Deuda"] + COMPANY_TYPES_V2["Inversión > Equity"]
+                    elif role == "Ecosistema":
+                        valid_types = COMPANY_TYPES_V2["Ecosistema"]
+                    else:
+                        valid_types = []
+                    if comp_type and comp_type not in valid_types:
+                        comp_type = ""
 
-                    # Validate market roles
+                    # Validate activities (only Corporate Finance)
+                    if role == "Originación" and segment == "Corporate Finance":
+                        activities = [a for a in activities if a in CORPORATE_ACTIVITIES]
+                    else:
+                        activities = []
+
+                    # Validate multi-selects
+                    technologies = [t for t in technologies if t in TECHNOLOGIES]
+                    geography = [g for g in geography if g in GEOGRAPHIES]
                     valid_mr = [r for r in market_roles if r in MARKET_ROLES_LIST]
 
+                    # Map to legacy fields
+                    legacy_group = ROLE_TO_LEGACY_GROUP.get(role, "Other")
+                    legacy_type = comp_type or "Other"
+
+                    # Build enrichment with _tv:2
                     enrichment = {
-                        "grp": group,
-                        "tp": comp_type,
-                        "mr": valid_mr if valid_mr else [],
+                        "_tv": 2,
+                        "role": role,
+                        "seg": segment,
+                        "tp2": comp_type,
+                        "act": activities,
+                        "tech": technologies,
+                        "geo": geography,
+                        "mr": valid_mr,
+                        # Legacy fields for backward compat
+                        "grp": legacy_group,
+                        "tp": legacy_type,
                     }
-                    if deal_stage:
-                        enrichment["ds"] = deal_stage
 
-                    # New enrichment fields
-                    subtipo = entry.get("subtipo", "")
-                    if subtipo:
-                        enrichment["st"] = subtipo
-
+                    # Optional enrichment fields
                     productos = entry.get("productos_potenciales", [])
                     if productos and isinstance(productos, list):
                         enrichment["pp"] = productos
@@ -354,12 +413,12 @@ Responde SOLO con un JSON válido, sin markdown ni explicaciones. Formato exacto
                         enrichment["sc"] = senales
 
                     fase = entry.get("fase_comercial", "")
-                    if fase:
+                    if fase and fase in COMMERCIAL_PHASES:
                         enrichment["fc"] = fase
 
                     results[domain] = {
-                        "group": group,
-                        "type": comp_type,
+                        "group": legacy_group,
+                        "type": legacy_type,
                         "enrichment": enrichment,
                     }
                 else:

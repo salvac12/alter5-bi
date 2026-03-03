@@ -20,8 +20,9 @@ const PERSONAL_DOMAINS = new Set([
  */
 export function isSuspiciousCompany(company) {
   if (PERSONAL_DOMAINS.has(company.domain)) return 'personal_domain';
-  if (company.interactions <= 2 && company.group === 'Other') return 'low_value';
-  if ((!company.group || company.group === 'Other') && (!company.companyType || company.companyType === 'Other')) return 'no_enrichment';
+  const isNoRelevante = company.role === 'No relevante' || company.group === 'Other' || company.group === 'No relevante';
+  if (company.interactions <= 2 && isNoRelevante) return 'low_value';
+  if (isNoRelevante && (!company.companyType || company.companyType === 'Other')) return 'no_enrichment';
   return null;
 }
 
@@ -212,7 +213,7 @@ export function getAllEnrichmentOverrides() {
 /**
  * Guardar override de enrichment para una empresa
  * @param {string} domain
- * @param {{ mr?: string[], st?: string, fc?: string }} overrides
+ * @param {{ mr?: string[], grp?: string, tp?: string, role?: string, seg?: string, tp2?: string, act?: string[], tech?: string[], geo?: string[] }} overrides
  */
 export function saveEnrichmentOverride(domain, overrides) {
   try {

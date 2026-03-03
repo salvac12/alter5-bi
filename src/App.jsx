@@ -69,11 +69,17 @@ export default function App() {
       .map(c => {
         const ov = enrichmentOverrides[c.domain];
         if (!ov) return c;
+        const role = ov.role !== undefined ? ov.role : (ov.grp !== undefined ? ov.grp : c.role);
         return {
           ...c,
+          role,
+          group: role, // alias
+          segment: ov.seg !== undefined ? ov.seg : c.segment,
           marketRoles: ov.mr !== undefined ? ov.mr : c.marketRoles,
-          group: ov.grp !== undefined ? ov.grp : c.group,
-          companyType: ov.tp !== undefined ? ov.tp : c.companyType,
+          companyType: ov.tp2 !== undefined ? ov.tp2 : (ov.tp !== undefined ? ov.tp : c.companyType),
+          activities: ov.act !== undefined ? ov.act : c.activities,
+          technologies: ov.tech !== undefined ? ov.tech : c.technologies,
+          geography: ov.geo !== undefined ? ov.geo : c.geography,
         };
       });
   }, [allCompanies, hiddenCompanies, blockedDomains, enrichmentOverrides]);
@@ -83,8 +89,11 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [activeEmployeeTab, setActiveEmployeeTab] = useState("all");
   const [selEmployees, setSelEmployees] = useState([]);
-  const [selGroups, setSelGroups] = useState([]);
+  const [selGroups, setSelGroups] = useState([]);     // roles (v2) / groups (legacy alias)
+  const [selSegments, setSelSegments] = useState([]);  // Originación segments
   const [selTypes, setSelTypes] = useState([]);
+  const [selActivities, setSelActivities] = useState([]); // Corporate Finance activities
+  const [selTech, setSelTech] = useState([]);           // Technologies
   const [selStatus, setSelStatus] = useState([]);
   const [selProduct, setSelProduct] = useState("");
   const [selMarketRoles, setSelMarketRoles] = useState([]);
@@ -113,14 +122,18 @@ export default function App() {
       list = list.filter(c =>
         c.name.toLowerCase().includes(q) ||
         c.domain.toLowerCase().includes(q) ||
-        c.group.toLowerCase().includes(q) ||
+        c.role.toLowerCase().includes(q) ||
+        (c.segment || "").toLowerCase().includes(q) ||
         c.companyType.toLowerCase().includes(q) ||
         c.marketRoles.some(mr => mr.toLowerCase().includes(q))
       );
     }
     if (selEmployees.length) list = list.filter(c => selEmployees.some(e => c.employees.includes(e)));
-    if (selGroups.length) list = list.filter(c => selGroups.includes(c.group));
+    if (selGroups.length) list = list.filter(c => selGroups.includes(c.role));
+    if (selSegments.length) list = list.filter(c => selSegments.includes(c.segment));
     if (selTypes.length) list = list.filter(c => selTypes.includes(c.companyType));
+    if (selActivities.length) list = list.filter(c => selActivities.some(a => c.activities?.includes(a)));
+    if (selTech.length) list = list.filter(c => selTech.some(t => c.technologies?.includes(t)));
     if (selStatus.length) list = list.filter(c => selStatus.includes(c.status));
     if (selMarketRoles.length) list = list.filter(c => selMarketRoles.some(mr => c.marketRoles.includes(mr)));
     if (selPipeline) {
@@ -155,7 +168,7 @@ export default function App() {
       }
       return m * (a[sortBy] - b[sortBy]);
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selTypes, selStatus, selMarketRoles, selPipeline, selProduct, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -466,7 +479,10 @@ export default function App() {
             companies={companies} employees={employees}
             selEmployees={selEmployees} setSelEmployees={setSelEmployees}
             selGroups={selGroups} setSelGroups={setSelGroups}
+            selSegments={selSegments} setSelSegments={setSelSegments}
             selTypes={selTypes} setSelTypes={setSelTypes}
+            selActivities={selActivities} setSelActivities={setSelActivities}
+            selTech={selTech} setSelTech={setSelTech}
             selStatus={selStatus} setSelStatus={setSelStatus}
             selProduct={selProduct} setSelProduct={setSelProduct}
             selMarketRoles={selMarketRoles} setSelMarketRoles={setSelMarketRoles}

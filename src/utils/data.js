@@ -1,6 +1,6 @@
 import rawData from '../data/companies.json';
 import oppData from '../data/opportunities.json';
-import { GROUP_WEIGHTS, REF_DATE, PRODUCTS } from './constants';
+import { GROUP_WEIGHTS, ROLE_WEIGHTS, REF_DATE, PRODUCTS } from './constants';
 
 const normalize = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
@@ -40,6 +40,18 @@ export function getOpportunityCounts(companies) {
   return counts;
 }
 
+// ── Legacy → v2 taxonomy helpers ──
+function mapLegacyGroup(grp) {
+  return { "Capital Seeker": "Originación", "Investor": "Inversión", "Services": "Ecosistema", "Other": "No relevante" }[grp] || "No relevante";
+}
+
+function inferSegment(grp, tp) {
+  if (grp !== "Capital Seeker") return "";
+  if (["Developer", "IPP", "Utility", "Asset Owner"].includes(tp)) return "Project Finance";
+  if (tp === "Corporate") return "Corporate Finance";
+  return "";
+}
+
 /**
  * Record: [empresa, dominio, sector, nContactos, totalInteracciones,
  *          tipoRelacion, primeraInteraccion, ultimaInteraccion, employeeSources]
@@ -70,16 +82,42 @@ export function parseCompanies() {
       datedSubjects: det[6] ? det[6].map(ds => ({ date: ds[0], subject: ds[1], extract: ds[2] || "" })) : [],
     } : null;
 
-    // New taxonomy fields from enrichment
+    // Taxonomy fields from enrichment
     const enrichment = detail?.enrichment || {};
-    const group = enrichment.grp || "Other";
-    const companyType = enrichment.tp || "";
+    const tv = enrichment._tv || 0;
+
+    let role, segment, companyType, activities, technologies, geography, assetPhase, commercialPhase;
+
+    if (tv >= 2) {
+      // v2 taxonomy
+      role = enrichment.role || "No relevante";
+      segment = enrichment.seg || "";
+      companyType = enrichment.tp2 || "";
+      activities = enrichment.act || [];
+      technologies = enrichment.tech || [];
+      geography = enrichment.geo || [];
+      assetPhase = enrichment.fase_activo || "";
+      commercialPhase = enrichment.fase || "";
+    } else {
+      // Legacy fallback
+      const legacyGrp = enrichment.grp || "Other";
+      const legacyTp = enrichment.tp || "";
+      role = mapLegacyGroup(legacyGrp);
+      segment = inferSegment(legacyGrp, legacyTp);
+      companyType = legacyTp;
+      activities = [];
+      technologies = [];
+      geography = [];
+      assetPhase = "";
+      commercialPhase = enrichment.fc || "";
+    }
+
     const marketRoles = enrichment.mr || [];
     const productosIA = enrichment.pp || [];
     const senales = enrichment.sc || [];
 
-    // Group-based scoring (replaces type scoring)
-    const groupScore = GROUP_WEIGHTS[group] || 2;
+    // Role-based scoring (v2 roles + legacy groups both in GROUP_WEIGHTS)
+    const groupScore = GROUP_WEIGHTS[role] ?? GROUP_WEIGHTS[enrichment.grp] ?? 2;
     const score = volScore + recScore + netScore + groupScore;
 
     // Airtable opportunity match
@@ -94,9 +132,16 @@ export function parseCompanies() {
       employees, status, score, volScore, recScore, netScore,
       groupScore,
       monthsAgo: Math.round(monthsAgo), detail,
-      // New taxonomy
-      group,
+      // Taxonomy v2
+      role,
+      group: role, // alias for backward compat
+      segment,
       companyType,
+      activities,
+      technologies,
+      geography,
+      assetPhase,
+      commercialPhase,
       marketRoles,
       productosIA,
       senales,
@@ -215,10 +260,11 @@ export function calculateProductMatches(companies) {
         signals.push({ type: "marketRole", value: matchedRoles.join(", ") });
       }
 
-      // --- Group bonus (max 10, replaces sector match) ---
-      if (product.groupBonus && c.group === product.groupBonus) {
+      // --- Role/Group bonus (max 10) ---
+      if ((product.roleBonus && c.role === product.roleBonus) ||
+          (product.groupBonus && c.group === product.groupBonus)) {
         score += 10;
-        signals.push({ type: "group", value: c.group });
+        signals.push({ type: "group", value: c.role || c.group });
       }
 
       // --- Contact role match (max 15) ---
@@ -294,7 +340,7 @@ function splitName(fullName) {
 /** Export filtered companies to Airtable-compatible CSV. */
 export function downloadCSV(companies, productMatches) {
   const headers = [
-    "Empresa", "Dominio", "Group", "Type",
+    "Empresa", "Dominio", "Role", "Segment", "Type",
     "Nº Contactos", "Total Interacciones",
     "Primera Interacción", "Última Interacción",
     "Estado", "Score", "Score Volumen", "Score Recencia", "Score Red", "Score Grupo",
@@ -321,7 +367,7 @@ export function downloadCSV(companies, productMatches) {
     const bestProduct = productMatches ? getBestProductMatch(productMatches, c.idx) : null;
 
     return [
-      c.name, c.domain, c.group, c.companyType,
+      c.name, c.domain, c.role, c.segment, c.companyType,
       c.nContacts, c.interactions,
       c.firstDate, c.lastDate,
       { active: "Activa", dormant: "Dormida", lost: "Perdida" }[c.status],

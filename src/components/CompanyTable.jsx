@@ -1,15 +1,15 @@
 import { StatusBadge } from './UI';
 import { getBestProductMatch } from '../utils/data';
-import { MARKET_ROLES, COMPANY_GROUPS } from '../utils/constants';
+import { MARKET_ROLES, COMPANY_ROLES } from '../utils/constants';
 import { SUSPECT_LABELS } from './CleanupToolbar';
 
-const GROUP_COLOR_MAP = Object.fromEntries(COMPANY_GROUPS.map(g => [g.id, g.color]));
+const ROLE_COLOR_MAP = Object.fromEntries(COMPANY_ROLES.map(g => [g.id, g.color]));
 
 const COLUMNS = [
   { key: "score", label: "Score", w: 58, sortable: true },
   { key: "name", label: "Empresa", w: 180, sortable: true },
-  { key: null, label: "Group", w: 110, sortable: false },
-  { key: null, label: "Type", w: 120, sortable: false },
+  { key: null, label: "Role", w: 100, sortable: false },
+  { key: null, label: "Seg / Tipo", w: 130, sortable: false },
   { key: null, label: "Market Role", w: 120, sortable: false },
   { key: "productScore", label: "Producto", w: 110, sortable: true },
   { key: null, label: "Estado", w: 76, sortable: false },
@@ -171,28 +171,14 @@ export default function CompanyTable({
                 <div style={{ fontSize: 11, color: "#6B7F94", fontWeight: 400 }}>{c.domain}</div>
               </td>
 
-              {/* Group */}
+              {/* Role */}
               <td style={{ padding: "10px" }}>
-                <GroupBadge group={c.group} />
+                <RoleBadge role={c.role} />
               </td>
 
-              {/* Type */}
+              {/* Segment / Type */}
               <td style={{ padding: "10px" }}>
-                {c.companyType ? (
-                  <span style={{
-                    display: "inline-block",
-                    padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                    background: "#8B5CF615", color: "#7C3AED", border: "1px solid #8B5CF625",
-                    whiteSpace: "nowrap",
-                    maxWidth: 120,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}>
-                    {c.companyType}
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>
-                )}
+                <SegmentTypeCell segment={c.segment} companyType={c.companyType} />
               </td>
 
               {/* Market Role */}
@@ -269,9 +255,9 @@ function ScoreChip({ score }) {
   );
 }
 
-/* ── Group badge for table rows ── */
-function GroupBadge({ group }) {
-  const color = GROUP_COLOR_MAP[group] || "#94A3B8";
+/* ── Role badge for table rows ── */
+function RoleBadge({ role }) {
+  const color = ROLE_COLOR_MAP[role] || "#94A3B8";
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 5,
@@ -280,8 +266,32 @@ function GroupBadge({ group }) {
       whiteSpace: "nowrap",
     }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      {group}
+      {role}
     </span>
+  );
+}
+
+/* ── Segment / Type cell for table rows ── */
+function SegmentTypeCell({ segment, companyType }) {
+  const label = segment || companyType;
+  if (!label) return <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>;
+  const secondary = segment && companyType ? companyType : null;
+  return (
+    <div>
+      <span style={{
+        display: "inline-block",
+        padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+        background: "#8B5CF615", color: "#7C3AED", border: "1px solid #8B5CF625",
+        whiteSpace: "nowrap", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis",
+      }}>
+        {label}
+      </span>
+      {secondary && (
+        <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 500, marginTop: 2 }}>
+          {secondary}
+        </div>
+      )}
+    </div>
   );
 }
 

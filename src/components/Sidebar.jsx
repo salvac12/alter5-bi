@@ -1,4 +1,4 @@
-import { COMPANY_GROUPS, COMPANY_TYPES, ALL_COMPANY_TYPES, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS, MARKET_ROLES } from '../utils/constants';
+import { COMPANY_ROLES, ORIGINACION_SEGMENTS, COMPANY_TYPES_V2, CORPORATE_ACTIVITIES, TECHNOLOGIES, COMPANY_TYPES, ALL_COMPANY_TYPES, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS, MARKET_ROLES } from '../utils/constants';
 import { getOpportunityStages, getOpportunityCounts } from '../utils/data';
 import { FilterChip, ComingSoonBadge, Tooltip } from './UI';
 
@@ -7,6 +7,9 @@ export default function Sidebar({
   selEmployees, setSelEmployees,
   selGroups, setSelGroups,
   selTypes, setSelTypes,
+  selSegments, setSelSegments,
+  selActivities, setSelActivities,
+  selTech, setSelTech,
   selStatus, setSelStatus,
   selProduct, setSelProduct,
   selMarketRoles, setSelMarketRoles,
@@ -19,7 +22,7 @@ export default function Sidebar({
     setPage(0);
   };
 
-  const hasFilters = selGroups.length > 0 || selTypes.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct || !!selPipeline;
+  const hasFilters = selGroups.length > 0 || selTypes.length > 0 || selSegments.length > 0 || selActivities.length > 0 || selTech.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct || !!selPipeline;
 
   const statusCounts = {
     active: companies.filter(c => c.status === "active").length,
@@ -27,11 +30,74 @@ export default function Sidebar({
     lost: companies.filter(c => c.status === "lost").length,
   };
 
-  const totalActiveFilters = selEmployees.length + selGroups.length + selTypes.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0) + (selPipeline ? 1 : 0);
+  const totalActiveFilters = selEmployees.length + selGroups.length + selSegments.length + selTypes.length + selActivities.length + selTech.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0) + (selPipeline ? 1 : 0);
 
-  const groupCounts = {};
-  for (const g of COMPANY_GROUPS) {
-    groupCounts[g.id] = companies.filter(c => c.group === g.id).length;
+  // Role counts
+  const roleCounts = {};
+  for (const r of COMPANY_ROLES) {
+    roleCounts[r.id] = companies.filter(c => c.role === r.id).length;
+  }
+
+  // Segment counts (only when Originación is selected)
+  const segmentCounts = {};
+  for (const s of ORIGINACION_SEGMENTS) {
+    segmentCounts[s.id] = companies.filter(c => c.role === "Originación" && c.segment === s.id).length;
+  }
+
+  // Show segment filter only when Originación is among selected roles (or no role filter)
+  const showSegments = selGroups.length === 0 || selGroups.includes("Originación");
+  const originacionSelected = selGroups.includes("Originación");
+
+  // Determine which types to show based on selected roles + segments
+  let availableTypes = [];
+  if (selGroups.length > 0) {
+    for (const role of selGroups) {
+      if (role === "Originación") {
+        if (selSegments.length > 0) {
+          for (const seg of selSegments) {
+            const key = `Originación > ${seg}`;
+            availableTypes.push(...(COMPANY_TYPES_V2[key] || []));
+          }
+        } else {
+          availableTypes.push(...(COMPANY_TYPES_V2["Originación > Project Finance"] || []));
+          // Corporate Finance has no fixed types
+        }
+      } else if (role === "Inversión") {
+        availableTypes.push(...(COMPANY_TYPES_V2["Inversión > Deuda"] || []));
+        availableTypes.push(...(COMPANY_TYPES_V2["Inversión > Equity"] || []));
+      } else if (role === "Ecosistema") {
+        availableTypes.push(...(COMPANY_TYPES_V2["Ecosistema"] || []));
+      }
+      // Also include legacy types for this role via COMPANY_TYPES
+      availableTypes.push(...(COMPANY_TYPES[role] || []));
+    }
+    // Deduplicate
+    availableTypes = [...new Set(availableTypes)];
+  } else {
+    availableTypes = ALL_COMPANY_TYPES;
+  }
+
+  // Type counts
+  const typeCounts = {};
+  for (const t of availableTypes) {
+    typeCounts[t] = companies.filter(c => c.companyType === t).length;
+  }
+
+  // Show activities filter when Corporate Finance is selected
+  const showActivities = originacionSelected && (selSegments.length === 0 || selSegments.includes("Corporate Finance"));
+
+  // Activity counts
+  const activityCounts = {};
+  if (showActivities) {
+    for (const act of CORPORATE_ACTIVITIES) {
+      activityCounts[act] = companies.filter(c => c.activities?.includes(act)).length;
+    }
+  }
+
+  // Technology counts
+  const techCounts = {};
+  for (const t of TECHNOLOGIES) {
+    techCounts[t.id] = companies.filter(c => c.technologies?.includes(t.id)).length;
   }
 
   const marketRoleCounts = {};
@@ -47,17 +113,6 @@ export default function Sidebar({
       if (matches.some(m => m.id === product.id && m.score >= 15)) count++;
     }
     productCounts[product.id] = count;
-  }
-
-  // Determine which types to show based on selected groups
-  const availableTypes = selGroups.length > 0
-    ? selGroups.flatMap(g => COMPANY_TYPES[g] || [])
-    : ALL_COMPANY_TYPES;
-
-  // Type counts
-  const typeCounts = {};
-  for (const t of availableTypes) {
-    typeCounts[t] = companies.filter(c => c.companyType === t).length;
   }
 
   return (
@@ -98,9 +153,9 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Company Group */}
-      <FilterSection title="Company Group">
-        {COMPANY_GROUPS.map(g => (
+      {/* Role (replaces Company Group) */}
+      <FilterSection title="Role">
+        {COMPANY_ROLES.map(g => (
           <FilterChip key={g.id}
             label={
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -112,7 +167,7 @@ export default function Sidebar({
                 <span style={{
                   fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
                 }}>
-                  {groupCounts[g.id]}
+                  {roleCounts[g.id]}
                 </span>
               </span>
             }
@@ -122,22 +177,89 @@ export default function Sidebar({
         ))}
       </FilterSection>
 
-      {/* Company Type */}
-      <FilterSection title="Company Type">
-        {availableTypes.map(t => (
-          <FilterChip key={t}
+      {/* Segment (conditional, only when Originación selected) */}
+      {showSegments && originacionSelected && (
+        <FilterSection title="Segmento">
+          {ORIGINACION_SEGMENTS.map(s => (
+            <FilterChip key={s.id}
+              label={
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {s.label}
+                  <span style={{
+                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                  }}>
+                    {segmentCounts[s.id]}
+                  </span>
+                </span>
+              }
+              active={selSegments.includes(s.id)}
+              onClick={() => toggle(selSegments, setSelSegments, s.id)}
+            />
+          ))}
+        </FilterSection>
+      )}
+
+      {/* Type (dynamic based on role + segment) */}
+      {availableTypes.length > 0 && (
+        <FilterSection title="Tipo">
+          {availableTypes.filter(t => typeCounts[t] > 0).map(t => (
+            <FilterChip key={t}
+              label={
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {t}
+                  <span style={{
+                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                  }}>
+                    {typeCounts[t]}
+                  </span>
+                </span>
+              }
+              active={selTypes.includes(t)}
+              onClick={() => toggle(selTypes, setSelTypes, t)}
+            />
+          ))}
+        </FilterSection>
+      )}
+
+      {/* Corporate Finance Activities (conditional multi-select) */}
+      {showActivities && (
+        <FilterSection title="Actividad Corp. Finance">
+          {CORPORATE_ACTIVITIES.filter(act => activityCounts[act] > 0).map(act => (
+            <FilterChip key={act}
+              label={
+                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11 }}>{act}</span>
+                  <span style={{
+                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
+                  }}>
+                    {activityCounts[act]}
+                  </span>
+                </span>
+              }
+              active={selActivities.includes(act)}
+              onClick={() => toggle(selActivities, setSelActivities, act)}
+            />
+          ))}
+        </FilterSection>
+      )}
+
+      {/* Technology */}
+      <FilterSection title="Tecnología">
+        {TECHNOLOGIES.map(t => (
+          <FilterChip key={t.id}
             label={
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {t}
+                <span style={{ fontSize: 12 }}>{t.icon}</span>
+                {t.label}
                 <span style={{
                   fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
                 }}>
-                  {typeCounts[t]}
+                  {techCounts[t.id]}
                 </span>
               </span>
             }
-            active={selTypes.includes(t)}
-            onClick={() => toggle(selTypes, setSelTypes, t)}
+            active={selTech.includes(t.id)}
+            onClick={() => toggle(selTech, setSelTech, t.id)}
           />
         ))}
       </FilterSection>
@@ -275,73 +397,11 @@ export default function Sidebar({
         ))}
       </FilterSection>
 
-      {/* Separador visual */}
-      <div style={{
-        margin: "24px 0",
-        borderTop: "2px solid #E2E8F0",
-        paddingTop: 16,
-      }}>
-        <div style={{
-          fontSize: 11,
-          textTransform: "uppercase",
-          color: "#94A3B8",
-          fontWeight: 600,
-          letterSpacing: "1px",
-          textAlign: "center",
-        }}>
-          FILTROS FUTUROS
-        </div>
-      </div>
-
-      {/* Tamaño Empresa (disabled) */}
-      <FilterSection title={
-        <span>
-          Tamaño Empresa
-          <ComingSoonBadge />
-        </span>
-      }>
-        {COMPANY_SIZES.map(size => (
-          <Tooltip key={size.id} text="Requiere cualificación de datos de LinkedIn">
-            <FilterChip
-              label={size.label}
-              active={false}
-              onClick={() => {}}
-              style={{
-                opacity: 0.4,
-                cursor: "not-allowed",
-              }}
-            />
-          </Tooltip>
-        ))}
-      </FilterSection>
-
-      {/* País (disabled) */}
-      <FilterSection title={
-        <span>
-          País
-          <ComingSoonBadge />
-        </span>
-      }>
-        {COUNTRIES.map(country => (
-          <Tooltip key={country.id} text="Requiere cualificación de datos por idioma de correos">
-            <FilterChip
-              label={country.label}
-              active={false}
-              onClick={() => {}}
-              style={{
-                opacity: 0.4,
-                cursor: "not-allowed",
-              }}
-            />
-          </Tooltip>
-        ))}
-      </FilterSection>
-
       {/* Clear */}
       {hasFilters && (
         <button
           onClick={() => {
-            setSelEmployees([]); setSelGroups([]); setSelTypes([]); setSelStatus([]); setSelMarketRoles([]); setSelPipeline(""); setSelProduct(""); setPage(0);
+            setSelEmployees([]); setSelGroups([]); setSelSegments([]); setSelTypes([]); setSelActivities([]); setSelTech([]); setSelStatus([]); setSelMarketRoles([]); setSelPipeline(""); setSelProduct(""); setPage(0);
           }}
           style={{
             marginTop: 20,

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides } from '../utils/companyData';
-import { COUNTRIES, COMPANY_SIZES, COMPANY_GROUPS, COMPANY_TYPES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
+import { COUNTRIES, COMPANY_SIZES, COMPANY_ROLES, COMPANY_TYPES, ORIGINACION_SEGMENTS, COMPANY_TYPES_V2, CORPORATE_ACTIVITIES, TECHNOLOGIES, ASSET_PHASES, GEOGRAPHIES, COMMERCIAL_PHASES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -48,11 +48,20 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   const [showAddContact, setShowAddContact] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', role: '', email: '' });
 
-  // Estado para edición de clasificación (new taxonomy)
+  // Estado para edición de clasificación (taxonomy v2)
   const [isEditingEnrichment, setIsEditingEnrichment] = useState(false);
   const [editedMR, setEditedMR] = useState([]);
-  const [editedGroup, setEditedGroup] = useState('');
+  const [editedRole, setEditedRole] = useState('');
+  const [editedSegment, setEditedSegment] = useState('');
   const [editedType, setEditedType] = useState('');
+  const [editedActivities, setEditedActivities] = useState([]);
+  const [editedTech, setEditedTech] = useState([]);
+  const [editedGeo, setEditedGeo] = useState([]);
+  const [editedAssetPhase, setEditedAssetPhase] = useState('');
+  const [editedCommPhase, setEditedCommPhase] = useState('');
+  // Legacy alias for backward compat in rest of file
+  const editedGroup = editedRole;
+  const setEditedGroup = setEditedRole;
   // Cargar datos al abrir el panel
   useEffect(() => {
     if (c.domain) {
@@ -67,11 +76,17 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
       setEditedContacts(savedContacts || (det?.contacts || []));
 
       setEditedMR(c.marketRoles || []);
-      setEditedGroup(c.group || '');
+      setEditedRole(c.role || c.group || '');
+      setEditedSegment(c.segment || '');
       setEditedType(c.companyType || '');
+      setEditedActivities(c.activities || []);
+      setEditedTech(c.technologies || []);
+      setEditedGeo(c.geography || []);
+      setEditedAssetPhase(c.assetPhase || '');
+      setEditedCommPhase(c.commercialPhase || '');
       setIsEditingEnrichment(false);
     }
-  }, [c.domain, det?.contacts, c.marketRoles, c.group, c.companyType]);
+  }, [c.domain, det?.contacts, c.marketRoles, c.role, c.group, c.companyType, c.segment, c.activities, c.technologies, c.geography, c.assetPhase, c.commercialPhase]);
 
   const qualifiedCountry = qualifyCountry(c);
   const qualifiedSize = qualifyCompanySize(c);
@@ -129,12 +144,19 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
     setEditedContacts(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Handlers para clasificación (new taxonomy)
+  // Handlers para clasificación (taxonomy v2)
   const handleSaveEnrichment = () => {
     if (onEnrichmentSave) {
       const success = onEnrichmentSave(c.domain, {
+        role: editedRole,
+        seg: editedSegment,
+        tp2: editedType,
+        act: editedActivities,
+        tech: editedTech,
+        geo: editedGeo,
         mr: editedMR,
-        grp: editedGroup,
+        // Legacy compat
+        grp: editedRole,
         tp: editedType,
       });
       if (success) setIsEditingEnrichment(false);
@@ -143,8 +165,14 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
 
   const handleCancelEnrichment = () => {
     setEditedMR(c.marketRoles || []);
-    setEditedGroup(c.group || '');
+    setEditedRole(c.role || c.group || '');
+    setEditedSegment(c.segment || '');
     setEditedType(c.companyType || '');
+    setEditedActivities(c.activities || []);
+    setEditedTech(c.technologies || []);
+    setEditedGeo(c.geography || []);
+    setEditedAssetPhase(c.assetPhase || '');
+    setEditedCommPhase(c.commercialPhase || '');
     setIsEditingEnrichment(false);
   };
 
@@ -154,12 +182,22 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
     );
   };
 
-  // Types available for the selected group
-  const availableTypes = COMPANY_TYPES[editedGroup] || [];
+  // Types available for the selected role + segment
+  const availableTypes = (() => {
+    if (editedRole === "Originación") {
+      if (editedSegment === "Project Finance") return COMPANY_TYPES_V2["Originación > Project Finance"] || [];
+      if (editedSegment === "Corporate Finance") return COMPANY_TYPES_V2["Originación > Corporate Finance"] || [];
+      return [...(COMPANY_TYPES_V2["Originación > Project Finance"] || [])];
+    }
+    if (editedRole === "Inversión") return [...(COMPANY_TYPES_V2["Inversión > Deuda"] || []), ...(COMPANY_TYPES_V2["Inversión > Equity"] || [])];
+    if (editedRole === "Ecosistema") return COMPANY_TYPES_V2["Ecosistema"] || [];
+    // Legacy fallback
+    return COMPANY_TYPES[editedRole] || COMPANY_TYPES[editedGroup] || [];
+  })();
 
   // Get group color
-  const groupDef = COMPANY_GROUPS.find(g => g.id === c.group);
-  const groupColor = groupDef?.color || "#94A3B8";
+  const roleDef = COMPANY_ROLES.find(g => g.id === c.role) || COMPANY_ROLES.find(g => g.id === c.group);
+  const groupColor = roleDef?.color || "#94A3B8";
 
   return (
     <div className="slide-in" style={{
@@ -723,71 +761,174 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
             )}
           </div>
 
-          {/* Group & Type */}
+          {/* Role & Segment */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
             <div>
-              <div style={{
-                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
-                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
-              }}>Group</div>
+              <DarkFieldLabel>Role</DarkFieldLabel>
               {isEditingEnrichment ? (
-                <select
-                  value={editedGroup}
-                  onChange={(e) => {
-                    setEditedGroup(e.target.value);
-                    // Reset type when group changes
-                    setEditedType('');
-                  }}
-                  style={{
-                    width: "100%", background: "#0A1628",
-                    border: "1px solid #8B5CF640", borderRadius: 4,
-                    padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
-                    fontFamily: "inherit", outline: "none", cursor: "pointer",
-                  }}
-                >
+                <DarkSelect value={editedRole} onChange={(e) => {
+                  setEditedRole(e.target.value);
+                  setEditedSegment('');
+                  setEditedType('');
+                  setEditedActivities([]);
+                }}>
                   <option value="">Sin clasificar</option>
-                  {COMPANY_GROUPS.map(g => (
+                  {COMPANY_ROLES.map(g => (
                     <option key={g.id} value={g.id}>{g.label}</option>
                   ))}
-                </select>
+                </DarkSelect>
               ) : (
                 <span style={{
                   fontSize: 13, fontWeight: 600,
-                  color: c.group ? groupColor : "#475569",
-                  fontStyle: c.group ? "normal" : "italic",
-                }}>{c.group || "Sin clasificar"}</span>
+                  color: c.role ? groupColor : "#475569",
+                  fontStyle: c.role ? "normal" : "italic",
+                }}>{c.role || "Sin clasificar"}</span>
               )}
             </div>
             <div>
-              <div style={{
-                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
-                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
-              }}>Type</div>
+              <DarkFieldLabel>Segmento</DarkFieldLabel>
               {isEditingEnrichment ? (
-                <select
-                  value={editedType}
-                  onChange={(e) => setEditedType(e.target.value)}
-                  style={{
-                    width: "100%", background: "#0A1628",
-                    border: "1px solid #8B5CF640", borderRadius: 4,
-                    padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
-                    fontFamily: "inherit", outline: "none", cursor: "pointer",
-                  }}
-                >
-                  <option value="">Sin clasificar</option>
+                editedRole === "Originación" ? (
+                  <DarkSelect value={editedSegment} onChange={(e) => {
+                    setEditedSegment(e.target.value);
+                    setEditedType('');
+                    setEditedActivities([]);
+                  }}>
+                    <option value="">Sin segmento</option>
+                    {ORIGINACION_SEGMENTS.map(s => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                  </DarkSelect>
+                ) : (
+                  <span style={{ fontSize: 12, color: "#475569", fontStyle: "italic" }}>N/A</span>
+                )
+              ) : (
+                <span style={{
+                  fontSize: 13, fontWeight: 600,
+                  color: c.segment ? "#A78BFA" : "#475569",
+                  fontStyle: c.segment ? "normal" : "italic",
+                }}>{c.segment || "—"}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Type */}
+          {availableTypes.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <DarkFieldLabel>Tipo</DarkFieldLabel>
+              {isEditingEnrichment ? (
+                <DarkSelect value={editedType} onChange={(e) => setEditedType(e.target.value)}>
+                  <option value="">Sin tipo</option>
                   {availableTypes.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
-                </select>
+                </DarkSelect>
               ) : (
                 <span style={{
                   fontSize: 13, fontWeight: 600,
                   color: c.companyType ? "#A78BFA" : "#475569",
                   fontStyle: c.companyType ? "normal" : "italic",
-                }}>{c.companyType || "Sin clasificar"}</span>
+                }}>{c.companyType || "Sin tipo"}</span>
               )}
             </div>
+          )}
+
+          {/* Activities (Corporate Finance) */}
+          {(editedRole === "Originación" && editedSegment === "Corporate Finance") && isEditingEnrichment && (
+            <div style={{ marginBottom: 14 }}>
+              <DarkFieldLabel>Actividades</DarkFieldLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {CORPORATE_ACTIVITIES.map(act => {
+                  const active = editedActivities.includes(act);
+                  return (
+                    <span key={act} onClick={() => setEditedActivities(prev =>
+                      prev.includes(act) ? prev.filter(a => a !== act) : [...prev, act]
+                    )} style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                      background: active ? "#F59E0B20" : "#0A1628",
+                      color: active ? "#F59E0B" : "#475569",
+                      border: `1px solid ${active ? "#F59E0B40" : "#1B3A5C"}`,
+                      cursor: "pointer", userSelect: "none",
+                    }}>{act}</span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* Show activities read-only */}
+          {!isEditingEnrichment && c.activities?.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <DarkFieldLabel>Actividades</DarkFieldLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {c.activities.map(act => (
+                  <span key={act} style={{
+                    padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                    background: "#F59E0B20", color: "#F59E0B", border: "1px solid #F59E0B40",
+                  }}>{act}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Technologies */}
+          <div style={{ marginBottom: 14 }}>
+            <DarkFieldLabel>Tecnología</DarkFieldLabel>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {TECHNOLOGIES.map(t => {
+                const active = isEditingEnrichment
+                  ? editedTech.includes(t.id)
+                  : (c.technologies || []).includes(t.id);
+                return (
+                  <span key={t.id} onClick={isEditingEnrichment ? () => setEditedTech(prev =>
+                    prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]
+                  ) : undefined} style={{
+                    padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                    background: active ? "#3B82F620" : "#0A1628",
+                    color: active ? "#60A5FA" : "#475569",
+                    border: `1px solid ${active ? "#3B82F640" : "#1B3A5C"}`,
+                    cursor: isEditingEnrichment ? "pointer" : "default",
+                    userSelect: "none", opacity: isEditingEnrichment && !active ? 0.6 : 1,
+                  }}>{t.icon} {t.label}</span>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Geography */}
+          {isEditingEnrichment && (
+            <div style={{ marginBottom: 14 }}>
+              <DarkFieldLabel>Geografía</DarkFieldLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {GEOGRAPHIES.map(g => {
+                  const active = editedGeo.includes(g);
+                  return (
+                    <span key={g} onClick={() => setEditedGeo(prev =>
+                      prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]
+                    )} style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                      background: active ? "#10B98120" : "#0A1628",
+                      color: active ? "#10B981" : "#475569",
+                      border: `1px solid ${active ? "#10B98140" : "#1B3A5C"}`,
+                      cursor: "pointer", userSelect: "none",
+                    }}>{g}</span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {!isEditingEnrichment && c.geography?.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <DarkFieldLabel>Geografía</DarkFieldLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {c.geography.map(g => (
+                  <span key={g} style={{
+                    padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                    background: "#10B98120", color: "#10B981", border: "1px solid #10B98140",
+                  }}>{g}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Market Roles */}
           <div style={{ marginBottom: 14 }}>
@@ -2107,6 +2248,28 @@ function DarkSectionTitle({ children, style = {} }) {
       fontWeight: 700, letterSpacing: "2.5px", marginBottom: 8,
       ...style,
     }}>{children}</div>
+  );
+}
+
+function DarkFieldLabel({ children }) {
+  return (
+    <div style={{
+      fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+      letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
+    }}>{children}</div>
+  );
+}
+
+function DarkSelect({ value, onChange, children }) {
+  return (
+    <select value={value} onChange={onChange} style={{
+      width: "100%", background: "#0A1628",
+      border: "1px solid #8B5CF640", borderRadius: 4,
+      padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
+      fontFamily: "inherit", outline: "none", cursor: "pointer",
+    }}>
+      {children}
+    </select>
   );
 }
 
