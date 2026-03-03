@@ -1,8 +1,8 @@
 name: Process Gmail Emails
 
 on:
-  schedule:
-    - cron: '0 4 * * *'  # 04:00 UTC = 05:00 Madrid (after GAS runs at ~03:12)
+  # schedule:
+  #   - cron: '0 4 * * *'  # DISABLED — replaced by scan-mailboxes.yml
   workflow_dispatch:
     inputs:
       reprocess:

@@ -1,0 +1,26 @@
+{
+  "analisis_salva_v2_final (1).xlsx": {
+    "employee_id": "salvador_carrillo",
+    "employee_name": "Salvador Carrillo",
+    "importedAt": "2026-02-18T09:13:37.739999",
+    "companies": 2223
+  },
+  "analisis_guillermo_v2_final (1).xlsx": {
+    "employee_id": "guillermo_souto",
+    "employee_name": "Guillermo Souto",
+    "importedAt": "2026-02-18T09:13:46.941885",
+    "companies": 1511
+  },
+  "analisis_contactos_leticia_v2.xlsx": {
+    "employee_id": "leticia_menéndez",
+    "employee_name": "Leticia Menéndez",
+    "importedAt": "2026-02-18T09:13:53.341394",
+    "companies": 691
+  },
+  "analisis_javier_v2_final.xlsx": {
+    "employee_id": "javier_ruiz",
+    "employee_name": "Javier Ruiz",
+    "importedAt": "2026-03-03T13:49:05.385428",
+    "companies": 1190
+  }
+}

@@ -1,0 +1,66 @@
+name: Scan Gmail Mailboxes
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC = 04:00 Madrid
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Override scan window (number of days to look back)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scan mailboxes
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          DAYS_ARG=""
+          if [ -n "${{ github.event.inputs.days }}" ]; then
+            DAYS_ARG="--days ${{ github.event.inputs.days }}"
+          fi
+          python scripts/scan_mailboxes.py $DAYS_ARG
+
+      - name: Sync Airtable opportunities
+        if: ${{ env.AIRTABLE_PAT != '' }}
+        env:
+          AIRTABLE_PAT: ${{ secrets.AIRTABLE_PAT }}
+        run: python scripts/sync_airtable_opportunities.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "alter5-bi-bot"
+          git config user.email "bot@alter5.com"
+          for f in src/data/companies.json src/data/companies_full.json src/data/employees.json src/data/opportunities.json config/scan_state.json; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "data: actualizacion automatica desde Gmail API directo
+
+            $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
