@@ -105,7 +105,7 @@ export const COMPANY_TYPES = {
   "Ecosistema": COMPANY_TYPES_V2["Ecosistema"] || [],
   "No relevante": [],
 };
-export const ALL_COMPANY_TYPES = Object.values(COMPANY_TYPES).flat();
+export const ALL_COMPANY_TYPES = [...new Set(Object.values(COMPANY_TYPES).flat())];
 
 /* ── Status config ── */
 export const STATUS_LABELS = { active: "Activa", dormant: "Dormida", lost: "Perdida" };
