@@ -346,16 +346,17 @@ def enrich_new_domains(all_companies, new_domain_keys):
         print("  [warn] Cannot import classify_domains_with_gemini — skipping enrichment")
         return
 
-    # Build context tuples: (domain, subjects, snippets)
+    # Build context tuples: (domain, subjects, snippets, name)
     domains_with_context = []
     for domain in new_domain_keys:
         co = all_companies.get(domain, {})
         subjects = co.get("subjects", [])
         snippets = co.get("snippets", [])
+        name = co.get("name", "")
         # Use context as snippet fallback
         if not snippets and co.get("context"):
             snippets = [co["context"]]
-        domains_with_context.append((domain, subjects, snippets))
+        domains_with_context.append((domain, subjects, snippets, name))
 
     print(f"  → Enriqueciendo {len(domains_with_context)} dominios nuevos con Gemini...")
     classifications = classify_domains_with_gemini(domains_with_context)

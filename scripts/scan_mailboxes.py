@@ -388,7 +388,8 @@ def classify_and_enrich(all_companies, new_keys, grouped):
         data = grouped.get(domain, {})
         subjects = data.get("subjects", []) if data else all_companies.get(domain, {}).get("subjects", [])
         snippets = data.get("snippets", []) if data else all_companies.get(domain, {}).get("snippets", [])
-        domains_with_context.append((domain, subjects, snippets))
+        name = all_companies.get(domain, {}).get("name", "")
+        domains_with_context.append((domain, subjects, snippets, name))
 
     print(f"  -> Clasificando {len(domains_with_context)} dominios nuevos con Gemini...")
     classifications = classify_domains_with_gemini(domains_with_context)
@@ -437,6 +438,8 @@ def main():
     parser = argparse.ArgumentParser(description="Alter5 BI — Gmail Scanner directo")
     parser.add_argument("--days", type=int, default=None,
                         help="Override: escanear los ultimos N dias (default: usa scan_state)")
+    parser.add_argument("--reenrich", action="store_true",
+                        help="Re-enriquecer empresas sin enrichment (skip Gmail scan)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -463,6 +466,25 @@ def main():
     all_companies = existing_data.get("companies", {})
     employees = existing_data.get("employees", [])
     print(f"  -> {len(all_companies)} empresas existentes")
+
+    # --reenrich mode: classify unenriched companies and exit
+    if args.reenrich:
+        print("\n  [reenrich] Buscando empresas sin enrichment...")
+        unenriched = [d for d, c in all_companies.items() if not c.get("enrichment")]
+        print(f"  -> {len(unenriched)} empresas sin enrichment")
+        if unenriched:
+            classify_and_enrich(all_companies, unenriched, {})
+            # Write updated files
+            full_data = {"companies": all_companies, "employees": employees}
+            with open(paths["full"], "w", encoding="utf-8") as f:
+                json.dump(full_data, f, ensure_ascii=False, indent=2)
+            compact = export_to_compact(all_companies)
+            with open(paths["compact"], "w", encoding="utf-8") as f:
+                json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
+            print(f"  [reenrich] OK: {len(unenriched)} empresas procesadas")
+        else:
+            print("  [reenrich] Todas las empresas ya tienen enrichment")
+        return True
 
     # [3/9] Load blocklist
     print("  [3/9] Cargando blocklist...")

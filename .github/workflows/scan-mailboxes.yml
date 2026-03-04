@@ -10,6 +10,11 @@ on:
         required: false
         default: ''
         type: string
+      reenrich:
+        description: 'Re-enrich companies without enrichment (skip Gmail scan)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -41,7 +46,11 @@ jobs:
           if [ -n "${{ github.event.inputs.days }}" ]; then
             DAYS_ARG="--days ${{ github.event.inputs.days }}"
           fi
-          python scripts/scan_mailboxes.py $DAYS_ARG
+          REENRICH_ARG=""
+          if [ "${{ github.event.inputs.reenrich }}" = "true" ]; then
+            REENRICH_ARG="--reenrich"
+          fi
+          python scripts/scan_mailboxes.py $DAYS_ARG $REENRICH_ARG
 
       - name: Sync Airtable opportunities
         if: ${{ env.AIRTABLE_PAT != '' }}

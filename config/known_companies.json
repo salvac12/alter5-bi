@@ -1,0 +1,131 @@
+{
+  "_comment": "Clasificaciones manuales que sobreescriben a Gemini. Se cargan en classify_domains_with_gemini().",
+  "companies": {
+    "ontier.net": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "ashurst.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "UK"]
+    },
+    "cuatrecasas.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "Portugal"]
+    },
+    "garrigues.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "Portugal"]
+    },
+    "uria.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "Portugal"]
+    },
+    "cliffordchance.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "UK"]
+    },
+    "linklaters.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "UK"]
+    },
+    "freshfields.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "UK"]
+    },
+    "allenovery.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "UK"]
+    },
+    "herbertsmithfreehills.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "UK"]
+    },
+    "dentons.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "bakermckenzie.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "cms-asl.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "hoganlovells.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "UK"]
+    },
+    "perezllorca.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "ramonycajal.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "osborneclarke.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor legal",
+      "mr": ["Partner & Services"],
+      "geo": ["España", "UK"]
+    },
+    "pwc.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor financiero",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "ey.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor financiero",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "deloitte.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor financiero",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    },
+    "kpmg.com": {
+      "role": "Ecosistema",
+      "tp2": "Asesor financiero",
+      "mr": ["Partner & Services"],
+      "geo": ["España"]
+    }
+  }
+}

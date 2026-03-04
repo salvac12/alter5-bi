@@ -102,6 +102,50 @@ PERSONAL_DOMAINS = {
 GEMINI_BATCH_SIZE = 6
 GEMINI_RPM_DELAY = 4.5  # seconds between calls to stay under 15 req/min
 
+# Known companies override file
+KNOWN_COMPANIES_FILE = os.path.join(PROJECT_DIR, "config", "known_companies.json")
+
+
+def load_known_companies():
+    """Load manual classifications from config/known_companies.json."""
+    if not os.path.exists(KNOWN_COMPANIES_FILE):
+        return {}
+    try:
+        with open(KNOWN_COMPANIES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("companies", {})
+    except Exception as e:
+        print(f"  [warn] Error loading known_companies.json: {e}")
+        return {}
+
+
+def build_known_result(override):
+    """Build a classify result dict from a known_companies override entry."""
+    role = override.get("role", "No relevante")
+    tp2 = override.get("tp2", "")
+    mr = override.get("mr", [])
+    geo = override.get("geo", [])
+    tech = override.get("tech", [])
+    seg = override.get("seg", "")
+    act = override.get("act", [])
+
+    legacy_group = ROLE_TO_LEGACY_GROUP.get(role, "Other")
+    legacy_type = tp2 or "Other"
+
+    enrichment = {
+        "_tv": 2,
+        "role": role,
+        "seg": seg,
+        "tp2": tp2,
+        "act": act,
+        "tech": tech,
+        "geo": geo,
+        "mr": mr,
+        "grp": legacy_group,
+        "tp": legacy_type,
+    }
+    return {"group": legacy_group, "type": legacy_type, "enrichment": enrichment}
+
 
 # ---------------------------------------------------------------------------
 # Google Sheet helpers
@@ -255,16 +299,45 @@ def classify_domains_with_gemini(domains_with_context):
     """Classify domains using v2 taxonomy (role → segment → type → activities).
 
     Args:
-        domains_with_context: list of (domain, [subjects], [snippets]) tuples
+        domains_with_context: list of tuples, either:
+            - (domain, [subjects], [snippets])           — 3-tuple (legacy)
+            - (domain, [subjects], [snippets], name)     — 4-tuple (with company name)
 
     Returns:
         dict of domain -> {"group": str, "type": str, "enrichment": {...} | None}
     """
     default = {"group": "Other", "type": "Other", "enrichment": None}
+
+    # Normalize tuples: extract domain and optional name
+    def _unpack(item):
+        if len(item) >= 4:
+            return item[0], item[1], item[2], item[3]
+        return item[0], item[1], item[2], ""
+
+    # Pre-resolve known companies (skip Gemini for these)
+    known = load_known_companies()
+    results = {}
+    remaining = []
+
+    for item in domains_with_context:
+        domain = item[0]
+        if domain in known:
+            results[domain] = build_known_result(known[domain])
+        else:
+            remaining.append(item)
+
+    if known and len(results) > 0:
+        print(f"  -> {len(results)} dominios resueltos via known_companies.json")
+
+    if not remaining:
+        return results
+
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         print("  [warn] GEMINI_API_KEY not set — using defaults")
-        return {d: dict(default) for d, _, _ in domains_with_context}
+        for item in remaining:
+            results[item[0]] = dict(default)
+        return results
 
     try:
         import google.generativeai as genai
@@ -272,19 +345,21 @@ def classify_domains_with_gemini(domains_with_context):
         model = genai.GenerativeModel("gemini-2.0-flash")
     except Exception as e:
         print(f"  [warn] Gemini init failed: {e} — using defaults")
-        return {d: dict(default) for d, _, _ in domains_with_context}
-
-    results = {}
+        for item in remaining:
+            results[item[0]] = dict(default)
+        return results
 
     # Process in batches
-    for batch_start in range(0, len(domains_with_context), GEMINI_BATCH_SIZE):
-        batch = domains_with_context[batch_start:batch_start + GEMINI_BATCH_SIZE]
+    for batch_start in range(0, len(remaining), GEMINI_BATCH_SIZE):
+        batch = remaining[batch_start:batch_start + GEMINI_BATCH_SIZE]
 
         lines = []
-        for domain, subjects, snippets in batch:
+        for item in batch:
+            domain, subjects, snippets, name = _unpack(item)
             subj_text = " | ".join(subjects[:5])
             snip_text = " // ".join(snippets[:3])[:300]
-            lines.append(f"- {domain}: subjects=[{subj_text}] snippets=[{snip_text}]")
+            name_part = f" ({name})" if name else ""
+            lines.append(f"- {domain}{name_part}: subjects=[{subj_text}] snippets=[{snip_text}]")
 
         prompt = f"""Eres un analista de Alter5, consultora de financiación de energías renovables en Europa.
 
@@ -322,6 +397,16 @@ Array de actividades aplicables: {json.dumps(CORPORATE_ACTIVITIES, ensure_ascii=
 - senales_clave: hechos concretos de emails (ej: "Pipeline 200MW", "NDA firmado"). Array vacío si no hay.
 - fase_comercial: una de {json.dumps(COMMERCIAL_PHASES, ensure_ascii=False)}
 
+## REGLAS ESPECIALES (aplica SIEMPRE antes de clasificar):
+- Bufetes / law firms (dominios de despachos de abogados): SIEMPRE role="Ecosistema", type="Asesor legal", aunque los emails hablen de financiación, proyectos o deals. Señales: "abogad@", "letrad@", "counsel", "partner" en firmas legales.
+- Big 4 (PwC, EY, Deloitte, KPMG): role="Ecosistema", type="Asesor financiero" o "Asesor técnico" según contexto.
+- Asociaciones del sector (UNEF, AEE, APPA, etc.): role="Ecosistema", type="Asociación / Institución".
+
+## EJEMPLOS de clasificaciones correctas:
+- ontier.net (ONTIER): {{"role":"Ecosistema","segment":"","type":"Asesor legal","activities":[],"technologies":[],"geography":["España"],"market_roles":["Partner & Services"],"productos_potenciales":[],"senales_clave":[],"fase_comercial":""}}
+- cuatrecasas.com (Cuatrecasas): {{"role":"Ecosistema","segment":"","type":"Asesor legal","activities":[],"technologies":[],"geography":["España","Portugal"],"market_roles":["Partner & Services"],"productos_potenciales":[],"senales_clave":[],"fase_comercial":""}}
+- opdenergy.com (Opdenergy): {{"role":"Originación","segment":"Project Finance","type":"Developer + IPP","activities":[],"technologies":["Solar","Eólica","BESS"],"geography":["España"],"market_roles":["Borrower"],"productos_potenciales":[],"senales_clave":[],"fase_comercial":"Exploración"}}
+
 ## EMPRESAS A CLASIFICAR:
 {chr(10).join(lines)}
 
@@ -340,7 +425,8 @@ Responde SOLO con JSON válido, sin markdown ni explicaciones:
                 text = text.strip()
 
             parsed = json.loads(text)
-            for domain, _, _ in batch:
+            for item in batch:
+                domain = item[0]
                 if domain in parsed:
                     entry = parsed[domain]
                     role = entry.get("role", "No relevante")
@@ -425,10 +511,10 @@ Responde SOLO con JSON válido, sin markdown ni explicaciones:
                     results[domain] = dict(default)
         except Exception as e:
             print(f"  [warn] Gemini batch failed: {e}")
-            for domain, _, _ in batch:
-                results[domain] = dict(default)
+            for item in batch:
+                results[item[0]] = dict(default)
 
-        if batch_start + GEMINI_BATCH_SIZE < len(domains_with_context):
+        if batch_start + GEMINI_BATCH_SIZE < len(remaining):
             time.sleep(GEMINI_RPM_DELAY)
 
     return results
