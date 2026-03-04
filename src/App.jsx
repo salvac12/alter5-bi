@@ -91,9 +91,10 @@ export default function App() {
     setCampaignsLoading(true);
     setCampaignsError(null);
     try {
-      const campData = await getCampaigns().catch(() => ({ campaigns: [] }));
+      const campData = await getCampaigns();
       setCampaigns(campData.campaigns || []);
     } catch (err) {
+      console.error('[Campaigns] loadCampaigns error:', err);
       setCampaignsError(err.message);
     } finally {
       setCampaignsLoading(false);
