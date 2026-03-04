@@ -17,7 +17,7 @@ const STEPS = [
  * @param {function} onCreated — called after successful creation
  * @param {Array} prospects — list of prospects from Airtable (for recipient selection)
  */
-export default function CampaignCreationPanel({ onClose, onCreated, prospects = [] }) {
+export default function CampaignCreationPanel({ onClose, onCreated, prospects = [], initialRecipients = [] }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -29,6 +29,7 @@ export default function CampaignCreationPanel({ onClose, onCreated, prospects = 
   const [selectedProspects, setSelectedProspects] = useState([]); // prospect IDs
   const [manualEmails, setManualEmails] = useState('');
   const [recipientSearch, setRecipientSearch] = useState('');
+  const [preloadedRecipients] = useState(() => initialRecipients); // from Candidatas
 
   // Step 3: Content
   const [name, setName] = useState('');
@@ -51,7 +52,7 @@ export default function CampaignCreationPanel({ onClose, onCreated, prospects = 
   function canProceed() {
     switch (step) {
       case 1: return !!campaignType;
-      case 2: return selectedProspects.length > 0 || manualEmails.trim().length > 0;
+      case 2: return preloadedRecipients.length > 0 || selectedProspects.length > 0 || manualEmails.trim().length > 0;
       case 3:
         if (campaignType === 'individual_followup') return instructions.trim().length > 0;
         return name.trim().length > 0 && subjectA.trim().length > 0 && bodyA.trim().length > 0;
@@ -107,12 +108,20 @@ export default function CampaignCreationPanel({ onClose, onCreated, prospects = 
 
   function getRecipientList() {
     const list = [];
+    // From preloaded recipients (Candidatas)
+    for (const r of preloadedRecipients) {
+      if (r.email && !list.some(x => x.email === r.email)) {
+        list.push({ email: r.email, name: r.name || '', lastName: r.lastName || '', organization: r.organization || '' });
+      }
+    }
     // From selected prospects
     for (const id of selectedProspects) {
       const p = prospects.find(pr => pr.id === id);
       if (p) {
         const email = p.contactEmail || '';
-        if (email) list.push({ email, name: p.name, organization: p.name, prospectId: p.id });
+        if (email && !list.some(r => r.email === email)) {
+          list.push({ email, name: p.name, organization: p.name, prospectId: p.id });
+        }
       }
     }
     // From manual input
@@ -196,6 +205,7 @@ export default function CampaignCreationPanel({ onClose, onCreated, prospects = 
               setManualEmails={setManualEmails}
               recipientSearch={recipientSearch}
               setRecipientSearch={setRecipientSearch}
+              preloadedRecipients={preloadedRecipients}
             />
           )}
           {step === 3 && (
@@ -342,6 +352,7 @@ function StepType({ campaignType, setCampaignType }) {
 function StepRecipients({
   campaignType, prospects, selectedProspects, setSelectedProspects,
   manualEmails, setManualEmails, recipientSearch, setRecipientSearch,
+  preloadedRecipients = [],
 }) {
   const isFollowUp = campaignType === 'individual_followup';
 
@@ -356,11 +367,43 @@ function StepRecipients({
     }
   }
 
+  // Group preloaded by organization
+  const preloadedByOrg = {};
+  for (const r of preloadedRecipients) {
+    const org = r.organization || 'Sin empresa';
+    if (!preloadedByOrg[org]) preloadedByOrg[org] = [];
+    preloadedByOrg[org].push(r);
+  }
+
   return (
     <div>
       <h3 style={sectionTitle}>
         {isFollowUp ? '¿A quién le envías el follow-up?' : 'Selecciona destinatarios'}
       </h3>
+
+      {/* Preloaded recipients from Candidatas */}
+      {preloadedRecipients.length > 0 && (
+        <div style={{
+          padding: 14, background: '#F5F3FF', borderRadius: 8,
+          border: '1px solid #DDD6FE', marginBottom: 14,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#6B21A8', marginBottom: 8 }}>
+            {preloadedRecipients.length} contactos de {Object.keys(preloadedByOrg).length} empresas (desde Candidatas)
+          </div>
+          <div style={{ maxHeight: 160, overflow: 'auto' }}>
+            {Object.entries(preloadedByOrg).map(([org, contacts]) => (
+              <div key={org} style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED' }}>{org}</div>
+                {contacts.map(c => (
+                  <div key={c.email} style={{ fontSize: 11, color: '#6B7F94', paddingLeft: 8 }}>
+                    {c.name} {c.lastName} — {c.email}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <input
@@ -430,8 +473,11 @@ function StepRecipients({
       />
 
       <p style={{ fontSize: 11, color: '#6B7F94', marginTop: 8 }}>
-        {selectedProspects.length} prospect{selectedProspects.length !== 1 ? 's' : ''} seleccionado{selectedProspects.length !== 1 ? 's' : ''}
+        {preloadedRecipients.length > 0 ? `${preloadedRecipients.length} de Candidatas` : ''}
+        {preloadedRecipients.length > 0 && selectedProspects.length > 0 ? ' + ' : ''}
+        {selectedProspects.length > 0 ? `${selectedProspects.length} prospect${selectedProspects.length !== 1 ? 's' : ''}` : ''}
         {manualEmails.trim() ? ` + ${manualEmails.trim().split('\n').filter(l => l.trim()).length} manual(es)` : ''}
+        {preloadedRecipients.length === 0 && selectedProspects.length === 0 && !manualEmails.trim() ? '0 destinatarios seleccionados' : ''}
       </p>
     </div>
   );

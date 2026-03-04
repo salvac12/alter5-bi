@@ -29,10 +29,57 @@ var PERSONAL_DOMAINS = [
   'googlemail.com', 'protonmail.com', 'me.com', 'msn.com'
 ];
 
-var EMPLOYEES = [
+// Fallback employees (used if 'employees' tab doesn't exist or is empty)
+var EMPLOYEES_FALLBACK = [
   { id: 'salvador_carrillo', configKey: 'lastScanDate_salvador', mode: 'delegated', email: 'salvador.carrillo@alter-5.com' },
   { id: 'leticia_menéndez',  configKey: 'lastScanDate_leticia',  mode: 'delegated', email: 'leticia.menendez@alter-5.com' },
 ];
+
+/**
+ * Read active employees from the 'employees' tab in the Sheet.
+ * Columns: employee_id | email | configKey | active
+ * Falls back to EMPLOYEES_FALLBACK if the tab doesn't exist or is empty.
+ */
+function getEmployeesFromSheet_(ss) {
+  var empSheet = ss.getSheetByName('employees');
+  if (!empSheet) {
+    Logger.log('Tab "employees" not found — using fallback');
+    return EMPLOYEES_FALLBACK;
+  }
+
+  var data = empSheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    Logger.log('Tab "employees" is empty — using fallback');
+    return EMPLOYEES_FALLBACK;
+  }
+
+  var employees = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var empId = String(row[0] || '').trim();
+    var email = String(row[1] || '').trim();
+    var configKey = String(row[2] || '').trim();
+    var active = row[3];
+
+    // Skip inactive or empty rows
+    if (!empId || !email || active === false || active === 'FALSE' || active === 'false') continue;
+
+    employees.push({
+      id: empId,
+      configKey: configKey || ('lastScanDate_' + empId.split('_')[0]),
+      mode: 'delegated',
+      email: email,
+    });
+  }
+
+  if (employees.length === 0) {
+    Logger.log('No active employees in Sheet — using fallback');
+    return EMPLOYEES_FALLBACK;
+  }
+
+  Logger.log('Loaded ' + employees.length + ' employees from Sheet');
+  return employees;
+}
 
 // ---- Main ----
 function scanMailboxes() {
@@ -48,6 +95,7 @@ function scanMailboxes() {
     throw new Error('Faltan tabs raw_emails o config en la Sheet');
   }
 
+  var EMPLOYEES = getEmployeesFromSheet_(ss);
   var existingThreadIds = getExistingThreadIds_(rawSheet);
   var totalNew = 0;
 

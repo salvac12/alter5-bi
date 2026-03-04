@@ -17,6 +17,7 @@ import CampaignsView from './components/CampaignsView';
 import CampaignCreationPanel from './components/CampaignCreationPanel';
 import CampaignDetailPanel from './components/CampaignDetailPanel';
 import FollowUpQuickPanel from './components/FollowUpQuickPanel';
+import CandidateSearchView from './components/CandidateSearchView';
 import { getCampaigns, getFollowUps } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
 import { getCurrentUser } from './utils/userConfig';
@@ -56,6 +57,7 @@ export default function App() {
   const [selectedCampaignDetail, setSelectedCampaignDetail] = useState(null);
   const [showFollowUpQuick, setShowFollowUpQuick] = useState(null); // prospect obj or null
   const [selectedFollowUpDetail, setSelectedFollowUpDetail] = useState(null);
+  const [campaignInitialRecipients, setCampaignInitialRecipients] = useState([]);
 
   // ── URL params: ?view=pipeline|prospects&add=CompanyName&stage=New ──
   useEffect(() => {
@@ -79,6 +81,8 @@ export default function App() {
       }
     } else if (view === "campanas") {
       setActiveView("campanas");
+    } else if (view === "candidatas") {
+      setActiveView("candidatas");
     }
   }, []);
 
@@ -427,6 +431,7 @@ export default function App() {
               { id: "prospects", label: "Prospects", badge: "PR" },
               { id: "pipeline", label: "Pipeline", badge: "AT" },
               { id: "campanas", label: "Campañas", badge: "EM" },
+              { id: "candidatas", label: "Candidatas", badge: "NEW" },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -446,10 +451,10 @@ export default function App() {
                     marginLeft: 6, fontSize: 8, fontWeight: 800,
                     padding: "1px 5px", borderRadius: 4,
                     background: activeView === tab.id
-                      ? (tab.id === "prospects" ? "#8B5CF620" : tab.id === "campanas" ? "#7C3AED20" : "#3B82F620")
+                      ? (tab.id === "prospects" ? "#8B5CF620" : tab.id === "campanas" ? "#7C3AED20" : tab.id === "candidatas" ? "#7C3AED20" : "#3B82F620")
                       : "#E2E8F040",
                     color: activeView === tab.id
-                      ? (tab.id === "prospects" ? "#8B5CF6" : tab.id === "campanas" ? "#7C3AED" : "#3B82F6")
+                      ? (tab.id === "prospects" ? "#8B5CF6" : tab.id === "campanas" ? "#7C3AED" : tab.id === "candidatas" ? "#7C3AED" : "#3B82F6")
                       : "#94A3B8",
                     textTransform: "uppercase", letterSpacing: "0.5px",
                     verticalAlign: "middle",
@@ -657,6 +662,15 @@ export default function App() {
           onSelectCampaign={(c) => setSelectedCampaignDetail(c)}
           onSelectFollowUp={(f) => setSelectedFollowUpDetail(f)}
         />
+      ) : activeView === "candidatas" ? (
+        /* ── Candidate search view ── */
+        <CandidateSearchView
+          allCompanies={companies}
+          onCreateCampaign={(recipients) => {
+            setCampaignInitialRecipients(recipients);
+            setShowCampaignCreation(true);
+          }}
+        />
       ) : (
         /* ── Pipeline (Kanban) view ── */
         <KanbanView
@@ -716,9 +730,10 @@ export default function App() {
       {/* ── Campaign Creation Panel ── */}
       {showCampaignCreation && (
         <CampaignCreationPanel
-          onClose={() => setShowCampaignCreation(false)}
-          onCreated={() => { setShowCampaignCreation(false); loadCampaigns(); }}
-          prospects={[]} // Will be populated when ProspectsView data is shared
+          onClose={() => { setShowCampaignCreation(false); setCampaignInitialRecipients([]); }}
+          onCreated={() => { setShowCampaignCreation(false); setCampaignInitialRecipients([]); loadCampaigns(); }}
+          prospects={[]}
+          initialRecipients={campaignInitialRecipients}
         />
       )}
 

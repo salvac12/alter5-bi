@@ -69,3 +69,28 @@ export async function scheduleFollowUp(data) {
 export async function cancelFollowUp(followUpId) {
   return proxyFetch('cancelFollowUp', { followUpId });
 }
+
+// ── Tracking domains ──────────────────────────────────────────────
+
+const GENERIC_DOMAINS = new Set([
+  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
+  'live.com', 'msn.com', 'aol.com', 'protonmail.com', 'zoho.com',
+]);
+
+/**
+ * Fetch domains that have already been contacted (from GAS Tracking sheet).
+ * Returns a Set<string> of lowercase domains.
+ */
+export async function fetchSentDomains() {
+  const data = await proxyFetch('dashboard');
+  const domains = new Set();
+  const contactos = data?.contactos || [];
+  for (const c of contactos) {
+    const email = c.email || "";
+    const d = email.split("@")[1]?.toLowerCase();
+    if (d && !GENERIC_DOMAINS.has(d)) {
+      domains.add(d);
+    }
+  }
+  return domains;
+}

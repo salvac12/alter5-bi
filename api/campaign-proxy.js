@@ -20,6 +20,8 @@ const ALLOWED_ACTIONS = new Set([
   'addRecipients',
   'scheduleFollowUp',
   'cancelFollowUp',
+  // GET-style (legacy dashboard endpoint)
+  'dashboard',
 ]);
 
 export default async function handler(req, res) {
