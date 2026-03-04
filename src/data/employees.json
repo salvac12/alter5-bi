@@ -3,25 +3,31 @@
     "id": "salvador_carrillo",
     "name": "Salvador Carrillo",
     "importedAt": "2026-02-18T09:13:37.739999",
-    "companiesCount": 2223
+    "companiesCount": 1745
   },
   {
     "id": "guillermo_souto",
     "name": "Guillermo Souto",
     "importedAt": "2026-02-18T09:13:46.941885",
-    "companiesCount": 1511
+    "companiesCount": 1347
   },
   {
     "id": "leticia_menéndez",
     "name": "Leticia Menéndez",
     "importedAt": "2026-02-18T09:13:53.341394",
-    "companiesCount": 691
+    "companiesCount": 609
   },
   {
     "id": "javier_ruiz",
     "name": "Javier Ruiz",
     "importedAt": "2026-03-03T13:49:04.836434",
-    "companiesCount": 1190,
+    "companiesCount": 1197,
     "email": "javier.ruiz@alter-5.com"
+  },
+  {
+    "id": "miguel_solana",
+    "name": "Miguel Solana",
+    "importedAt": "2026-03-04T04:00:50.977642",
+    "companiesCount": 61
   }
 ]
