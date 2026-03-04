@@ -6,7 +6,7 @@ import { getCurrentUser } from '../utils/userConfig';
 
 // ── Constants ───────────────────────────────────────────────────────
 
-const CAMPAIGN_REF = 'Bridge_Q1';
+const DEFAULT_CAMPAIGN_REF = 'Bridge_Q1';
 const PAGE_SIZE = 50;
 
 const STATUS_TABS = [
@@ -102,7 +102,13 @@ function cleanContacts(contacts) {
 
 // ── Component ───────────────────────────────────────────────────────
 
-export default function CandidateSearchView({ allCompanies, onCreateCampaign }) {
+export default function CandidateSearchView({
+  allCompanies,
+  onCreateCampaign,
+  campaignRef = DEFAULT_CAMPAIGN_REF,
+  onRecipientsChange,
+  embeddedMode = false,
+}) {
   // Data state
   const [trackingDomains, setTrackingDomains] = useState(new Set());
   const [trackingOk, setTrackingOk] = useState(false); // true only if tracking loaded successfully with >0 domains
@@ -149,7 +155,7 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
         trackingFailed = true;
       }
 
-      const targets = await fetchCandidateTargets(CAMPAIGN_REF).catch(() => ({}));
+      const targets = await fetchCandidateTargets(campaignRef).catch(() => ({}));
 
       const domainSet = (domains instanceof Set && domains.size > 0) ? domains : new Set();
       setTrackingDomains(domainSet);
@@ -264,7 +270,7 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
         companyName: company.name,
         status,
         selectedContacts: contacts,
-        campaignRef: CAMPAIGN_REF,
+        campaignRef: campaignRef,
         segment: company.segment || '',
         companyType: company.companyType || '',
         technologies: company.technologies || [],
@@ -281,7 +287,7 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
           companyName: company.name,
           status,
           selectedContacts: contacts,
-          campaignRef: CAMPAIGN_REF,
+          campaignRef: campaignRef,
           segment: company.segment || '',
           companyType: company.companyType || '',
           reviewedBy: currentUser?.name || '',
@@ -291,11 +297,39 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
 
       const labels = { approved: 'Aprobada', rejected: 'Rechazada', skipped: 'Saltada', pending: 'Deshecho' };
       showToast(`${company.name}: ${labels[status] || status}`);
+
+      // Notify parent in embedded mode
+      if (onRecipientsChange) {
+        // Collect all approved recipients after this update
+        const updatedTargets = { ...savedTargets, [domain]: { ...savedTargets[domain], status, selectedContacts: contacts } };
+        const approvedRecipients = buildRecipientsFromTargets(updatedTargets);
+        onRecipientsChange(approvedRecipients);
+      }
     } catch (err) {
       showToast(`Error: ${err.message}`);
     } finally {
       setSaving(null);
     }
+  }
+
+  function buildRecipientsFromTargets(targets) {
+    const recipients = [];
+    for (const [, target] of Object.entries(targets)) {
+      if (target.status !== 'approved') continue;
+      const cleaned = cleanContacts(target.selectedContacts || []);
+      for (const ct of cleaned) {
+        const normalized = normalizeName(ct.name);
+        const { nombre, apellidos } = splitName(normalized);
+        recipients.push({
+          email: ct.email,
+          name: nombre,
+          lastName: apellidos,
+          organization: target.companyName || '',
+          role: cleanRole(ct.role),
+        });
+      }
+    }
+    return recipients;
   }
 
   function getSelectedContactsForCompany(company) {
@@ -419,7 +453,7 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `candidatas_${CAMPAIGN_REF}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `candidatas_${campaignRef}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     setShowExportModal(false);
@@ -506,16 +540,17 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
   }
 
   return (
-    <div style={{ maxHeight: 'calc(100vh - 57px)', overflow: 'auto', position: 'relative' }}>
+    <div style={{ maxHeight: embeddedMode ? 'none' : 'calc(100vh - 57px)', overflow: 'auto', position: 'relative' }}>
       {/* ── Header ── */}
-      <div style={{ padding: '20px 24px 0' }}>
+      <div style={{ padding: embeddedMode ? '12px 0 0' : '20px 24px 0' }}>
+        {!embeddedMode && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#1A2B3D', letterSpacing: '-0.5px' }}>
               Buscar Empresas Candidatas
             </h2>
             <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7F94' }}>
-              Empresas de Originacion sin contactar · Campana {CAMPAIGN_REF}
+              Empresas de Originacion sin contactar · Campana {campaignRef}
             </p>
           </div>
           {exportSummary.contacts > 0 && (
@@ -535,6 +570,17 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
             </button>
           )}
         </div>
+        )}
+
+        {/* ── Embedded mode summary ── */}
+        {embeddedMode && exportSummary.contacts > 0 && (
+          <div style={{
+            padding: '10px 14px', background: '#ECFDF5', borderRadius: 8,
+            border: '1px solid #A7F3D0', marginBottom: 12, fontSize: 13, color: '#059669', fontWeight: 600,
+          }}>
+            {exportSummary.contacts} contactos de {exportSummary.companies} empresas seleccionados
+          </div>
+        )}
 
         {/* ── KPIs ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>

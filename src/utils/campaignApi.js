@@ -56,6 +56,44 @@ export async function getCampaignRecipients(campaignId) {
   return proxyFetch('getCampaignRecipients', { campaignId });
 }
 
+export async function updateCampaign(campaignId, fields) {
+  return proxyFetch('updateCampaign', { campaignId, fields });
+}
+
+// ── Campaign dashboard & detail ───────────────────────────────────
+
+export async function getCampaignDashboard(campaignId) {
+  return proxyFetch('getCampaignDashboard', { campaignId });
+}
+
+export async function getFollowUpCandidates(campaignId) {
+  return proxyFetch('getFollowUpCandidates', { campaignId });
+}
+
+export async function getConversation(email, campaignId) {
+  return proxyFetch('getConversation', { email, campaignId });
+}
+
+// ── Drafts & sending ──────────────────────────────────────────────
+
+export async function sendDraft({ email, campaignId, threadId, draftId, editedBody }) {
+  return proxyFetch('sendDraft', { email, campaignId, threadId, draftId, editedBody });
+}
+
+export async function saveDraft({ email, campaignId, body }) {
+  return proxyFetch('saveDraft', { email, campaignId, body });
+}
+
+export async function composeFromInstructions({ email, campaignId, instructions }) {
+  return proxyFetch('composeFromInstructions', { email, campaignId, instructions });
+}
+
+// ── Reply classification ──────────────────────────────────────────
+
+export async function classifyReply({ email, campaignId, replyText }) {
+  return proxyFetch('classifyReply', { email, campaignId, replyText });
+}
+
 // ── Follow-ups ─────────────────────────────────────────────────────
 
 export async function getFollowUps(filters = {}) {
@@ -68,6 +106,14 @@ export async function scheduleFollowUp(data) {
 
 export async function cancelFollowUp(followUpId) {
   return proxyFetch('cancelFollowUp', { followUpId });
+}
+
+export async function generateFollowUpBatch({ campaignId, contacts, instructions }) {
+  return proxyFetch('generateFollowUpBatch', { campaignId, contacts, instructions });
+}
+
+export async function sendFollowUpBatch({ campaignId, contacts }) {
+  return proxyFetch('sendFollowUpBatch', { campaignId, contacts });
 }
 
 // ── Tracking domains ──────────────────────────────────────────────

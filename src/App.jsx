@@ -15,10 +15,9 @@ import CerebroSearch from './components/CerebroSearch';
 import UserSelector from './components/UserSelector';
 import CampaignsView from './components/CampaignsView';
 import CampaignCreationPanel from './components/CampaignCreationPanel';
-import CampaignDetailPanel from './components/CampaignDetailPanel';
+import CampaignDetailView from './components/CampaignDetailView';
 import FollowUpQuickPanel from './components/FollowUpQuickPanel';
-import CandidateSearchView from './components/CandidateSearchView';
-import { getCampaigns, getFollowUps } from './utils/campaignApi';
+import { getCampaigns } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
 import { getCurrentUser } from './utils/userConfig';
 import CleanupToolbar from './components/CleanupToolbar';
@@ -50,14 +49,11 @@ export default function App() {
 
   // ── Campaigns state ──
   const [campaigns, setCampaigns] = useState([]);
-  const [followUps, setFollowUps] = useState([]);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [campaignsError, setCampaignsError] = useState(null);
   const [showCampaignCreation, setShowCampaignCreation] = useState(false);
-  const [selectedCampaignDetail, setSelectedCampaignDetail] = useState(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [showFollowUpQuick, setShowFollowUpQuick] = useState(null); // prospect obj or null
-  const [selectedFollowUpDetail, setSelectedFollowUpDetail] = useState(null);
-  const [campaignInitialRecipients, setCampaignInitialRecipients] = useState([]);
 
   // ── URL params: ?view=pipeline|prospects&add=CompanyName&stage=New ──
   useEffect(() => {
@@ -81,8 +77,6 @@ export default function App() {
       }
     } else if (view === "campanas") {
       setActiveView("campanas");
-    } else if (view === "candidatas") {
-      setActiveView("candidatas");
     }
   }, []);
 
@@ -97,12 +91,8 @@ export default function App() {
     setCampaignsLoading(true);
     setCampaignsError(null);
     try {
-      const [campData, fuData] = await Promise.all([
-        getCampaigns().catch(() => ({ campaigns: [] })),
-        getFollowUps().catch(() => ({ followUps: [] })),
-      ]);
+      const campData = await getCampaigns().catch(() => ({ campaigns: [] }));
       setCampaigns(campData.campaigns || []);
-      setFollowUps(fuData.followUps || []);
     } catch (err) {
       setCampaignsError(err.message);
     } finally {
@@ -431,7 +421,6 @@ export default function App() {
               { id: "prospects", label: "Prospects", badge: "PR" },
               { id: "pipeline", label: "Pipeline", badge: "AT" },
               { id: "campanas", label: "Campañas", badge: "EM" },
-              { id: "candidatas", label: "Candidatas", badge: "NEW" },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -451,10 +440,10 @@ export default function App() {
                     marginLeft: 6, fontSize: 8, fontWeight: 800,
                     padding: "1px 5px", borderRadius: 4,
                     background: activeView === tab.id
-                      ? (tab.id === "prospects" ? "#8B5CF620" : tab.id === "campanas" ? "#7C3AED20" : tab.id === "candidatas" ? "#7C3AED20" : "#3B82F620")
+                      ? (tab.id === "prospects" ? "#8B5CF620" : tab.id === "campanas" ? "#7C3AED20" : "#3B82F620")
                       : "#E2E8F040",
                     color: activeView === tab.id
-                      ? (tab.id === "prospects" ? "#8B5CF6" : tab.id === "campanas" ? "#7C3AED" : tab.id === "candidatas" ? "#7C3AED" : "#3B82F6")
+                      ? (tab.id === "prospects" ? "#8B5CF6" : tab.id === "campanas" ? "#7C3AED" : "#3B82F6")
                       : "#94A3B8",
                     textTransform: "uppercase", letterSpacing: "0.5px",
                     verticalAlign: "middle",
@@ -650,26 +639,22 @@ export default function App() {
           onSelectProspect={handleSelectProspect}
           onCreateProspect={handleCreateProspect}
         />
+      ) : activeView === "campanas" && selectedCampaignId ? (
+        /* ── Campaign detail view ── */
+        <CampaignDetailView
+          campaignId={selectedCampaignId}
+          allCompanies={companies}
+          onBack={() => { setSelectedCampaignId(null); loadCampaigns(); }}
+        />
       ) : activeView === "campanas" ? (
-        /* ── Campaigns view ── */
+        /* ── Campaigns list ── */
         <CampaignsView
           campaigns={campaigns}
-          followUps={followUps}
           loading={campaignsLoading}
           error={campaignsError}
           onRefresh={loadCampaigns}
           onCreateCampaign={() => setShowCampaignCreation(true)}
-          onSelectCampaign={(c) => setSelectedCampaignDetail(c)}
-          onSelectFollowUp={(f) => setSelectedFollowUpDetail(f)}
-        />
-      ) : activeView === "candidatas" ? (
-        /* ── Candidate search view ── */
-        <CandidateSearchView
-          allCompanies={companies}
-          onCreateCampaign={(recipients) => {
-            setCampaignInitialRecipients(recipients);
-            setShowCampaignCreation(true);
-          }}
+          onSelectCampaign={(c) => setSelectedCampaignId(c.id)}
         />
       ) : (
         /* ── Pipeline (Kanban) view ── */
@@ -730,19 +715,9 @@ export default function App() {
       {/* ── Campaign Creation Panel ── */}
       {showCampaignCreation && (
         <CampaignCreationPanel
-          onClose={() => { setShowCampaignCreation(false); setCampaignInitialRecipients([]); }}
-          onCreated={() => { setShowCampaignCreation(false); setCampaignInitialRecipients([]); loadCampaigns(); }}
-          prospects={[]}
-          initialRecipients={campaignInitialRecipients}
-        />
-      )}
-
-      {/* ── Campaign Detail Panel ── */}
-      {selectedCampaignDetail && (
-        <CampaignDetailPanel
-          campaign={selectedCampaignDetail}
-          onClose={() => setSelectedCampaignDetail(null)}
-          onUpdated={() => { setSelectedCampaignDetail(null); loadCampaigns(); }}
+          onClose={() => setShowCampaignCreation(false)}
+          onCreated={() => { setShowCampaignCreation(false); loadCampaigns(); }}
+          allCompanies={companies}
         />
       )}
 
@@ -750,9 +725,8 @@ export default function App() {
       {showFollowUpQuick && (
         <FollowUpQuickPanel
           prospect={showFollowUpQuick}
-          existingFollowUp={selectedFollowUpDetail}
-          onClose={() => { setShowFollowUpQuick(null); setSelectedFollowUpDetail(null); }}
-          onScheduled={() => { setShowFollowUpQuick(null); setSelectedFollowUpDetail(null); loadCampaigns(); }}
+          onClose={() => setShowFollowUpQuick(null)}
+          onScheduled={() => { setShowFollowUpQuick(null); loadCampaigns(); }}
         />
       )}
 

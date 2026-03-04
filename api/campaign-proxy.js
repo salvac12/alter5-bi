@@ -20,6 +20,20 @@ const ALLOWED_ACTIONS = new Set([
   'addRecipients',
   'scheduleFollowUp',
   'cancelFollowUp',
+  // Dashboard & detail
+  'getCampaignDashboard',
+  'getFollowUpCandidates',
+  'updateCampaign',
+  'getConversation',
+  // Drafts & sending
+  'sendDraft',
+  'saveDraft',
+  'composeFromInstructions',
+  // Classification
+  'classifyReply',
+  // Follow-up batch
+  'generateFollowUpBatch',
+  'sendFollowUpBatch',
   // GET-style (legacy dashboard endpoint)
   'dashboard',
 ]);
