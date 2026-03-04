@@ -101,8 +101,8 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
       setTrackingDomains(domainSet);
       setSavedTargets(targets || {});
 
-      // If tracking call failed OR returned 0 domains → something is wrong
-      if (trackingFailed || domainSet.size === 0) {
+      // Only warn if the API call itself failed (not if it returned 0 domains — that's normal initially)
+      if (trackingFailed) {
         setTrackingWarning(true);
         setTrackingOk(false);
       } else {
