@@ -26,14 +26,111 @@ async function proxyFetch(action, params = {}) {
   return data;
 }
 
+// ── Airtable direct read (fallback when GAS is outdated) ──────────
+
+const AT_BASE = 'appVu3TvSZ1E4tj0J';
+const AT_CAMPAIGNS_TABLE = 'Campaigns';
+
+function atToken() {
+  return import.meta.env.VITE_AIRTABLE_PAT || '';
+}
+
+async function fetchCampaignsFromAirtable(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) {
+    params.set('filterByFormula', `{Status} = '${filters.status}'`);
+  }
+  params.set('sort[0][field]', 'Name');
+  params.set('sort[0][direction]', 'asc');
+
+  const url = `https://api.airtable.com/v0/${AT_BASE}/${encodeURIComponent(AT_CAMPAIGNS_TABLE)}?${params}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${atToken()}` },
+  });
+  if (!res.ok) throw new Error(`Airtable error ${res.status}`);
+  const data = await res.json();
+
+  const campaigns = (data.records || []).map(r => {
+    const f = r.fields || {};
+    return {
+      id: r.id,
+      createdTime: r.createdTime,
+      name: f.Name || '',
+      type: f.Type || 'mass',
+      status: f.Status || 'draft',
+      senderEmail: f.SenderEmail || '',
+      senderName: f.SenderName || '',
+      subjectA: f.SubjectA || '',
+      subjectB: f.SubjectB || '',
+      abTestPercent: f.AbTestPercent || 0,
+      abWinnerCriteria: f.AbWinnerCriteria || 'aperturas',
+      abWinner: f.AbWinner || null,
+      totalSent: f.TotalSent || 0,
+      totalOpened: f.TotalOpened || 0,
+      totalClicked: f.TotalClicked || 0,
+      totalReplied: f.TotalReplied || 0,
+      notes: f.Notes || '',
+      knowledgeBase: f.KnowledgeBase || '',
+      createdBy: f.CreatedBy || '',
+    };
+  });
+
+  return { success: true, campaigns, total: campaigns.length };
+}
+
 // ── Campaigns ──────────────────────────────────────────────────────
 
 export async function getCampaigns(filters = {}) {
-  return proxyFetch('getCampaigns', filters);
+  // Try GAS proxy first, fallback to direct Airtable if GAS returns empty/invalid
+  try {
+    const data = await proxyFetch('getCampaigns', filters);
+    if (data.success && data.campaigns?.length > 0) return data;
+  } catch { /* GAS failed, try Airtable */ }
+
+  return fetchCampaignsFromAirtable(filters);
 }
 
 export async function getCampaign(id) {
-  return proxyFetch('getCampaign', { id });
+  // Try GAS proxy first, fallback to direct Airtable
+  try {
+    const data = await proxyFetch('getCampaign', { id });
+    if (data.success && data.campaign) return data;
+  } catch { /* GAS failed, try Airtable */ }
+
+  // Direct Airtable read
+  const url = `https://api.airtable.com/v0/${AT_BASE}/${encodeURIComponent(AT_CAMPAIGNS_TABLE)}/${id}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${atToken()}` },
+  });
+  if (!res.ok) throw new Error(`Airtable error ${res.status}`);
+  const r = await res.json();
+  const f = r.fields || {};
+  return {
+    success: true,
+    campaign: {
+      id: r.id,
+      createdTime: r.createdTime,
+      name: f.Name || '',
+      type: f.Type || 'mass',
+      status: f.Status || 'draft',
+      senderEmail: f.SenderEmail || '',
+      senderName: f.SenderName || '',
+      subjectA: f.SubjectA || '',
+      bodyA: f.BodyA || '',
+      subjectB: f.SubjectB || '',
+      bodyB: f.BodyB || '',
+      abTestPercent: f.AbTestPercent || 0,
+      abWinnerCriteria: f.AbWinnerCriteria || 'aperturas',
+      abWinner: f.AbWinner || null,
+      totalSent: f.TotalSent || 0,
+      totalOpened: f.TotalOpened || 0,
+      totalClicked: f.TotalClicked || 0,
+      totalReplied: f.TotalReplied || 0,
+      notes: f.Notes || '',
+      knowledgeBase: f.KnowledgeBase || '',
+      createdBy: f.CreatedBy || '',
+    },
+  };
 }
 
 export async function createCampaign(data) {
