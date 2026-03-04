@@ -47,6 +47,59 @@ function cleanRole(role) {
   return r;
 }
 
+function roleBadgeStyle(role) {
+  const r = (role || "").toLowerCase();
+  if (/\bceo\b|\bcfo\b/.test(r)) return { color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' };
+  if (/\bdirector\b|\bhead\b|\bjefe\b|\bjefa\b/.test(r)) return { color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' };
+  return { color: '#6B7F94', bg: '#F1F5F9', border: '#E2E8F0' };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isGenericName(name) {
+  const n = (name || "").trim();
+  if (n.length < 3) return true;
+  if (!/\s/.test(n)) return true; // no space = probably not first+last
+  const lower = n.toLowerCase();
+  if (['info', 'admin', 'contact', 'no name', 'n/a', 'unknown'].some(g => lower.includes(g))) return true;
+  return false;
+}
+
+function toTitleCase(str) {
+  return str.toLowerCase().replace(/(?:^|\s)\S/g, c => c.toUpperCase());
+}
+
+function normalizeName(name) {
+  let n = (name || "").trim();
+  if (!n) return n;
+  // Detect ALL CAPS (2+ word chars all uppercase)
+  if (n.length > 2 && n === n.toUpperCase() && /[A-Z]/.test(n)) {
+    n = toTitleCase(n);
+  }
+  return n;
+}
+
+/** Dedup + validate + normalize contacts for a company */
+function cleanContacts(contacts) {
+  if (!contacts || !contacts.length) return [];
+  const seen = new Set();
+  const result = [];
+  for (const ct of contacts) {
+    if (!ct.email) continue;
+    const emailLower = ct.email.toLowerCase().trim();
+    if (seen.has(emailLower)) continue;
+    if (!EMAIL_RE.test(emailLower)) continue;
+    seen.add(emailLower);
+    result.push({
+      ...ct,
+      email: emailLower,
+      name: normalizeName(ct.name),
+      _genericName: isGenericName(ct.name),
+    });
+  }
+  return result;
+}
+
 // ── Component ───────────────────────────────────────────────────────
 
 export default function CandidateSearchView({ allCompanies, onCreateCampaign }) {
@@ -68,6 +121,7 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
 
   // Selection & UI
   const [selectedContacts, setSelectedContacts] = useState({});
+  const [selectedForSend, setSelectedForSend] = useState(new Set()); // domains selected for this batch
   const [expandedCompany, setExpandedCompany] = useState(null);
   const [page, setPage] = useState(0);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -247,9 +301,8 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
   function getSelectedContactsForCompany(company) {
     const domain = company.domain?.toLowerCase();
     const sel = selectedContacts[domain];
-    const contacts = (company.detail?.contacts || []).filter(ct => ct.email);
+    const contacts = cleanContacts((company.detail?.contacts || []).filter(ct => ct.email));
     if (!sel) {
-      // All selected by default
       return contacts.map(ct => ({ name: ct.name, email: ct.email, role: ct.role }));
     }
     return contacts
@@ -287,15 +340,51 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
     setExpandedCompany(prev => prev === domain ? null : domain);
   }
 
+  // ── Send selection (buckets) ──
+
+  function toggleSendSelection(domain) {
+    setSelectedForSend(prev => {
+      const next = new Set(prev);
+      if (next.has(domain)) next.delete(domain);
+      else next.add(domain);
+      return next;
+    });
+  }
+
+  const approvedDomains = useMemo(() => {
+    return Object.entries(savedTargets)
+      .filter(([, t]) => t.status === 'approved')
+      .map(([d]) => d);
+  }, [savedTargets]);
+
+  function selectAllApprovedVisible() {
+    const visibleApproved = candidates
+      .filter(c => (savedTargets[c.domain?.toLowerCase()]?.status) === 'approved')
+      .map(c => c.domain?.toLowerCase());
+    setSelectedForSend(prev => {
+      const next = new Set(prev);
+      for (const d of visibleApproved) next.add(d);
+      return next;
+    });
+  }
+
+  function deselectAll() {
+    setSelectedForSend(new Set());
+  }
+
   // ── CSV Export ──
 
   function generateCSV() {
     const rows = [];
+    const domainsToExport = selectedForSend.size > 0 ? selectedForSend : null;
     for (const [domain, target] of Object.entries(savedTargets)) {
       if (target.status !== 'approved') continue;
+      if (domainsToExport && !domainsToExport.has(domain)) continue;
       const company = originacionCompanies.find(c => c.domain?.toLowerCase() === domain);
-      for (const ct of (target.selectedContacts || [])) {
-        const { nombre, apellidos } = splitName(ct.name);
+      const cleaned = cleanContacts(target.selectedContacts || []);
+      for (const ct of cleaned) {
+        const normalized = normalizeName(ct.name);
+        const { nombre, apellidos } = splitName(normalized);
         rows.push([
           ct.email || '',
           nombre,
@@ -337,40 +426,48 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
     showToast(`CSV descargado: ${rows.length} contactos`);
   }
 
-  // ── Create Campaign from approved contacts ──
+  // ── Create Campaign from selected approved contacts ──
   function handleCreateCampaign() {
     const recipients = [];
+    const domainsToExport = selectedForSend.size > 0 ? selectedForSend : null;
     for (const [domain, target] of Object.entries(savedTargets)) {
       if (target.status !== 'approved') continue;
+      if (domainsToExport && !domainsToExport.has(domain)) continue;
       const company = originacionCompanies.find(c => c.domain?.toLowerCase() === domain);
-      for (const ct of (target.selectedContacts || [])) {
-        const { nombre, apellidos } = splitName(ct.name);
+      const cleaned = cleanContacts(target.selectedContacts || []);
+      for (const ct of cleaned) {
+        const normalized = normalizeName(ct.name);
+        const { nombre, apellidos } = splitName(normalized);
         recipients.push({
           email: ct.email,
           name: nombre,
           lastName: apellidos,
           organization: target.companyName || company?.name || '',
+          role: cleanRole(ct.role),
         });
       }
     }
     if (onCreateCampaign) onCreateCampaign(recipients);
   }
 
-  // ── Export summary ──
+  // ── Export summary ── (counts for selected-for-send bucket, or all approved if none selected)
   const exportSummary = useMemo(() => {
     let companies = 0;
     let contacts = 0;
     const bySegment = {};
-    for (const [, t] of Object.entries(savedTargets)) {
+    const domainsToCount = selectedForSend.size > 0 ? selectedForSend : null;
+    for (const [domain, t] of Object.entries(savedTargets)) {
       if (t.status !== 'approved') continue;
+      if (domainsToCount && !domainsToCount.has(domain)) continue;
       companies++;
-      const n = (t.selectedContacts || []).length;
+      const cleaned = cleanContacts(t.selectedContacts || []);
+      const n = cleaned.length;
       contacts += n;
       const seg = t.segment || 'Sin segmento';
       bySegment[seg] = (bySegment[seg] || 0) + n;
     }
     return { companies, contacts, bySegment };
-  }, [savedTargets]);
+  }, [savedTargets, selectedForSend]);
 
   // Actions are blocked if tracking data failed to load and user hasn't overridden
   const actionsBlocked = trackingWarning && !trackingOverride;
@@ -604,20 +701,25 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
             No hay empresas con este filtro
           </div>
         ) : (
-          paginated.map(company => (
-            <CompanyCard
-              key={company.domain}
-              company={company}
-              savedTarget={savedTargets[company.domain?.toLowerCase()]}
-              expanded={expandedCompany === company.domain}
-              onToggleExpand={() => toggleExpand(company.domain)}
-              onAction={(status) => handleAction(company, status)}
-              isContactSelected={(email) => isContactSelected(company.domain, email)}
-              onToggleContact={(email) => toggleContact(company.domain, email)}
-              isSaving={saving === company.domain?.toLowerCase()}
-              actionsBlocked={actionsBlocked}
-            />
-          ))
+          paginated.map(company => {
+            const domainKey = company.domain?.toLowerCase();
+            return (
+              <CompanyCard
+                key={company.domain}
+                company={company}
+                savedTarget={savedTargets[domainKey]}
+                expanded={expandedCompany === company.domain}
+                onToggleExpand={() => toggleExpand(company.domain)}
+                onAction={(status) => handleAction(company, status)}
+                isContactSelected={(email) => isContactSelected(company.domain, email)}
+                onToggleContact={(email) => toggleContact(company.domain, email)}
+                isSaving={saving === domainKey}
+                actionsBlocked={actionsBlocked}
+                isSelectedForSend={selectedForSend.has(domainKey)}
+                onToggleSendSelection={() => toggleSendSelection(domainKey)}
+              />
+            );
+          })
         )}
 
         {/* Pagination */}
@@ -655,7 +757,7 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
       </div>
 
       {/* ── Sticky footer ── */}
-      {exportSummary.contacts > 0 && (
+      {kpis.approvedCount > 0 && (
         <div style={{
           position: 'fixed', bottom: 0, left: 0, right: 0,
           background: '#FFFFFF', borderTop: '1px solid #E2E8F0',
@@ -663,35 +765,63 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
           justifyContent: 'space-between', zIndex: 50,
           boxShadow: '0 -2px 8px rgba(0,0,0,0.06)',
         }}>
-          <span style={{ fontSize: 13, color: '#1A2B3D', fontWeight: 600 }}>
-            {exportSummary.contacts} contactos de {exportSummary.companies} empresas
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 13, color: '#1A2B3D', fontWeight: 600 }}>
+              {kpis.approvedCount} aprobadas
+              {selectedForSend.size > 0 && (
+                <> · <span style={{ color: '#7C3AED' }}>{selectedForSend.size} seleccionadas</span></>
+              )}
+              {' '}({exportSummary.contacts} contactos)
+            </span>
+            <button
+              onClick={selectAllApprovedVisible}
+              style={{
+                padding: '4px 10px', borderRadius: 5, border: '1px solid #E2E8F0',
+                background: '#F7F9FC', color: '#6B7F94', fontSize: 11, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Seleccionar visibles
+            </button>
+            {selectedForSend.size > 0 && (
+              <button
+                onClick={deselectAll}
+                style={{
+                  padding: '4px 10px', borderRadius: 5, border: '1px solid #E2E8F0',
+                  background: '#F7F9FC', color: '#6B7F94', fontSize: 11, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                Deseleccionar
+              </button>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {onCreateCampaign && (
               <button
                 onClick={() => !actionsBlocked && handleCreateCampaign()}
-                disabled={actionsBlocked}
+                disabled={actionsBlocked || exportSummary.contacts === 0}
                 style={{
                   padding: '8px 24px', borderRadius: 8, border: 'none',
-                  background: actionsBlocked ? '#CBD5E1' : 'linear-gradient(135deg, #7C3AED, #6366F1)',
+                  background: (actionsBlocked || exportSummary.contacts === 0) ? '#CBD5E1' : 'linear-gradient(135deg, #7C3AED, #6366F1)',
                   color: '#FFFFFF', fontSize: 13, fontWeight: 700,
-                  cursor: actionsBlocked ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                  opacity: actionsBlocked ? 0.6 : 1,
+                  cursor: (actionsBlocked || exportSummary.contacts === 0) ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                  opacity: (actionsBlocked || exportSummary.contacts === 0) ? 0.6 : 1,
                 }}
               >
                 Crear Campaña ({exportSummary.contacts})
               </button>
             )}
             <button
-              onClick={() => !actionsBlocked && setShowExportModal(true)}
-              disabled={actionsBlocked}
+              onClick={() => !actionsBlocked && exportSummary.contacts > 0 && setShowExportModal(true)}
+              disabled={actionsBlocked || exportSummary.contacts === 0}
               style={{
                 padding: '8px 24px', borderRadius: 8,
-                border: actionsBlocked ? 'none' : '1px solid #E2E8F0',
-                background: actionsBlocked ? '#CBD5E1' : '#FFFFFF',
-                color: actionsBlocked ? '#FFFFFF' : '#334155', fontSize: 13, fontWeight: 700,
-                cursor: actionsBlocked ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                opacity: actionsBlocked ? 0.6 : 1,
+                border: (actionsBlocked || exportSummary.contacts === 0) ? 'none' : '1px solid #E2E8F0',
+                background: (actionsBlocked || exportSummary.contacts === 0) ? '#CBD5E1' : '#FFFFFF',
+                color: (actionsBlocked || exportSummary.contacts === 0) ? '#FFFFFF' : '#334155', fontSize: 13, fontWeight: 700,
+                cursor: (actionsBlocked || exportSummary.contacts === 0) ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                opacity: (actionsBlocked || exportSummary.contacts === 0) ? 0.6 : 1,
               }}
             >
               {actionsBlocked ? 'Verificacion pendiente' : 'Generar CSV'}
@@ -779,10 +909,11 @@ export default function CandidateSearchView({ allCompanies, onCreateCampaign }) 
 function CompanyCard({
   company, savedTarget, expanded, onToggleExpand,
   onAction, isContactSelected, onToggleContact, isSaving, actionsBlocked,
+  isSelectedForSend, onToggleSendSelection,
 }) {
   const [hover, setHover] = useState(false);
   const status = savedTarget?.status || 'pending';
-  const contacts = (company.detail?.contacts || []).filter(ct => ct.email);
+  const contacts = cleanContacts((company.detail?.contacts || []).filter(ct => ct.email));
   const sc = STATUS_COLORS[status] || STATUS_COLORS.pending;
 
   // Approved compact view
@@ -791,17 +922,26 @@ function CompanyCard({
       <div
         style={{
           padding: '10px 16px', marginBottom: 6, borderRadius: 8,
-          border: `1px solid ${sc.border}`, background: sc.bg,
+          border: `1px solid ${isSelectedForSend ? '#7C3AED' : sc.border}`,
+          background: isSelectedForSend ? '#F5F3FF' : sc.bg,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           cursor: 'pointer',
         }}
         onClick={onToggleExpand}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={!!isSelectedForSend}
+            onChange={(e) => { e.stopPropagation(); onToggleSendSelection(); }}
+            onClick={(e) => e.stopPropagation()}
+            style={{ accentColor: '#7C3AED', cursor: 'pointer' }}
+            title="Incluir en este envio"
+          />
           <span style={{ color: '#059669', fontSize: 14 }}>&#10003;</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>{company.name}</span>
           <span style={{ fontSize: 11, color: '#6B7F94' }}>
-            · {(savedTarget?.selectedContacts || []).length} contactos seleccionados
+            · {contacts.length} contactos
           </span>
         </div>
         <button
@@ -935,11 +1075,12 @@ function CompanyCard({
           borderTop: '1px solid #F1F5F9', padding: '8px 16px 12px',
         }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7F94', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Contactos
+            Contactos ({contacts.length})
           </div>
           {[...contacts].sort((a, b) => contactPriority(a.role) - contactPriority(b.role)).map(ct => {
             const selected = isContactSelected(ct.email);
             const role = cleanRole(ct.role);
+            const badge = role ? roleBadgeStyle(role) : null;
             return (
               <label
                 key={ct.email}
@@ -948,6 +1089,7 @@ function CompanyCard({
                   padding: '5px 8px', borderRadius: 6, cursor: 'pointer',
                   background: selected ? '#F7F9FC' : 'transparent',
                   marginBottom: 2,
+                  opacity: ct._genericName ? 0.6 : 1,
                 }}
               >
                 <input
@@ -956,11 +1098,20 @@ function CompanyCard({
                   onChange={() => onToggleContact(ct.email)}
                   style={{ accentColor: '#7C3AED' }}
                 />
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#1A2B3D', minWidth: 140 }}>
+                <span style={{
+                  fontSize: 13, fontWeight: 600, color: '#1A2B3D', minWidth: 140,
+                  fontStyle: ct._genericName ? 'italic' : 'normal',
+                }}>
                   {ct.name}
                 </span>
-                {role && (
-                  <span style={{ fontSize: 11, color: '#6B7F94' }}>{role}</span>
+                {badge && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 4,
+                    background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {role}
+                  </span>
                 )}
                 <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 'auto' }}>{ct.email}</span>
               </label>
