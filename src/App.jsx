@@ -743,8 +743,8 @@ export default function App() {
         />
       )}
 
-      {/* User selector: overlay on first use, dropdown when changing */}
-      {(!currentUser || showUserSelector) && (
+      {/* User selector: dropdown when changing */}
+      {showUserSelector && (
         <UserSelector
           currentUser={currentUser}
           onSelect={(user) => {

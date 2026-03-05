@@ -4,7 +4,6 @@ import { getEmployeeList, setCurrentUser } from '../utils/userConfig';
 export default function UserSelector({ onSelect, currentUser }) {
   const employees = getEmployeeList();
   const [adminToggle, setAdminToggle] = useState(false);
-  const isOverlay = !currentUser; // full-screen overlay on first use, dropdown otherwise
 
   const handleSelect = (emp) => {
     const user = setCurrentUser(emp.id, adminToggle);
@@ -18,17 +17,15 @@ export default function UserSelector({ onSelect, currentUser }) {
       {/* Backdrop */}
       <div style={{
         position: 'fixed', inset: 0,
-        background: isOverlay ? 'rgba(10,22,40,0.8)' : 'rgba(10,22,40,0.3)',
+        background: 'rgba(10,22,40,0.3)',
         zIndex: 200,
-      }} onClick={!isOverlay ? () => onSelect(null) : undefined} />
+      }} onClick={() => onSelect(null)} />
 
-      {/* Modal */}
+      {/* Dropdown */}
       <div style={{
         position: 'fixed',
-        top: isOverlay ? '50%' : 60,
-        right: isOverlay ? undefined : 16,
-        left: isOverlay ? '50%' : undefined,
-        transform: isOverlay ? 'translate(-50%, -50%)' : 'none',
+        top: 60,
+        right: 16,
         background: '#0F1D2F',
         borderRadius: 12,
         padding: 24,
@@ -42,12 +39,12 @@ export default function UserSelector({ onSelect, currentUser }) {
           fontSize: 16, fontWeight: 800, color: '#FFFFFF',
           margin: '0 0 4px 0',
         }}>
-          {isOverlay ? 'Selecciona tu usuario' : 'Cambiar usuario'}
+          Cambiar usuario
         </h3>
         <p style={{
           fontSize: 12, color: '#6B7F94', margin: '0 0 16px 0',
         }}>
-          {isOverlay ? 'Elige tu perfil para empezar' : 'Selecciona otro perfil'}
+          Selecciona otro perfil
         </p>
 
         {/* Employee list */}

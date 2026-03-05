@@ -6,16 +6,22 @@ import employees from '../data/employees.json';
 
 const STORAGE_KEY = 'alter5_current_user';
 
+export function getDefaultUser() {
+  const emp = employees[0]; // Salvador Carrillo
+  if (!emp) return null;
+  return { id: emp.id, name: emp.name, isAdmin: false };
+}
+
 export function getCurrentUser() {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return null;
+    if (!data) return getDefaultUser();
     const parsed = JSON.parse(data);
     // Validate that the employee still exists
-    if (!employees.find(e => e.id === parsed.id)) return null;
+    if (!employees.find(e => e.id === parsed.id)) return getDefaultUser();
     return parsed; // { id, name, isAdmin }
   } catch {
-    return null;
+    return getDefaultUser();
   }
 }
 

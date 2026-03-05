@@ -27,7 +27,29 @@
   {
     "id": "miguel_solana",
     "name": "Miguel Solana",
-    "importedAt": "2026-03-04T04:00:50.977642",
-    "companiesCount": 69
+    "importedAt": "2026-03-05T09:16:01.646240",
+    "companiesCount": 2096,
+    "email": "miguel.solana@alter-5.com"
+  },
+  {
+    "id": "carlos_almodóvar",
+    "name": "Carlos Almodóvar",
+    "importedAt": "2026-03-05T09:16:08.655720",
+    "companiesCount": 122,
+    "email": "carlos.almodovar@alter-5.com"
+  },
+  {
+    "id": "gonzalo_de_gracia",
+    "name": "Gonzalo de Gracia",
+    "importedAt": "2026-03-05T09:16:16.407509",
+    "companiesCount": 52,
+    "email": "gonzalo.degracia@alter-5.com"
+  },
+  {
+    "id": "rafael_nevado",
+    "name": "Rafael Nevado",
+    "importedAt": "2026-03-05T09:16:22.121885",
+    "companiesCount": 372,
+    "email": "rafael.nevado@alter-5.com"
   }
 ]

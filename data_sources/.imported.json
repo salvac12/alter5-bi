@@ -22,5 +22,29 @@
     "employee_name": "Javier Ruiz",
     "importedAt": "2026-03-03T13:49:05.385428",
     "companies": 1190
+  },
+  "analisis_miguel_v2_final.xlsx": {
+    "employee_id": "miguel_solana",
+    "employee_name": "Miguel Solana",
+    "importedAt": "2026-03-05T09:16:02.736286",
+    "companies": 2096
+  },
+  "analisis_carlos_v2_final.xlsx": {
+    "employee_id": "carlos_almodóvar",
+    "employee_name": "Carlos Almodóvar",
+    "importedAt": "2026-03-05T09:16:09.938328",
+    "companies": 122
+  },
+  "analisis_gonzalo_v2_final.xlsx": {
+    "employee_id": "gonzalo_de_gracia",
+    "employee_name": "Gonzalo de Gracia",
+    "importedAt": "2026-03-05T09:16:17.580025",
+    "companies": 52
+  },
+  "analisis_rafael_v2_final.xlsx": {
+    "employee_id": "rafael_nevado",
+    "employee_name": "Rafael Nevado",
+    "importedAt": "2026-03-05T09:16:23.293302",
+    "companies": 372
   }
 }
