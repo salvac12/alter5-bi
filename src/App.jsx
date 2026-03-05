@@ -16,6 +16,7 @@ import UserSelector from './components/UserSelector';
 import CampaignsView from './components/CampaignsView';
 import CampaignCreationPanel from './components/CampaignCreationPanel';
 import CampaignDetailView from './components/CampaignDetailView';
+import BridgeCampaignView from './components/BridgeCampaignView';
 import FollowUpQuickPanel from './components/FollowUpQuickPanel';
 import { getCampaigns } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
@@ -53,6 +54,7 @@ export default function App() {
   const [campaignsError, setCampaignsError] = useState(null);
   const [showCampaignCreation, setShowCampaignCreation] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [selectedCampaignName, setSelectedCampaignName] = useState(null);
   const [showFollowUpQuick, setShowFollowUpQuick] = useState(null); // prospect obj or null
 
   // ── URL params: ?view=pipeline|prospects&add=CompanyName&stage=New ──
@@ -640,12 +642,17 @@ export default function App() {
           onSelectProspect={handleSelectProspect}
           onCreateProspect={handleCreateProspect}
         />
+      ) : activeView === "campanas" && selectedCampaignId && selectedCampaignName && selectedCampaignName.toLowerCase().includes('bridge') ? (
+        /* ── Bridge Energy Program — full standalone dashboard ── */
+        <BridgeCampaignView
+          onBack={() => { setSelectedCampaignId(null); setSelectedCampaignName(null); loadCampaigns(); }}
+        />
       ) : activeView === "campanas" && selectedCampaignId ? (
-        /* ── Campaign detail view ── */
+        /* ── Generic campaign detail view ── */
         <CampaignDetailView
           campaignId={selectedCampaignId}
           allCompanies={companies}
-          onBack={() => { setSelectedCampaignId(null); loadCampaigns(); }}
+          onBack={() => { setSelectedCampaignId(null); setSelectedCampaignName(null); loadCampaigns(); }}
         />
       ) : activeView === "campanas" ? (
         /* ── Campaigns list ── */
@@ -655,7 +662,7 @@ export default function App() {
           error={campaignsError}
           onRefresh={loadCampaigns}
           onCreateCampaign={() => setShowCampaignCreation(true)}
-          onSelectCampaign={(c) => setSelectedCampaignId(c.id)}
+          onSelectCampaign={(c) => { setSelectedCampaignId(c.id); setSelectedCampaignName(c.name || ''); }}
         />
       ) : (
         /* ── Pipeline (Kanban) view ── */
