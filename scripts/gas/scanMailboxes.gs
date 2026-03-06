@@ -200,8 +200,9 @@ function cleanContinuationTriggers_() {
 // ---- Gmail API con delegación de dominio (streaming) ----
 
 /**
- * Scan an employee's Gmail, writing rows to the sheet in real-time.
- * No message count limit — paginates through ALL messages.
+ * Scan an employee's Gmail since afterDate, writing rows to the sheet in real-time.
+ * Paginates through ALL message IDs, then fetches in batches of 50.
+ * Uses 2-pass approach: batch metadata for filtering + individual full for body text.
  * Checks time limit after each batch write.
  * Returns { count: N, timedOut: bool }
  */
@@ -236,7 +237,7 @@ function scanDelegatedGmailStreaming_(emp, afterDate, existingThreadIds, rawShee
 
   Logger.log(emp.id + ': ' + messageIds.length + ' total message IDs');
 
-  // Fetch and write in batches of 50
+  // Fetch and write in batches of 50 (individual API calls per message)
   var BATCH_SIZE = 50;
   for (var batchStart = 0; batchStart < messageIds.length; batchStart += BATCH_SIZE) {
     // Time check before each batch
@@ -267,11 +268,23 @@ function scanDelegatedGmailStreaming_(emp, afterDate, existingThreadIds, rawShee
   return { count: totalWritten, timedOut: false };
 }
 
+// Batch counter for diagnostic logging
+var DEBUG_BATCH_COUNT_ = 0;
+
 /**
- * Fetch up to 100 messages in a single HTTP call using Gmail batch API.
- * Reduces ~100 UrlFetchApp calls to 1, solving the daily quota issue.
+ * Two-pass message fetch:
+ * Pass 1: Batch API with format=metadata (small, fast) → filter by domain/dedup
+ * Pass 2: Individual GET with format=full for accepted messages → extract body text
+ * Fallback: if body fetch fails (quota), uses snippet instead.
  */
 function fetchMessageBatch_(userEmail, accessToken, msgIds, empId, existingThreadIds) {
+  DEBUG_BATCH_COUNT_++;
+  var isDebug = DEBUG_BATCH_COUNT_ <= 3;
+  var empDomain = userEmail.split('@')[1];
+
+  var stats = { total: msgIds.length, noPayload: 0, noFrom: 0, personalDomain: 0, ownDomain: 0, dedup: 0, errors: 0, accepted: 0, bodyFetched: 0 };
+
+  // ── PASS 1: Batch API with format=metadata ──
   var boundary = 'batch_alter5_' + Date.now();
   var batchBody = '';
 
@@ -279,7 +292,7 @@ function fetchMessageBatch_(userEmail, accessToken, msgIds, empId, existingThrea
     batchBody += '--' + boundary + '\r\n';
     batchBody += 'Content-Type: application/http\r\n';
     batchBody += 'Content-ID: <msg' + i + '>\r\n\r\n';
-    batchBody += 'GET /gmail/v1/users/' + userEmail + '/messages/' + msgId + '?format=full\r\n\r\n';
+    batchBody += 'GET /gmail/v1/users/' + userEmail + '/messages/' + msgId + '?format=metadata\r\n\r\n';
   });
   batchBody += '--' + boundary + '--';
 
@@ -296,23 +309,45 @@ function fetchMessageBatch_(userEmail, accessToken, msgIds, empId, existingThrea
     return [];
   }
 
-  var rows = [];
+  // Parse batch response — use lastIndexOf to find JSON body (no greedy regex)
   var respText = response.getContentText();
   var respBoundary = respText.match(/^--([^\r\n]+)/);
   if (!respBoundary) return [];
 
   var parts = respText.split('--' + respBoundary[1]);
-  parts.forEach(function(part) {
-    // Each part has HTTP headers, blank line, then the JSON body
-    var jsonMatch = part.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return;
 
+  // Collect accepted messages for pass 2
+  var accepted = [];  // [{id, threadId, headers, snippet, dateStr}]
+
+  for (var pi = 0; pi < parts.length; pi++) {
+    var part = parts[pi];
+
+    // Find JSON body: after the last blank line in the part
+    var sep = '\r\n\r\n';
+    var lastSep = part.lastIndexOf(sep);
+    if (lastSep === -1) {
+      sep = '\n\n';
+      lastSep = part.lastIndexOf(sep);
+    }
+    if (lastSep === -1) continue;
+
+    var jsonStr = part.substring(lastSep + sep.length).trim();
+    if (!jsonStr || jsonStr.charAt(0) !== '{') continue;
+
+    var msg;
     try {
-      var msg = JSON.parse(jsonMatch[0]);
-    } catch(e) { return; }
+      msg = JSON.parse(jsonStr);
+    } catch(e) { continue; }
 
-    if (!msg.id || !msg.threadId) return;
-    if (existingThreadIds[msg.threadId]) return;
+    if (!msg.id || !msg.threadId) {
+      stats.noPayload++;
+      continue;
+    }
+
+    if (existingThreadIds[msg.threadId]) {
+      stats.dedup++;
+      continue;
+    }
 
     var headers = {};
     (msg.payload && msg.payload.headers || []).forEach(function(h) {
@@ -320,39 +355,91 @@ function fetchMessageBatch_(userEmail, accessToken, msgIds, empId, existingThrea
     });
 
     var parsed = parseFromField_(headers['from'] || '');
-    if (!parsed.domain || isPersonalDomain_(parsed.domain)) return;
+
+    if (!parsed.domain) {
+      stats.noFrom++;
+      continue;
+    }
+
+    if (isPersonalDomain_(parsed.domain)) {
+      stats.personalDomain++;
+      continue;
+    }
+
+    if (parsed.domain === empDomain) {
+      stats.ownDomain++;
+      continue;
+    }
 
     var dateStr = '';
     try {
       dateStr = Utilities.formatDate(new Date(headers['date']), 'Europe/Madrid', 'yyyy-MM-dd');
     } catch(e) {
-      dateStr = Utilities.formatDate(new Date(parseInt(msg.internalDate)), 'Europe/Madrid', 'yyyy-MM-dd');
+      try {
+        dateStr = Utilities.formatDate(new Date(parseInt(msg.internalDate)), 'Europe/Madrid', 'yyyy-MM-dd');
+      } catch(e2) { dateStr = ''; }
     }
 
-    // Extract and clean the full email body text (max 2000 chars)
+    accepted.push({
+      id: msg.id,
+      threadId: msg.threadId,
+      parsed: parsed,
+      headers: headers,
+      snippet: msg.snippet || '',
+      dateStr: dateStr,
+    });
+
+    existingThreadIds[msg.threadId] = true;
+  }
+
+  // ── PASS 2: Get full body for accepted messages only ──
+  var rows = [];
+
+  for (var ai = 0; ai < accepted.length; ai++) {
+    var acc = accepted[ai];
     var bodyText = '';
+
     try {
-      bodyText = extractPlainText_(msg.payload);
-      bodyText = cleanEmailBody_(bodyText).substring(0, 2000);
+      var fullUrl = 'https://gmail.googleapis.com/gmail/v1/users/' + userEmail + '/messages/' + acc.id + '?format=full';
+      var fullResp = UrlFetchApp.fetch(fullUrl, {
+        headers: { 'Authorization': 'Bearer ' + accessToken },
+        muteHttpExceptions: true,
+      });
+
+      if (fullResp.getResponseCode() === 200) {
+        var fullMsg = JSON.parse(fullResp.getContentText());
+        bodyText = extractPlainText_(fullMsg.payload);
+        bodyText = cleanEmailBody_(bodyText).substring(0, 2000);
+        stats.bodyFetched++;
+      }
     } catch(e) {
-      bodyText = (msg.snippet || '').substring(0, 300);  // fallback to snippet
+      // Bandwidth quota or other error — fallback to snippet
+    }
+
+    if (!bodyText) {
+      bodyText = acc.snippet.substring(0, 300);
     }
 
     rows.push([
       'pending',
       empId,
-      dateStr,
-      parsed.email,
-      parsed.name,
-      parsed.domain,
-      (headers['subject'] || '').substring(0, 200),
-      (msg.snippet || '').substring(0, 300),
-      msg.threadId,
-      bodyText,           // NEW: column 10 — full email body text
+      acc.dateStr,
+      acc.parsed.email,
+      acc.parsed.name,
+      acc.parsed.domain,
+      (acc.headers['subject'] || '').substring(0, 200),
+      acc.snippet.substring(0, 300),
+      acc.threadId,
+      bodyText,
     ]);
 
-    existingThreadIds[msg.threadId] = true;
-  });
+    stats.accepted++;
+  }
+
+  // Log stats
+  if (isDebug || DEBUG_BATCH_COUNT_ % 50 === 0) {
+    Logger.log('  STATS batch ' + DEBUG_BATCH_COUNT_ + ': ' + JSON.stringify(stats));
+  }
 
   return rows;
 }
