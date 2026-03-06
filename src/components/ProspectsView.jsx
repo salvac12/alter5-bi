@@ -188,6 +188,13 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect }) {
     return acc;
   }, {});
 
+  // Pre-compute totals for the funnel strip (uses all prospects, not filtered)
+  const stageTotals = PROSPECT_STAGES.reduce((acc, stage) => {
+    const ps = prospects.filter(p => p.stage === stage);
+    acc[stage] = { count: ps.length, amount: ps.reduce((s, p) => s + (p.amount || 0), 0) };
+    return acc;
+  }, {});
+
   const totalCount = filteredProspects.length;
   const totalAmount = filteredProspects.reduce((sum, p) => sum + (p.amount || 0), 0);
 
@@ -272,6 +279,47 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect }) {
           <button onClick={loadProspects} style={styles.retryButton}>
             Reintentar
           </button>
+        </div>
+      )}
+
+      {/* Funnel stats strip */}
+      {!loading && prospects.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', overflowX: 'auto',
+          padding: '8px 24px', background: '#F8FAFC',
+          borderBottom: '1px solid #E2E8F0', gap: 4, flexShrink: 0,
+        }}>
+          {PROSPECT_STAGES.map((stage, i) => {
+            const { count, amount: stageAmount } = stageTotals[stage] || { count: 0, amount: 0 };
+            const colors = PROSPECT_STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
+            const shortLabel = PROSPECT_STAGE_SHORT[stage] || stage;
+            return (
+              <React.Fragment key={stage}>
+                {i > 0 && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                    <path d="M9 18l6-6-6-6"/>
+                  </svg>
+                )}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0,
+                  background: count > 0 ? colors.bg : 'transparent',
+                  border: count > 0 ? `1px solid ${colors.border}` : '1px solid transparent',
+                }}>
+                  <span style={{ color: colors.color, fontWeight: 700, fontSize: 11 }}>{shortLabel}</span>
+                  <span style={{
+                    background: colors.color, color: '#FFFFFF',
+                    borderRadius: 999, padding: '0 5px', fontSize: 10, fontWeight: 800, lineHeight: '16px',
+                  }}>{count}</span>
+                  {stageAmount > 0 && (
+                    <span style={{ color: '#6B7F94', fontSize: 10 }}>
+                      {formatAmount(stageAmount, 'EUR')}
+                    </span>
+                  )}
+                </div>
+              </React.Fragment>
+            );
+          })}
         </div>
       )}
 
@@ -597,6 +645,17 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick })
 
         {/* Indicators */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
+          {prospect.contacts && prospect.contacts.length > 0 && (
+            <span style={{ fontSize: 11, color: '#6B7F94', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              {prospect.contacts.length}
+            </span>
+          )}
           {prospect.context && (
             <span style={{ fontSize: 11, color: '#6B7F94', display: 'flex', alignItems: 'center', gap: 3 }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

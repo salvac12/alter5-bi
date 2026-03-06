@@ -189,6 +189,9 @@ export function normalizeRecord(record) {
   let businessType = f["Type (from Business Program)"] || "";
   if (Array.isArray(businessType)) businessType = businessType[0] || "";
 
+  // Deal Manager / Responsible — try multiple field names as Airtable schemas vary
+  const dealManager = f["Deal Manager"] || f["Responsible"] || f["Assigned To"] || "";
+
   return {
     id: record.id,
     name: name.trim(),
@@ -198,6 +201,7 @@ export function normalizeRecord(record) {
     currency: String(currency),
     recordStatus,
     businessType: String(businessType),
+    dealManager: String(dealManager),
     // Keep raw fields for editing
     _raw: f,
   };

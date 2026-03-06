@@ -145,6 +145,13 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
     return acc;
   }, {});
 
+  // Pre-compute totals for the funnel strip (uses all opportunities, not filtered)
+  const stageTotals = KANBAN_STAGES.reduce((acc, stage) => {
+    const opps = opportunities.filter(o => o.stage === stage);
+    acc[stage] = { count: opps.length, amount: opps.reduce((s, o) => s + (o.amount || 0), 0) };
+    return acc;
+  }, {});
+
   const totalCount = filteredOpportunities.length;
   const totalAmount = filteredOpportunities.reduce((sum, opp) => sum + (opp.amount || 0), 0);
 
@@ -232,6 +239,47 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
           <button onClick={loadOpportunities} style={styles.retryButton}>
             Reintentar
           </button>
+        </div>
+      )}
+
+      {/* Pipeline stats strip */}
+      {!loading && opportunities.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', overflowX: 'auto',
+          padding: '8px 24px', background: '#F8FAFC',
+          borderBottom: '1px solid #E2E8F0', gap: 4, flexShrink: 0,
+        }}>
+          {KANBAN_STAGES.map((stage, i) => {
+            const { count, amount: stageAmount } = stageTotals[stage] || { count: 0, amount: 0 };
+            const colors = STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
+            const shortLabel = STAGE_SHORT_LABELS[stage] || stage;
+            return (
+              <React.Fragment key={stage}>
+                {i > 0 && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                    <path d="M9 18l6-6-6-6"/>
+                  </svg>
+                )}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0,
+                  background: count > 0 ? colors.bg : 'transparent',
+                  border: count > 0 ? `1px solid ${colors.border}` : '1px solid transparent',
+                }}>
+                  <span style={{ color: colors.color, fontWeight: 700, fontSize: 11 }}>{shortLabel}</span>
+                  <span style={{
+                    background: colors.color, color: '#FFFFFF',
+                    borderRadius: 999, padding: '0 5px', fontSize: 10, fontWeight: 800, lineHeight: '16px',
+                  }}>{count}</span>
+                  {stageAmount > 0 && (
+                    <span style={{ color: '#6B7F94', fontSize: 10 }}>
+                      {formatAmount(stageAmount, 'EUR')}
+                    </span>
+                  )}
+                </div>
+              </React.Fragment>
+            );
+          })}
         </div>
       )}
 
@@ -489,6 +537,21 @@ function OpportunityCard({
             <span style={{ fontSize: 11, color: '#6B7F94' }}>
               {opportunity.recordStatus}
             </span>
+          </div>
+        )}
+
+        {/* Deal Manager */}
+        {opportunity.dealManager && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            fontSize: 11, color: '#3B82F6', fontWeight: 600,
+            marginTop: 2,
+          }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            {opportunity.dealManager}
           </div>
         )}
       </div>
