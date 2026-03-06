@@ -34,11 +34,36 @@ function splitName(fullName) {
 
 function contactPriority(role) {
   const r = (role || "").toLowerCase().trim();
-  if (/\bceo\b|\bcfo\b/.test(r)) return 1;
-  if (r.includes("financiaci") && r.includes("estructurada")) return 2;
-  if (/\bm&a\b|\bm\s*&\s*a\b/.test(r)) return 3;
-  if (!r || r === "no identificado" || r === "nan") return 5;
-  return 4;
+
+  // Rango 1 — CEO / Director General (máxima autoridad)
+  if (
+    /\bceo\b/.test(r) ||
+    /director\s*general/.test(r) ||
+    /\bdg\b/.test(r) ||
+    /managing\s*director/.test(r) ||
+    /\bmd\b/.test(r)
+  ) return 1;
+
+  // Rango 2 — CFO / Director Financiero
+  if (
+    /\bcfo\b/.test(r) ||
+    /director\s*financier/.test(r) ||
+    /head\s*of\s*finance/.test(r) ||
+    /responsable\s*financier/.test(r) ||
+    /chief\s*financial/.test(r)
+  ) return 2;
+
+  // Rango 3 — Financiación Estructurada
+  if (r.includes("financiaci") && r.includes("estructurada")) return 3;
+
+  // Rango 4 — M&A
+  if (/\bm&a\b|\bm\s*&\s*a\b/.test(r)) return 4;
+
+  // Rango 6 — Sin cargo identificado
+  if (!r || r === "no identificado" || r === "nan") return 6;
+
+  // Rango 5 — Otros cargos conocidos
+  return 5;
 }
 
 function cleanRole(role) {
@@ -49,8 +74,18 @@ function cleanRole(role) {
 
 function roleBadgeStyle(role) {
   const r = (role || "").toLowerCase();
-  if (/\bceo\b|\bcfo\b/.test(r)) return { color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' };
-  if (/\bdirector\b|\bhead\b|\bjefe\b|\bjefa\b/.test(r)) return { color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' };
+  // CEO / Director General → verde (máximo valor)
+  if (/\bceo\b|director\s*general|\bdg\b|managing\s*director|\bmd\b/.test(r))
+    return { color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' };
+  // CFO / Director Financiero → ámbar
+  if (/\bcfo\b|director\s*financier|head\s*of\s*finance|chief\s*financial/.test(r))
+    return { color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' };
+  // Financiación Estructurada → azul
+  if (r.includes("financiaci") && r.includes("estructurada"))
+    return { color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' };
+  // Otros directores / heads → azul claro
+  if (/\bdirector\b|\bhead\b|\bjefe\b|\bjefa\b/.test(r))
+    return { color: '#6366F1', bg: '#EEF2FF', border: '#C7D2FE' };
   return { color: '#6B7F94', bg: '#F1F5F9', border: '#E2E8F0' };
 }
 
@@ -336,9 +371,14 @@ export default function CandidateSearchView({
     const domain = company.domain?.toLowerCase();
     const sel = selectedContacts[domain];
     const contacts = cleanContacts((company.detail?.contacts || []).filter(ct => ct.email));
+
     if (!sel) {
-      return contacts.map(ct => ({ name: ct.name, email: ct.email, role: ct.role }));
+      // Sin selección manual: preseleccionar solo el contacto top-1 por prioridad
+      const sorted = [...contacts].sort((a, b) => contactPriority(a.role) - contactPriority(b.role));
+      const top = sorted[0];
+      return top ? [{ name: top.name, email: top.email, role: top.role }] : [];
     }
+
     return contacts
       .filter(ct => sel.has(ct.email))
       .map(ct => ({ name: ct.name, email: ct.email, role: ct.role }));
@@ -348,14 +388,25 @@ export default function CandidateSearchView({
     const d = domain.toLowerCase();
     setSelectedContacts(prev => {
       const existing = prev[d];
+
       if (!existing) {
-        // First toggle: find company, select all EXCEPT this one
+        // Primer toggle: inicializar desde el top-1, no desde todos
         const company = originacionCompanies.find(c => c.domain?.toLowerCase() === d);
-        const allEmails = (company?.detail?.contacts || []).filter(ct => ct.email).map(ct => ct.email);
-        const newSet = new Set(allEmails);
-        newSet.delete(email);
+        const contacts = cleanContacts((company?.detail?.contacts || []).filter(ct => ct.email));
+        const sorted = [...contacts].sort((a, b) => contactPriority(a.role) - contactPriority(b.role));
+        const topEmail = sorted[0]?.email;
+
+        // El set inicial contiene solo el top-1
+        const newSet = new Set(topEmail ? [topEmail] : []);
+
+        // Ahora aplicar el toggle sobre ese set inicial
+        if (newSet.has(email)) newSet.delete(email);
+        else newSet.add(email);
+
         return { ...prev, [d]: newSet };
       }
+
+      // Toggle normal sobre selección existente
       const newSet = new Set(existing);
       if (newSet.has(email)) newSet.delete(email);
       else newSet.add(email);
@@ -363,10 +414,17 @@ export default function CandidateSearchView({
     });
   }
 
-  function isContactSelected(domain, email) {
-    const d = domain?.toLowerCase();
-    const sel = selectedContacts[d];
-    if (!sel) return true; // All selected by default
+  function isContactSelectedForCompany(company, email) {
+    const domain = company.domain?.toLowerCase();
+    const sel = selectedContacts[domain];
+
+    if (!sel) {
+      // Sin selección manual: solo el top-1 está marcado
+      const contacts = cleanContacts((company.detail?.contacts || []).filter(ct => ct.email));
+      const sorted = [...contacts].sort((a, b) => contactPriority(a.role) - contactPriority(b.role));
+      return sorted[0]?.email === email;
+    }
+
     return sel.has(email);
   }
 
@@ -757,7 +815,7 @@ export default function CandidateSearchView({
                 expanded={expandedCompany === company.domain}
                 onToggleExpand={() => toggleExpand(company.domain)}
                 onAction={(status) => handleAction(company, status)}
-                isContactSelected={(email) => isContactSelected(company.domain, email)}
+                isContactSelected={(email) => isContactSelectedForCompany(company, email)}  // ← cambiar
                 onToggleContact={(email) => toggleContact(company.domain, email)}
                 isSaving={saving === domainKey}
                 actionsBlocked={actionsBlocked}
@@ -986,9 +1044,15 @@ function CompanyCard({
           />
           <span style={{ color: '#059669', fontSize: 14 }}>&#10003;</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>{company.name}</span>
-          <span style={{ fontSize: 11, color: '#6B7F94' }}>
-            · {contacts.length} contactos
-          </span>
+          {(() => {
+            const approvedContacts = savedTarget?.selectedContacts || [];
+            return (
+              <span style={{ fontSize: 11, color: '#6B7F94' }}>
+                · {approvedContacts.length} contacto{approvedContacts.length !== 1 ? 's' : ''} seleccionado{approvedContacts.length !== 1 ? 's' : ''}
+                {approvedContacts[0]?.role ? ` · ${cleanRole(approvedContacts[0].role)}` : ''}
+              </span>
+            );
+          })()}
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
@@ -1123,7 +1187,10 @@ function CompanyCard({
           <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7F94', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Contactos ({contacts.length})
           </div>
-          {[...contacts].sort((a, b) => contactPriority(a.role) - contactPriority(b.role)).map(ct => {
+          {(() => {
+            const sortedContacts = [...contacts].sort((a, b) => contactPriority(a.role) - contactPriority(b.role));
+            const topEmail = sortedContacts[0]?.email;
+            return sortedContacts.map(ct => {
             const selected = isContactSelected(ct.email);
             const role = cleanRole(ct.role);
             const badge = role ? roleBadgeStyle(role) : null;
@@ -1159,10 +1226,20 @@ function CompanyCard({
                     {role}
                   </span>
                 )}
+                {ct.email === topEmail && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 6px',
+                    borderRadius: 4, background: '#FEF3C7', color: '#92400E',
+                    letterSpacing: '0.3px', flexShrink: 0,
+                  }}>
+                    ⭐ Recomendado
+                  </span>
+                )}
                 <span style={{ fontSize: 11, color: '#94A3B8', marginLeft: 'auto' }}>{ct.email}</span>
               </label>
             );
-          })}
+          });
+          })()} 
         </div>
       )}
     </div>
