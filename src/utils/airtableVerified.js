@@ -86,6 +86,7 @@ export async function fetchAllVerified() {
       verifiedBy: r.fields["Verified By"] || "",
       verifiedAt: r.fields["Verified At"] || "",
       notes: r.fields.Notes || "",
+      website: r.fields.Website || "",
       mismatch: r.fields.Mismatch || false,
       confidence: r.fields.Confidence || "",
       employeeCount: r.fields["Employee Count"] || null,

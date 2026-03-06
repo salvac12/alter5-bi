@@ -223,8 +223,9 @@ Asuntos recientes: [{subj_text}]
    - Ejemplo: Un fondo de equity que habla de deuda con Alter5 sigue siendo un fondo de equity.
    - Ejemplo: Una empresa que busca financiacion para sus proyectos es "Originacion", no "Inversion".
 3. COMPARA tu hallazgo con la clasificacion actual y senala si hay discrepancia.
-4. BUSCA el numero aproximado de empleados (LinkedIn, web corporativa, informes).
-5. BUSCA la facturacion/ingresos anuales estimados (registros mercantiles, CNMV, Crunchbase, noticias). Si no encuentras datos fiables, pon null.
+4. IDENTIFICA la URL del sitio web principal de la empresa.
+5. BUSCA el numero aproximado de empleados (LinkedIn, web corporativa, informes).
+6. BUSCA la facturacion/ingresos anuales estimados (registros mercantiles, CNMV, Crunchbase, noticias). Si no encuentras datos fiables, pon null.
 
 ## TAXONOMIA (elige de estas opciones EXACTAS):
 - Role: {json.dumps(COMPANY_ROLES)}
@@ -248,6 +249,7 @@ Asuntos recientes: [{subj_text}]
   "verified_technologies": [...],
   "verified_geography": [...],
   "verified_market_roles": [...],
+  "website": "https://www.ejemplo.com",
   "employee_count": 150,
   "employee_count_source": "LinkedIn|web|estimacion",
   "estimated_revenue_eur": 25000000,
@@ -377,6 +379,11 @@ def build_airtable_fields(domain, name, current_enrichment, verification):
 
     if verification.get("mismatch_explanation"):
         fields["Notes"] = verification["mismatch_explanation"]
+
+    # Website
+    website = verification.get("website", "")
+    if website and isinstance(website, str) and website.startswith("http"):
+        fields["Website"] = website[:500]
 
     # Employee count
     emp_count = verification.get("employee_count")
