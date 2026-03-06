@@ -15,6 +15,28 @@ import { isGeminiConfigured, summarizeMeetingNotes, extractTasksFromNotes } from
 import { syncTasksToAirtable } from '../utils/airtableTasks';
 import ProspectTasks from './ProspectTasks';
 
+// Domains for internal tools — never match prospects to these companies
+const INTERNAL_TOOL_DOMAINS = [
+  'atlassian.com', 'atlassian.net', 'jira.com',
+  'slack.com', 'slack-edge.com',
+  'google.com', 'gmail.com', 'googlemail.com', 'google.es',
+  'microsoft.com', 'outlook.com', 'office365.com', 'office.com', 'live.com', 'hotmail.com',
+  'zoom.us', 'zoom.com',
+  'notion.so', 'notion.com',
+  'github.com', 'gitlab.com', 'bitbucket.org',
+  'trello.com', 'asana.com', 'monday.com', 'clickup.com',
+  'hubspot.com', 'salesforce.com', 'pipedrive.com',
+  'mailchimp.com', 'sendgrid.net', 'sendgrid.com',
+  'calendly.com', 'docusign.com', 'docusign.net',
+  'dropbox.com', 'box.com',
+  'linkedin.com', 'facebook.com', 'twitter.com', 'x.com',
+  'airtable.com', 'typeform.com', 'intercom.io',
+  'vercel.com', 'netlify.com', 'heroku.com', 'aws.amazon.com',
+  'stripe.com', 'paypal.com',
+  'canva.com', 'figma.com', 'miro.com',
+  'alter-5.com',
+];
+
 /**
  * ProspectPanel - Slide-in panel for creating/editing Prospects
  *
@@ -128,7 +150,9 @@ export default function ProspectPanel({
     if (!companies.length || isNew) return null;
     const prospectName = (formData.name || '').trim().toLowerCase();
     const prospectEmails = contacts.map(c => (c.email || '').toLowerCase()).filter(Boolean);
-    const prospectDomains = prospectEmails.map(e => e.split('@')[1]).filter(Boolean);
+    const prospectDomains = prospectEmails
+      .map(e => e.split('@')[1])
+      .filter(d => d && !INTERNAL_TOOL_DOMAINS.some(t => d === t || d.endsWith('.' + t)));
 
     // 1) Exact domain match from contact emails
     for (const domain of prospectDomains) {

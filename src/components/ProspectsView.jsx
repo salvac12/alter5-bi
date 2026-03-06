@@ -12,6 +12,34 @@ import {
 } from '../utils/airtableProspects';
 import { isAirtableConfigured } from '../utils/airtable';
 
+// Domains for internal tools — never match prospects to these companies
+const INTERNAL_TOOL_DOMAINS = [
+  'atlassian.com', 'atlassian.net', 'jira.com',
+  'slack.com', 'slack-edge.com',
+  'google.com', 'gmail.com', 'googlemail.com', 'google.es',
+  'microsoft.com', 'outlook.com', 'office365.com', 'office.com', 'live.com', 'hotmail.com',
+  'zoom.us', 'zoom.com',
+  'notion.so', 'notion.com',
+  'github.com', 'gitlab.com', 'bitbucket.org',
+  'trello.com', 'asana.com', 'monday.com', 'clickup.com',
+  'hubspot.com', 'salesforce.com', 'pipedrive.com',
+  'mailchimp.com', 'sendgrid.net', 'sendgrid.com',
+  'calendly.com', 'docusign.com', 'docusign.net',
+  'dropbox.com', 'box.com',
+  'linkedin.com', 'facebook.com', 'twitter.com', 'x.com',
+  'airtable.com', 'typeform.com', 'intercom.io',
+  'vercel.com', 'netlify.com', 'heroku.com', 'aws.amazon.com',
+  'stripe.com', 'paypal.com',
+  'canva.com', 'figma.com', 'miro.com',
+  'alter-5.com',
+];
+
+/** Check if a domain belongs to an internal tool (should not be used for matching) */
+function isInternalDomain(domain) {
+  if (!domain) return true;
+  return INTERNAL_TOOL_DOMAINS.some(t => domain === t || domain.endsWith('.' + t));
+}
+
 /**
  * ProspectsView - Kanban board for Alter5 Prospects funnel
  *
@@ -199,11 +227,14 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
   const totalAmount = filteredProspects.reduce((sum, p) => sum + (p.amount || 0), 0);
 
   // Build company name lookup for matching prospects to CRM data
+  // Exclude internal tool domains from the domain index
   const companyByName = useMemo(() => {
     const map = new Map();
     for (const c of companies) {
       map.set(c.name.toLowerCase(), c);
-      map.set(c.domain, c);
+      if (c.domain && !isInternalDomain(c.domain)) {
+        map.set(c.domain, c);
+      }
     }
     return map;
   }, [companies]);
@@ -212,12 +243,12 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
     const name = (prospect.name || '').trim().toLowerCase();
     // Direct name match
     if (companyByName.has(name)) return companyByName.get(name);
-    // Domain from contacts
+    // Domain from contacts (skip internal tool domains like atlassian, jira, slack, etc.)
     const emails = prospect.contacts?.map(c => c.email) || [];
     if (prospect.contactEmail) emails.push(prospect.contactEmail);
     for (const email of emails) {
       const domain = (email || '').split('@')[1];
-      if (domain && companyByName.has(domain)) return companyByName.get(domain);
+      if (domain && !isInternalDomain(domain) && companyByName.has(domain)) return companyByName.get(domain);
     }
     // Partial name match
     if (name.length >= 4) {
