@@ -117,6 +117,7 @@ def fetch_verified_domains():
                     domains[domain] = {
                         "record_id": rec["id"],
                         "status": rec["fields"].get("Status", ""),
+                        "mismatch": rec["fields"].get("Mismatch", False),
                     }
             offset = data.get("offset", "")
             if not offset:
@@ -134,7 +135,7 @@ def upsert_verification(domain, fields, existing_records):
 
     # Sanitize: remove empty singleSelect values
     clean = {}
-    single_selects = {"Role", "Segment", "Type", "Status"}
+    single_selects = {"Role", "Segment", "Type", "Status", "Confidence"}
     multi_selects = {"Activities", "Technologies", "Geography", "Market Roles"}
     for k, v in fields.items():
         if k in single_selects and (not v or v == ""):
@@ -359,6 +360,10 @@ def build_airtable_fields(domain, name, current_enrichment, verification):
         "Mismatch": verification.get("mismatch", False),
     }
 
+    confidence = verification.get("confidence", "")
+    if confidence in ("alta", "media", "baja"):
+        fields["Confidence"] = confidence
+
     if verification.get("mismatch_explanation"):
         fields["Notes"] = verification["mismatch_explanation"]
 
@@ -466,10 +471,21 @@ def main():
             if domain != target_domain:
                 continue
         else:
-            # Skip if already verified (unless --force)
-            if domain in existing_records and not force:
+            # --unverified: only companies NOT yet in Verified-Companies table
+            if unverified_only and domain in existing_records:
+                continue
+
+            # --mismatched: only companies already verified WITH mismatch=True
+            if mismatched_only:
+                if domain not in existing_records:
+                    continue
+                if not existing_records[domain].get("mismatch", False):
+                    continue
+
+            # Skip if already verified (unless --force or --mismatched)
+            if domain in existing_records and not force and not mismatched_only:
                 status = existing_records[domain].get("status", "")
-                if status in ("Verified", "Edited") and not force:
+                if status in ("Verified", "Edited"):
                     continue
 
             # Skip "No relevante" with very few interactions (noise)

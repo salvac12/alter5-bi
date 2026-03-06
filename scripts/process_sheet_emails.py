@@ -436,7 +436,7 @@ Los números son los índices de cada email. Todos los emails deben aparecer en 
     return relevant, ignored
 
 
-def classify_domains_with_gemini(domains_with_context):
+def classify_domains_with_gemini(domains_with_context, verified=None):
     """Classify domains using v2 taxonomy (role → segment → type → activities).
 
     Args:
@@ -444,6 +444,7 @@ def classify_domains_with_gemini(domains_with_context):
             - (domain, [subjects], [snippets])                      — 3-tuple (legacy)
             - (domain, [subjects], [snippets], name)                — 4-tuple (with company name)
             - (domain, [subjects], [snippets], name, [bodies])      — 5-tuple (with full bodies)
+        verified: optional pre-loaded dict from load_verified_companies() to avoid duplicate API calls.
 
     Returns:
         dict of domain -> {"group": str, "type": str, "enrichment": {...} | None}
@@ -460,7 +461,8 @@ def classify_domains_with_gemini(domains_with_context):
         return domain, subjects, snippets, name, bodies
 
     # Pre-resolve verified companies from Airtable (highest priority)
-    verified = load_verified_companies()
+    if verified is None:
+        verified = load_verified_companies()
     results = {}
     remaining_after_verified = []
 
@@ -1076,15 +1078,18 @@ def process_pipeline(reprocess=False):
 
     classifications = {}
 
+    # Pre-load verified companies once for both classification passes
+    verified_overrides = load_verified_companies() if (new_domains or reclassify_domains) else {}
+
     if new_domains:
         print(f"  → {len(new_domains)} dominios nuevos a clasificar")
-        new_cls = classify_domains_with_gemini(new_domains)
+        new_cls = classify_domains_with_gemini(new_domains, verified=verified_overrides)
         classifications.update(new_cls)
         log_classifications_batch(sheet, new_cls, "gemini-2.5-flash-new")
 
     if reclassify_domains:
         print(f"  → {len(reclassify_domains)} dominios existentes a re-clasificar")
-        recls = classify_domains_with_gemini(reclassify_domains)
+        recls = classify_domains_with_gemini(reclassify_domains, verified=verified_overrides)
         classifications.update(recls)
         log_classifications_batch(sheet, recls, "gemini-2.5-flash-reclassify")
 

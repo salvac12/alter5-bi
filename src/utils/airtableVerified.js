@@ -87,6 +87,7 @@ export async function fetchAllVerified() {
       verifiedAt: r.fields["Verified At"] || "",
       notes: r.fields.Notes || "",
       mismatch: r.fields.Mismatch || false,
+      confidence: r.fields.Confidence || "",
     });
   }
 
