@@ -181,3 +181,55 @@ export function invalidateVerifiedCache() {
   verifiedCache = null;
   cacheTimestamp = 0;
 }
+
+// -- Accent mapping: Airtable singleSelect (no accents) -> enrichment (with accents) --
+const ROLE_ACCENT_MAP = {
+  "Originacion": "Originación",
+  "Inversion": "Inversión",
+  "Ecosistema": "Ecosistema",
+  "No relevante": "No relevante",
+};
+
+const TYPE_ACCENT_MAP = {
+  "Asesor tecnico": "Asesor técnico",
+  "Asociacion / Institucion": "Asociación / Institución",
+  "Ingenieria": "Ingeniería",
+};
+
+const TECH_ACCENT_MAP = {
+  "Eolica": "Eólica",
+  "Biogas": "Biogás",
+  "Hidrogeno": "Hidrógeno",
+};
+
+const GEO_ACCENT_MAP = {
+  "Espana": "España",
+};
+
+function mapAccent(value, map) {
+  return map[value] || value;
+}
+
+function mapAccentArray(arr, map) {
+  if (!Array.isArray(arr)) return arr;
+  return arr.map(v => map[v] || v);
+}
+
+/**
+ * Convert a verified record from Airtable format to enrichment override format
+ * (with proper accents restored).
+ * Returns an object compatible with saveEnrichmentOverride().
+ */
+export function verifiedToEnrichmentOverride(verified) {
+  if (!verified || !verified.role) return null;
+
+  const override = {};
+  if (verified.role) override.role = mapAccent(verified.role, ROLE_ACCENT_MAP);
+  if (verified.segment) override.seg = verified.segment; // segments don't have accents
+  if (verified.type) override.tp2 = mapAccent(verified.type, TYPE_ACCENT_MAP);
+  if (verified.technologies?.length) override.tech = mapAccentArray(verified.technologies, TECH_ACCENT_MAP);
+  if (verified.geography?.length) override.geo = mapAccentArray(verified.geography, GEO_ACCENT_MAP);
+  if (verified.marketRoles?.length) override.mr = verified.marketRoles; // no accents needed
+
+  return override;
+}

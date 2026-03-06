@@ -20,7 +20,7 @@ import BridgeCampaignView from './components/BridgeCampaignView';
 import FollowUpQuickPanel from './components/FollowUpQuickPanel';
 import { getCampaigns } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
-import { fetchAllVerified, saveVerification, invalidateVerifiedCache } from './utils/airtableVerified';
+import { fetchAllVerified, saveVerification, invalidateVerifiedCache, verifiedToEnrichmentOverride } from './utils/airtableVerified';
 import { getCurrentUser } from './utils/userConfig';
 import CleanupToolbar from './components/CleanupToolbar';
 import blocklist from './data/blocklist.json';
@@ -31,10 +31,33 @@ export default function App() {
   const [enrichmentOverrides, setEnrichmentOverrides] = useState(() => getAllEnrichmentOverrides());
   const [verifiedCompanies, setVerifiedCompanies] = useState(new Map());
 
-  // Load verified companies from Airtable on mount
+  // Load verified companies from Airtable on mount and auto-apply as enrichment overrides
   useEffect(() => {
     fetchAllVerified()
-      .then(map => setVerifiedCompanies(map))
+      .then(map => {
+        setVerifiedCompanies(map);
+        // Auto-apply verified/mismatch classifications as localStorage overrides
+        let applied = 0;
+        const currentOverrides = getAllEnrichmentOverrides();
+        for (const [domain, v] of map) {
+          // Only apply if the record has a role and is a mismatch or has verified/edited status
+          if (!v.role) continue;
+          const dominated = v.status === "Verified" || v.status === "Edited";
+          const pendingMismatch = v.status === "Pending Review" && v.mismatch;
+          if (!dominated && !pendingMismatch) continue;
+          // Skip if user already has a manual override (don't overwrite their edits)
+          if (currentOverrides[domain]?.updatedAt) continue;
+          const override = verifiedToEnrichmentOverride(v);
+          if (override) {
+            saveEnrichmentOverride(domain, override);
+            applied++;
+          }
+        }
+        if (applied > 0) {
+          console.log(`[Verified] Auto-applied ${applied} verified classifications`);
+          setEnrichmentOverrides(getAllEnrichmentOverrides());
+        }
+      })
       .catch(() => {});
   }, []);
 
