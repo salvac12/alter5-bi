@@ -145,7 +145,7 @@ export default function App() {
       .map(c => {
         const ov = enrichmentOverrides[c.domain];
         if (!ov) return c;
-        const role = ov.role !== undefined ? ov.role : (ov.grp !== undefined ? ov.grp : c.role);
+        const role = (ov.role !== undefined ? ov.role : (ov.grp !== undefined ? ov.grp : c.role)) || c.role || "No relevante";
         return {
           ...c,
           role,
@@ -198,10 +198,10 @@ export default function App() {
       list = list.filter(c =>
         c.name.toLowerCase().includes(q) ||
         c.domain.toLowerCase().includes(q) ||
-        c.role.toLowerCase().includes(q) ||
+        (c.role || "").toLowerCase().includes(q) ||
         (c.segment || "").toLowerCase().includes(q) ||
-        c.companyType.toLowerCase().includes(q) ||
-        c.marketRoles.some(mr => mr.toLowerCase().includes(q))
+        (c.companyType || "").toLowerCase().includes(q) ||
+        (c.marketRoles || []).some(mr => mr.toLowerCase().includes(q))
       );
     }
     if (selEmployees.length) list = list.filter(c => selEmployees.some(e => c.employees.includes(e)));
