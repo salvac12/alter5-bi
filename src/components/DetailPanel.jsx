@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides, canHideCompany } from '../utils/companyData';
 import { COUNTRIES, COMPANY_SIZES, COMPANY_ROLES, COMPANY_TYPES, ORIGINACION_SEGMENTS, COMPANY_TYPES_V2, CORPORATE_ACTIVITIES, TECHNOLOGIES, ASSET_PHASES, GEOGRAPHIES, COMMERCIAL_PHASES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
+import { saveVerification, invalidateVerifiedCache } from '../utils/airtableVerified';
+import { isGeminiConfigured } from '../utils/gemini';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -27,7 +29,7 @@ function contactPriorityInfo(role) {
   return { rank: 4, label: role, color: "#94A3B8" };
 }
 
-export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSave, productMatches, currentUser }) {
+export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSave, productMatches, currentUser, verifiedCompanies, onVerifiedUpdate }) {
   if (!company) return null;
   const c = company;
   const det = c.detail;
@@ -59,6 +61,12 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   const [editedGeo, setEditedGeo] = useState([]);
   const [editedAssetPhase, setEditedAssetPhase] = useState('');
   const [editedCommPhase, setEditedCommPhase] = useState('');
+  // Verification state
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
+  const [verificationError, setVerificationError] = useState(null);
+  const [verifyCooldown, setVerifyCooldown] = useState(false);
+
   // Legacy alias for backward compat in rest of file
   const editedGroup = editedRole;
   const setEditedGroup = setEditedRole;
@@ -85,6 +93,9 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
       setEditedAssetPhase(c.assetPhase || '');
       setEditedCommPhase(c.commercialPhase || '');
       setIsEditingEnrichment(false);
+      setVerificationResult(null);
+      setVerificationError(null);
+      setIsVerifying(false);
     }
   }, [c.domain, det?.contacts, c.marketRoles, c.role, c.group, c.companyType, c.segment, c.activities, c.technologies, c.geography, c.assetPhase, c.commercialPhase]);
 
@@ -180,6 +191,155 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
     setEditedMR(prev =>
       prev.includes(roleId) ? prev.filter(r => r !== roleId) : [...prev, roleId]
     );
+  };
+
+  // Get verification status for this company
+  const verifiedRecord = verifiedCompanies?.get?.(c.domain) || null;
+  const verificationStatus = verifiedRecord?.status || null;
+
+  // Verify company using Gemini + Google Search grounding (browser-side)
+  const handleVerify = async () => {
+    setIsVerifying(true);
+    setVerificationError(null);
+    setVerificationResult(null);
+
+    const apiKey = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+    if (!apiKey) {
+      setVerificationError("VITE_GEMINI_API_KEY no configurada");
+      setIsVerifying(false);
+      return;
+    }
+
+    // Build current classification summary
+    const currRole = c.role || c.group || "Sin clasificar";
+    const currSeg = c.segment || "";
+    const currType = c.companyType || "";
+    const currMR = (c.marketRoles || []).join(", ");
+
+    // Build email context from subjects
+    const subjects = (det?.subjects || []).slice(0, 15).join(" | ");
+    const datedSubjects = (det?.datedSubjects || []).slice(0, 5).map(ds => ds.extract || ds.subject || "").filter(Boolean).join(" // ");
+
+    const prompt = `Eres un analista de verificacion de Alter5, consultora de financiacion de energias renovables.
+
+TAREA: Verificar la clasificacion de "${c.name || c.domain}" (dominio: ${c.domain}).
+
+CLASIFICACION ACTUAL: Role=${currRole}${currSeg ? `, Segment=${currSeg}` : ""}${currType ? `, Type=${currType}` : ""}${currMR ? `, MarketRoles=[${currMR}]` : ""}
+
+CONTEXTO DE EMAILS: [${subjects}]
+${datedSubjects ? `EXTRACTOS: [${datedSubjects.slice(0, 1500)}]` : ""}
+
+INSTRUCCIONES:
+1. BUSCA en internet que hace realmente esta empresa
+2. DISTINGUE entre "lo que la empresa ES" (su negocio real) y "de que habla con Alter5"
+3. Compara con la clasificacion actual
+
+TAXONOMIA:
+- Role: ["Originacion", "Inversion", "Ecosistema", "No relevante"]
+- Segment Originacion: ["Project Finance", "Corporate Finance"]
+- Segment Inversion: ["Deuda", "Equity"]
+- Types Inversion>Deuda: ["Fondo de deuda", "Banco", "Bonista / Institucional"]
+- Types Inversion>Equity: ["Fondo de infraestructura", "Private equity", "Fondo renovable", "IPP comprador", "Utility compradora"]
+- Types Originacion>PF: ["Developer", "IPP", "Developer + IPP"]
+- Types Ecosistema: ["Asesor legal", "Asesor tecnico", "Consultor de precios", "Asset manager", "Ingenieria", "Asesor financiero", "Asociacion / Institucion"]
+- Market Roles: ["Borrower", "Seller (M&A)", "Buyer Investor (M&A)", "Debt Investor", "Equity Investor", "Partner & Services"]
+
+FORMATO (JSON valido, sin markdown):
+{"company_description": "...", "web_sources": "...", "verified_role": "...", "verified_segment": "...", "verified_type": "...", "verified_market_roles": [...], "mismatch": true/false, "mismatch_explanation": "...", "confidence": "alta|media|baja"}`;
+
+    try {
+      const GEMINI_MODEL = "gemini-2.5-flash";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          tools: [{ google_search: {} }],
+          generationConfig: { temperature: 0.2 },
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Gemini API error ${res.status}: ${errText.slice(0, 200)}`);
+      }
+
+      const data = await res.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+      // Parse JSON from response
+      let cleaned = rawText.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+      // Try to find JSON object in text
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
+      const result = JSON.parse(cleaned);
+      setVerificationResult(result);
+    } catch (err) {
+      console.error("Verification failed:", err);
+      setVerificationError(err.message?.includes("JSON") ? "Respuesta invalida de IA — intenta de nuevo" : (err.message || "Error desconocido"));
+    } finally {
+      setIsVerifying(false);
+      // Rate limit: 30s cooldown between verifications
+      setVerifyCooldown(true);
+      setTimeout(() => setVerifyCooldown(false), 30000);
+    }
+  };
+
+  // Accept verification result and apply it
+  const handleAcceptVerification = async () => {
+    if (!verificationResult) return;
+
+    const v = verificationResult;
+
+    // Map to enrichment fields
+    const overrides = {
+      role: v.verified_role || editedRole,
+      seg: v.verified_segment || "",
+      tp2: v.verified_type || "",
+      act: editedActivities,
+      tech: editedTech,
+      geo: editedGeo,
+      mr: v.verified_market_roles || editedMR,
+      grp: v.verified_role || editedRole,
+      tp: v.verified_type || editedType,
+    };
+
+    // Save to localStorage via parent handler
+    if (onEnrichmentSave) {
+      onEnrichmentSave(c.domain, overrides);
+    }
+
+    // Also save verification details to Airtable
+    try {
+      await saveVerification(c.domain, {
+        companyName: c.name || c.domain,
+        previousClassification: `${c.role || ""}${c.segment ? " > " + c.segment : ""}${c.companyType ? " > " + c.companyType : ""}`,
+        role: v.verified_role || "",
+        segment: v.verified_segment || "",
+        type: v.verified_type || "",
+        marketRoles: v.verified_market_roles || [],
+        webDescription: v.company_description || "",
+        webSources: v.web_sources || "",
+        status: "Verified",
+        verifiedBy: currentUser?.name || "manual",
+        mismatch: v.mismatch || false,
+        notes: v.mismatch_explanation || "",
+      });
+      invalidateVerifiedCache();
+      if (onVerifiedUpdate) onVerifiedUpdate();
+    } catch (err) {
+      console.warn("Failed to save verification to Airtable:", err);
+    }
+
+    // Update local UI state
+    setEditedRole(v.verified_role || editedRole);
+    setEditedSegment(v.verified_segment || "");
+    setEditedType(v.verified_type || "");
+    if (v.verified_market_roles?.length) setEditedMR(v.verified_market_roles);
+    setVerificationResult(null);
   };
 
   // Types available for the selected role + segment
@@ -963,6 +1123,213 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
             </div>
           </div>
 
+        </div>
+
+        {/* ═══ Verification Section ═══ */}
+        <div style={{
+          background: "#132238", borderRadius: 12, padding: 18,
+          marginBottom: 20,
+          border: verificationStatus === "Verified" ? "1px solid #10B98140"
+            : verificationStatus === "Edited" ? "1px solid #8B5CF640"
+            : verificationResult?.mismatch ? "1px solid #EF444440"
+            : "1px solid #1B3A5C",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 16 }}>
+              {verificationStatus === "Verified" || verificationStatus === "Edited" ? "\u2705" : "\uD83D\uDD0D"}
+            </span>
+            <DarkSectionTitle style={{ marginBottom: 0 }}>
+              Verificacion
+            </DarkSectionTitle>
+            <span style={{ flex: 1 }} />
+
+            {/* Status badge */}
+            {verificationStatus && (
+              <span style={{
+                padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700,
+                background: verificationStatus === "Verified" ? "#10B98120"
+                  : verificationStatus === "Edited" ? "#8B5CF620"
+                  : verificationStatus === "Pending Review" ? "#F59E0B20"
+                  : "#EF444420",
+                color: verificationStatus === "Verified" ? "#10B981"
+                  : verificationStatus === "Edited" ? "#8B5CF6"
+                  : verificationStatus === "Pending Review" ? "#F59E0B"
+                  : "#EF4444",
+                border: `1px solid ${
+                  verificationStatus === "Verified" ? "#10B98140"
+                  : verificationStatus === "Edited" ? "#8B5CF640"
+                  : verificationStatus === "Pending Review" ? "#F59E0B40"
+                  : "#EF444440"
+                }`,
+              }}>
+                {verificationStatus}
+              </span>
+            )}
+
+            {/* Verify button */}
+            <button
+              onClick={handleVerify}
+              disabled={isVerifying || verifyCooldown}
+              style={{
+                background: (isVerifying || verifyCooldown)
+                  ? "#1B3A5C"
+                  : "linear-gradient(135deg, #F59E0B, #D97706)",
+                border: "none", color: (isVerifying || verifyCooldown) ? "#6B7F94" : "#FFFFFF",
+                padding: "5px 12px", borderRadius: 6,
+                fontSize: 10, fontWeight: 700,
+                cursor: (isVerifying || verifyCooldown) ? "not-allowed" : "pointer",
+                fontFamily: "inherit",
+                opacity: (isVerifying || verifyCooldown) ? 0.7 : 1,
+              }}
+            >
+              {isVerifying ? "Verificando..." : verifyCooldown ? "Espera..." : "Verificar"}
+            </button>
+          </div>
+
+          {/* Verified web description (from Airtable) */}
+          {verifiedRecord?.webDescription && !verificationResult && (
+            <div style={{
+              padding: "10px 12px", borderRadius: 8,
+              background: "#0A1628", border: "1px solid #1B3A5C",
+              marginBottom: 10,
+            }}>
+              <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+                Descripcion web
+              </div>
+              <p style={{ fontSize: 12, color: "#CBD5E1", lineHeight: 1.6, margin: 0 }}>
+                {verifiedRecord.webDescription}
+              </p>
+              {verifiedRecord.verifiedAt && (
+                <div style={{ fontSize: 10, color: "#475569", marginTop: 6 }}>
+                  Verificado por {verifiedRecord.verifiedBy || "agente"} el {new Date(verifiedRecord.verifiedAt).toLocaleDateString("es-ES")}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Verification error */}
+          {verificationError && (
+            <div style={{
+              padding: "8px 12px", borderRadius: 6,
+              background: "#EF444415", border: "1px solid #EF444430",
+              color: "#EF4444", fontSize: 12, marginBottom: 10,
+            }}>
+              Error: {verificationError}
+            </div>
+          )}
+
+          {/* Verification result (comparison view) */}
+          {verificationResult && (
+            <div style={{ marginTop: 4 }}>
+              {/* Web description found */}
+              <div style={{
+                padding: "10px 12px", borderRadius: 8,
+                background: "#0A1628", border: "1px solid #1B3A5C",
+                marginBottom: 12,
+              }}>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+                  Resultado de verificacion web
+                </div>
+                <p style={{ fontSize: 12, color: "#CBD5E1", lineHeight: 1.6, margin: 0 }}>
+                  {verificationResult.company_description || "Sin descripcion encontrada"}
+                </p>
+                {verificationResult.web_sources && (
+                  <div style={{ fontSize: 10, color: "#475569", marginTop: 6 }}>
+                    Fuentes: {verificationResult.web_sources}
+                  </div>
+                )}
+              </div>
+
+              {/* Comparison: Current vs Suggested */}
+              {verificationResult.mismatch && (
+                <div style={{
+                  padding: "10px 12px", borderRadius: 8,
+                  background: "#EF444410", border: "1px solid #EF444430",
+                  marginBottom: 12,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#EF4444", marginBottom: 6 }}>
+                    DISCREPANCIA DETECTADA
+                  </div>
+                  <p style={{ fontSize: 12, color: "#FCA5A5", lineHeight: 1.5, margin: 0 }}>
+                    {verificationResult.mismatch_explanation}
+                  </p>
+                </div>
+              )}
+
+              {/* Side-by-side comparison */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                <div style={{ padding: "8px 10px", borderRadius: 6, background: "#1B3A5C30", border: "1px solid #1B3A5C" }}>
+                  <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Actual</div>
+                  <div style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.6 }}>
+                    <div>Role: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.role || c.group || "?"}</span></div>
+                    {c.segment && <div>Seg: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.segment}</span></div>}
+                    {c.companyType && <div>Tipo: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.companyType}</span></div>}
+                    {(c.marketRoles || []).length > 0 && <div>MR: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.marketRoles.join(", ")}</span></div>}
+                  </div>
+                </div>
+                <div style={{
+                  padding: "8px 10px", borderRadius: 6,
+                  background: verificationResult.mismatch ? "#F59E0B10" : "#10B98110",
+                  border: `1px solid ${verificationResult.mismatch ? "#F59E0B30" : "#10B98130"}`,
+                }}>
+                  <div style={{ fontSize: 9, color: verificationResult.mismatch ? "#F59E0B" : "#10B981", textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Sugerido</div>
+                  <div style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.6 }}>
+                    <div>Role: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{verificationResult.verified_role || "?"}</span></div>
+                    {verificationResult.verified_segment && <div>Seg: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{verificationResult.verified_segment}</span></div>}
+                    {verificationResult.verified_type && <div>Tipo: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{verificationResult.verified_type}</span></div>}
+                    {(verificationResult.verified_market_roles || []).length > 0 && <div>MR: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{verificationResult.verified_market_roles.join(", ")}</span></div>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Confidence */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 10, color: "#6B7F94" }}>Confianza:</span>
+                <span style={{
+                  padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                  background: verificationResult.confidence === "alta" ? "#10B98120" : verificationResult.confidence === "media" ? "#F59E0B20" : "#6B7F9420",
+                  color: verificationResult.confidence === "alta" ? "#10B981" : verificationResult.confidence === "media" ? "#F59E0B" : "#6B7F94",
+                }}>
+                  {verificationResult.confidence || "?"}
+                </span>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={handleAcceptVerification}
+                  style={{
+                    flex: 1,
+                    background: "linear-gradient(135deg, #10B981, #059669)",
+                    border: "none", color: "#FFFFFF",
+                    padding: "8px 14px", borderRadius: 6,
+                    fontSize: 11, fontWeight: 700,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Aceptar sugerencia
+                </button>
+                <button
+                  onClick={() => setVerificationResult(null)}
+                  style={{
+                    background: "#1B3A5C", border: "1px solid #2A4A6C",
+                    color: "#94A3B8", padding: "8px 14px", borderRadius: 6,
+                    fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Descartar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* No verification yet */}
+          {!verificationResult && !verifiedRecord && !verificationError && !isVerifying && (
+            <p style={{ fontSize: 11, color: "#475569", margin: 0, fontStyle: "italic" }}>
+              Pulsa "Verificar" para buscar en internet que hace realmente esta empresa y validar la clasificacion.
+            </p>
+          )}
         </div>
 
         {/* Enrichment: Productos IA & Senales */}

@@ -22,6 +22,7 @@ export default function CompanyTable({
   companies, sortBy, sortDir, onSort, onSelect, selected,
   page, totalPages, setPage, productMatches,
   cleanupMode, cleanupSelection, onToggleCleanup, suspiciousMap,
+  verifiedCompanies,
 }) {
   const SortIcon = ({ col }) => {
     if (sortBy !== col) {
@@ -97,6 +98,7 @@ export default function CompanyTable({
             const isSelected = selected?.idx === c.idx;
             const isChecked = cleanupMode && cleanupSelection?.has(c.domain);
             const suspectReason = cleanupMode && suspiciousMap?.get(c.domain);
+            const verifiedStatus = verifiedCompanies?.get?.(c.domain)?.status;
 
             return (
               <tr key={c.idx}
@@ -160,6 +162,15 @@ export default function CompanyTable({
               <td style={{ padding: "10px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ fontWeight: 600, color: "#1A2B3D", fontSize: 13, lineHeight: 1.3 }}>{c.name}</div>
+                  {verifiedStatus && (
+                    <span title={`Verificado: ${verifiedStatus}`} style={{
+                      width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                      background: verifiedStatus === "Verified" ? "#10B981"
+                        : verifiedStatus === "Edited" ? "#8B5CF6"
+                        : verifiedStatus === "Pending Review" ? "#F59E0B"
+                        : "#6B7F94",
+                    }} />
+                  )}
                   {cleanupMode && suspectReason && (
                     <span style={{
                       fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4,

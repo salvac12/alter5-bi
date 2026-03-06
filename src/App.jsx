@@ -20,6 +20,7 @@ import BridgeCampaignView from './components/BridgeCampaignView';
 import FollowUpQuickPanel from './components/FollowUpQuickPanel';
 import { getCampaigns } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
+import { fetchAllVerified, saveVerification, invalidateVerifiedCache } from './utils/airtableVerified';
 import { getCurrentUser } from './utils/userConfig';
 import CleanupToolbar from './components/CleanupToolbar';
 import blocklist from './data/blocklist.json';
@@ -28,6 +29,14 @@ export default function App() {
   const allCompanies = useMemo(() => parseCompanies(), []);
   const [hiddenCompanies, setHiddenCompanies] = useState(() => getHiddenCompanies());
   const [enrichmentOverrides, setEnrichmentOverrides] = useState(() => getAllEnrichmentOverrides());
+  const [verifiedCompanies, setVerifiedCompanies] = useState(new Map());
+
+  // Load verified companies from Airtable on mount
+  useEffect(() => {
+    fetchAllVerified()
+      .then(map => setVerifiedCompanies(map))
+      .catch(() => {});
+  }, []);
 
   // ── User identity ──
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
@@ -261,6 +270,24 @@ export default function App() {
     const success = saveEnrichmentOverride(domain, overrides);
     if (success) {
       setEnrichmentOverrides(getAllEnrichmentOverrides());
+
+      // Also persist to Airtable Verified-Companies (fire-and-forget)
+      const company = companies.find(c => c.domain === domain);
+      saveVerification(domain, {
+        companyName: company?.name || domain,
+        role: overrides.role || "",
+        segment: overrides.seg || "",
+        type: overrides.tp2 || "",
+        activities: overrides.act || [],
+        technologies: overrides.tech || [],
+        geography: overrides.geo || [],
+        marketRoles: overrides.mr || [],
+        status: "Edited",
+        verifiedBy: currentUser?.name || "manual",
+      }).then(() => {
+        invalidateVerifiedCache();
+        fetchAllVerified().then(map => setVerifiedCompanies(map)).catch(() => {});
+      }).catch(err => console.warn("Verified save failed:", err));
     }
     return success;
   };
@@ -632,6 +659,7 @@ export default function App() {
               cleanupSelection={cleanupSelection}
               onToggleCleanup={handleToggleCleanup}
               suspiciousMap={suspiciousMap}
+              verifiedCompanies={verifiedCompanies}
             />
           </div>
         </div>
@@ -686,6 +714,8 @@ export default function App() {
             onEnrichmentSave={handleEnrichmentSave}
             productMatches={productMatches}
             currentUser={currentUser}
+            verifiedCompanies={verifiedCompanies}
+            onVerifiedUpdate={() => fetchAllVerified().then(map => setVerifiedCompanies(map)).catch(() => {})}
           />
         </>
       )}

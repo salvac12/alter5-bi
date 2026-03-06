@@ -22,8 +22,10 @@
 
 import json
 import os
+import ssl
 import sys
 import time
+import urllib.request
 from collections import defaultdict
 from datetime import datetime
 
@@ -146,6 +148,137 @@ def build_known_result(override):
         "tp": legacy_type,
     }
     return {"group": legacy_group, "type": legacy_type, "enrichment": enrichment}
+
+
+def load_verified_companies():
+    """Load verified classifications from Airtable Verified-Companies table.
+
+    Only loads records with Status = 'Verified' or 'Edited'.
+    Returns dict of domain -> override fields (same format as known_companies).
+    """
+    airtable_pat = os.environ.get("AIRTABLE_PAT", "")
+    if not airtable_pat:
+        return {}
+
+    base_id = os.environ.get("AIRTABLE_BASE_ID", "appVu3TvSZ1E4tj0J")
+    table_name = "Verified-Companies"
+    api_url = f"https://api.airtable.com/v0/{base_id}/{urllib.request.quote(table_name)}"
+
+    # Map Airtable singleSelect values (no accents) -> enrichment values (with accents)
+    ROLE_MAP = {
+        "Originacion": "Originación",
+        "Inversion": "Inversión",
+        "Ecosistema": "Ecosistema",
+        "No relevante": "No relevante",
+    }
+    # Enrichment `seg` is only used for Originación (PF/CF).
+    # For Inversión, "Deuda"/"Equity" is inferred from type, not stored in seg.
+    SEG_MAP_ORIGINACION = {
+        "Project Finance": "Project Finance",
+        "Corporate Finance": "Corporate Finance",
+    }
+    TYPE_ACCENT_MAP = {
+        "Asesor tecnico": "Asesor técnico",
+        "Asociacion / Institucion": "Asociación / Institución",
+        "Ingenieria": "Ingeniería",
+    }
+    TECH_ACCENT_MAP = {
+        "Eolica": "Eólica",
+        "Biogas": "Biogás",
+        "Hidrogeno": "Hidrógeno",
+    }
+    GEO_ACCENT_MAP = {
+        "Espana": "España",
+    }
+    # Activities with accents
+    ACTIVITY_ACCENT_MAP = {
+        "Biogas / Biometano": "Biogás / Biometano",
+        "Hidrogeno verde": "Hidrógeno verde",
+        "Construccion renovable": "Construcción renovable",
+        "EPC / Construccion renovable": "EPC / Construcción renovable",
+        "Redes / Infraestructura electrica": "Redes / Infraestructura eléctrica",
+    }
+
+    verified = {}
+    offset = ""
+
+    try:
+        import urllib.request as ur
+
+        while True:
+            # Filter for Verified or Edited status
+            formula = urllib.request.quote("OR({Status}='Verified',{Status}='Edited')")
+            url = f"{api_url}?pageSize=100&filterByFormula={formula}"
+            if offset:
+                url += f"&offset={offset}"
+
+            req = ur.Request(url, headers={
+                "Authorization": f"Bearer {airtable_pat}",
+                "Content-Type": "application/json",
+            })
+
+            # Reuse project-level SSL context
+            try:
+                import certifi as _certifi
+                _ssl_ctx = ssl.create_default_context(cafile=_certifi.where())
+            except ImportError:
+                _ssl_ctx = ssl.create_default_context()
+                if not os.environ.get("CI"):
+                    _ssl_ctx.check_hostname = False
+                    _ssl_ctx.verify_mode = ssl.CERT_NONE
+
+            with ur.urlopen(req, context=_ssl_ctx) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            for rec in data.get("records", []):
+                f = rec.get("fields", {})
+                domain = f.get("Domain", "")
+                if not domain:
+                    continue
+
+                # Map Airtable field values back to enrichment format
+                role_raw = f.get("Role", "")
+                role = ROLE_MAP.get(role_raw, role_raw)
+
+                seg_raw = f.get("Segment", "")
+                type_raw = f.get("Type", "")
+                tp2 = TYPE_ACCENT_MAP.get(type_raw, type_raw)
+
+                # Segment handling: enrichment `seg` only stores Originación segments
+                # For Inversión, Deuda/Equity is inferred from type, not stored
+                if role == "Originación":
+                    seg = SEG_MAP_ORIGINACION.get(seg_raw, seg_raw) if seg_raw else ""
+                else:
+                    seg = ""  # Inversión/Ecosistema don't use seg in enrichment
+
+                tech_raw = f.get("Technologies", [])
+                tech = [TECH_ACCENT_MAP.get(t, t) for t in tech_raw]
+
+                geo_raw = f.get("Geography", [])
+                geo = [GEO_ACCENT_MAP.get(g, g) for g in geo_raw]
+
+                mr = f.get("Market Roles", [])
+                act_raw = f.get("Activities", [])
+                act = [ACTIVITY_ACCENT_MAP.get(a, a) for a in act_raw]
+
+                verified[domain] = {
+                    "role": role,
+                    "seg": seg,
+                    "tp2": tp2,
+                    "act": act,
+                    "tech": tech,
+                    "geo": geo,
+                    "mr": mr,
+                }
+
+            offset = data.get("offset", "")
+            if not offset:
+                break
+
+    except Exception as e:
+        print(f"  [warn] Error loading verified companies from Airtable: {e}")
+
+    return verified
 
 
 # ---------------------------------------------------------------------------
@@ -326,20 +459,35 @@ def classify_domains_with_gemini(domains_with_context):
         bodies = item[4] if len(item) > 4 else []
         return domain, subjects, snippets, name, bodies
 
-    # Pre-resolve known companies (skip Gemini for these)
-    known = load_known_companies()
+    # Pre-resolve verified companies from Airtable (highest priority)
+    verified = load_verified_companies()
     results = {}
-    remaining = []
+    remaining_after_verified = []
 
     for item in domains_with_context:
+        domain = item[0]
+        if domain in verified:
+            results[domain] = build_known_result(verified[domain])
+        else:
+            remaining_after_verified.append(item)
+
+    if verified and len(results) > 0:
+        print(f"  -> {len(results)} dominios resueltos via Verified-Companies (Airtable)")
+
+    # Pre-resolve known companies (skip Gemini for these)
+    known = load_known_companies()
+    remaining = []
+
+    for item in remaining_after_verified:
         domain = item[0]
         if domain in known:
             results[domain] = build_known_result(known[domain])
         else:
             remaining.append(item)
 
-    if known and len(results) > 0:
-        print(f"  -> {len(results)} dominios resueltos via known_companies.json")
+    known_count = len(remaining_after_verified) - len(remaining)
+    if known_count > 0:
+        print(f"  -> {known_count} dominios resueltos via known_companies.json")
 
     if not remaining:
         return results
