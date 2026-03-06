@@ -123,6 +123,46 @@ export function parseCompanies() {
     // Airtable opportunity match
     const opportunity = findOpportunity(r[0]);
 
+    // ── Data Quality Score (0-100) ──
+    // Measures how complete and reliable the data is for this company
+    let qualityScore = 0;
+
+    // Has v2 enrichment with role classified (not "No relevante" default) → 25 pts
+    if (tv >= 2 && role && role !== "No relevante") qualityScore += 25;
+    else if (tv >= 2) qualityScore += 15; // has enrichment but "No relevante"
+
+    // Has contacts with identified roles (not all "No identificado") → 20 pts
+    const contacts = detail?.contacts || [];
+    const identifiedContacts = contacts.filter(c => c.role && c.role !== "No identificado" && c.role !== "");
+    if (identifiedContacts.length >= 2) qualityScore += 20;
+    else if (identifiedContacts.length === 1) qualityScore += 10;
+
+    // Has timeline with summaries → 15 pts
+    const timeline = detail?.timeline || [];
+    const summaryCount = timeline.filter(t => t.summary && t.summary.length > 5).length;
+    if (summaryCount >= 3) qualityScore += 15;
+    else if (summaryCount >= 1) qualityScore += 8;
+
+    // Has meaningful context → 15 pts
+    const contextLen = (detail?.context || "").length;
+    if (contextLen >= 100) qualityScore += 15;
+    else if (contextLen >= 30) qualityScore += 8;
+
+    // Has enough subjects for context → 10 pts
+    const subjectCount = (detail?.subjects || []).length;
+    if (subjectCount >= 5) qualityScore += 10;
+    else if (subjectCount >= 2) qualityScore += 5;
+
+    // Has market roles assigned → 10 pts
+    if (marketRoles.length > 0) qualityScore += 10;
+
+    // Has multiple contacts → 5 pts
+    if (contacts.length >= 3) qualityScore += 5;
+    else if (contacts.length >= 2) qualityScore += 3;
+
+    // Quality label
+    const qualityLabel = qualityScore >= 75 ? "alta" : qualityScore >= 45 ? "media" : "baja";
+
     return {
       idx: i, name: r[0], domain: r[1],
       // Keep legacy fields for CSV export compatibility
@@ -131,6 +171,7 @@ export function parseCompanies() {
       firstDate: r[6], lastDate: r[7],
       employees, status, score, volScore, recScore, netScore,
       groupScore,
+      qualityScore, qualityLabel,
       monthsAgo: Math.round(monthsAgo), detail,
       // Taxonomy v2
       role,

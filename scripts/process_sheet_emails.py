@@ -100,7 +100,8 @@ PERSONAL_DOMAINS = {
 }
 
 GEMINI_BATCH_SIZE = 6
-GEMINI_RPM_DELAY = 4.5  # seconds between calls to stay under 15 req/min
+GEMINI_RPM_DELAY = float(os.environ.get("GEMINI_RPM_DELAY", "4.5"))  # seconds between calls
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Known companies override file
 KNOWN_COMPANIES_FILE = os.path.join(PROJECT_DIR, "config", "known_companies.json")
@@ -236,7 +237,7 @@ def filter_relevant_emails(pending_emails):
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL)
     except Exception as e:
         print(f"  [warn] Gemini init failed: {e} — skipping relevance filter")
         return pending_emails, []
@@ -252,12 +253,19 @@ def filter_relevant_emails(pending_emails):
         for i, row in enumerate(batch):
             from_email = str(row.get("from_email", ""))
             subject = str(row.get("subject", ""))
-            snippet = str(row.get("body_snippet", ""))[:150]
-            lines.append(f"{i}: from={from_email} | subject={subject} | snippet={snippet}")
+            snippet = str(row.get("body_snippet", ""))[:200]
+            body = str(row.get("body_text", ""))[:500]
+            # Use body_text if available, otherwise fall back to snippet
+            content = body if body and body != "nan" else snippet
+            lines.append(f"{i}: from={from_email} | subject={subject} | content={content}")
 
-        prompt = f"""Eres un filtro de emails para Alter-5, una empresa de consultoría tecnológica y soluciones digitales.
+        prompt = f"""Eres un filtro de emails para Alter5, consultora de financiación de energías renovables en Europa.
 
-Analiza estos emails y decide cuáles son RELEVANTES para el negocio (oportunidades comerciales, comunicación con clientes, partners, proveedores, contactos profesionales, propuestas, reuniones de negocio) y cuáles NO son relevantes (newsletters, notificaciones automáticas de herramientas/apps, marketing masivo, facturas/recibos, spam, suscripciones, alertas de sistemas, emails personales no profesionales).
+Alter5 INTERMEDIA entre empresas que buscan capital (developers renovables, IPPs, corporates en transición energética) e inversores (fondos de deuda, bancos, fondos de equity). Sus productos son: Préstamo Construcción, Refinanciación, Colocación Inversores, Advisory / M&A.
+
+Analiza estos emails y decide cuáles son RELEVANTES para el negocio:
+RELEVANTES: comunicación con clientes/prospects, inversores, asesores legales/financieros, propuestas de financiación, reuniones de negocio, oportunidades en renovables, deals de M&A, term sheets, due diligence, NDA, contactos profesionales del sector energético/financiero.
+NO RELEVANTES: newsletters, notificaciones automáticas de herramientas/apps, marketing masivo, facturas/recibos genéricos, spam, suscripciones, alertas de sistemas, emails personales, eventos/conferencias masivas, plataformas SaaS.
 
 Emails:
 {chr(10).join(lines)}
@@ -300,19 +308,23 @@ def classify_domains_with_gemini(domains_with_context):
 
     Args:
         domains_with_context: list of tuples, either:
-            - (domain, [subjects], [snippets])           — 3-tuple (legacy)
-            - (domain, [subjects], [snippets], name)     — 4-tuple (with company name)
+            - (domain, [subjects], [snippets])                      — 3-tuple (legacy)
+            - (domain, [subjects], [snippets], name)                — 4-tuple (with company name)
+            - (domain, [subjects], [snippets], name, [bodies])      — 5-tuple (with full bodies)
 
     Returns:
         dict of domain -> {"group": str, "type": str, "enrichment": {...} | None}
     """
     default = {"group": "Other", "type": "Other", "enrichment": None}
 
-    # Normalize tuples: extract domain and optional name
+    # Normalize tuples: extract domain, subjects, snippets, name, and bodies
     def _unpack(item):
-        if len(item) >= 4:
-            return item[0], item[1], item[2], item[3]
-        return item[0], item[1], item[2], ""
+        domain = item[0]
+        subjects = item[1] if len(item) > 1 else []
+        snippets = item[2] if len(item) > 2 else []
+        name = item[3] if len(item) > 3 else ""
+        bodies = item[4] if len(item) > 4 else []
+        return domain, subjects, snippets, name, bodies
 
     # Pre-resolve known companies (skip Gemini for these)
     known = load_known_companies()
@@ -342,7 +354,7 @@ def classify_domains_with_gemini(domains_with_context):
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL)
     except Exception as e:
         print(f"  [warn] Gemini init failed: {e} — using defaults")
         for item in remaining:
@@ -350,16 +362,26 @@ def classify_domains_with_gemini(domains_with_context):
         return results
 
     # Process in batches
+    total_batches = (len(remaining) + GEMINI_BATCH_SIZE - 1) // GEMINI_BATCH_SIZE
     for batch_start in range(0, len(remaining), GEMINI_BATCH_SIZE):
         batch = remaining[batch_start:batch_start + GEMINI_BATCH_SIZE]
+        batch_num = batch_start // GEMINI_BATCH_SIZE + 1
+        if batch_num % 10 == 1 or batch_num == total_batches:
+            print(f"  [classify] batch {batch_num}/{total_batches} ({batch_start + len(batch)}/{len(remaining)} empresas)")
 
         lines = []
         for item in batch:
-            domain, subjects, snippets, name = _unpack(item)
-            subj_text = " | ".join(subjects[:5])
-            snip_text = " // ".join(snippets[:3])[:300]
+            domain, subjects, snippets, name, bodies = _unpack(item)
+            subj_text = " | ".join(subjects[:15])  # expanded from 5 to 15
             name_part = f" ({name})" if name else ""
-            lines.append(f"- {domain}{name_part}: subjects=[{subj_text}] snippets=[{snip_text}]")
+
+            # Build rich context: prefer full bodies, fallback to snippets
+            if bodies:
+                body_text = " // ".join(bodies[:5])[:2000]  # up to 5 bodies, 2000 chars total
+                lines.append(f"- {domain}{name_part}: subjects=[{subj_text}] email_content=[{body_text}]")
+            else:
+                snip_text = " // ".join(snippets[:8])[:1000]  # expanded from 3/300 to 8/1000
+                lines.append(f"- {domain}{name_part}: subjects=[{subj_text}] snippets=[{snip_text}]")
 
         prompt = f"""Eres un analista de Alter5, consultora de financiación de energías renovables en Europa.
 
@@ -521,10 +543,12 @@ Responde SOLO con JSON válido, sin markdown ni explicaciones:
 
 
 def classify_roles_with_gemini(contacts_to_classify):
-    """Classify contact roles using Gemini.
+    """Classify contact roles using Gemini with email context.
 
     Args:
-        contacts_to_classify: list of (name, email, domain) tuples
+        contacts_to_classify: list of tuples:
+            - (name, email, domain)                              — 3-tuple (legacy)
+            - (name, email, domain, [subjects], [bodies])        — 5-tuple (with context)
 
     Returns:
         dict of email -> role string
@@ -536,7 +560,7 @@ def classify_roles_with_gemini(contacts_to_classify):
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL)
     except Exception:
         return {}
 
@@ -546,16 +570,40 @@ def classify_roles_with_gemini(contacts_to_classify):
         batch = contacts_to_classify[batch_start:batch_start + GEMINI_BATCH_SIZE]
 
         lines = []
-        for name, email, domain in batch:
-            lines.append(f"- {name} <{email}> ({domain})")
+        for item in batch:
+            name = item[0]
+            email = item[1]
+            domain = item[2]
+            subjects = item[3] if len(item) > 3 else []
+            bodies = item[4] if len(item) > 4 else []
 
-        prompt = f"""Para cada contacto, estima su cargo/rol profesional basándote en su nombre y email.
+            # Build context from email subjects and bodies
+            context_parts = []
+            if subjects:
+                context_parts.append(f"emails sobre: {' | '.join(subjects[:5])}")
+            if bodies:
+                # Look for signature lines that reveal the role/title
+                body_sample = bodies[0][:500] if bodies else ""
+                context_parts.append(f"contenido: {body_sample}")
+
+            context = f" — {'; '.join(context_parts)}" if context_parts else ""
+            lines.append(f"- {name} <{email}> ({domain}){context}")
+
+        prompt = f"""Eres un analista de Alter5, consultora de financiación de energías renovables.
+
+Para cada contacto, estima su cargo/rol profesional. Usa las pistas disponibles:
+1. Firma del email (si aparece en el contenido): cargo exacto
+2. Asuntos de email: tipo de conversación indica seniority y departamento
+3. Nombre del dominio: tipo de empresa
+4. Nombre: patrones culturales de nombres ejecutivos
+
+Cargos típicos en este sector: CEO, CFO, Director Financiero, Director de Desarrollo, Responsable de Financiación Estructurada, Head of M&A, Portfolio Manager, Investment Director, Fund Manager, Socio/Partner, Asociado, Abogado, Director General, Director Comercial, Head of Business Development, Tesorero.
 
 Contactos:
 {chr(10).join(lines)}
 
 Responde SOLO con un JSON válido: {{"email": "cargo estimado"}}
-Si no puedes estimar el cargo, usa "No identificado"."""
+Si no hay suficientes pistas para una estimación razonable, usa "No identificado"."""
 
         try:
             response = model.generate_content(prompt)
@@ -612,7 +660,7 @@ def generate_quarterly_summaries(all_companies):
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel(GEMINI_MODEL)
     except Exception as e:
         print(f"  [warn] Gemini init failed: {e} — skipping summaries")
         return 0
@@ -692,6 +740,8 @@ def group_emails_by_company(pending_emails):
         "subjects": [],
         "dated_subjects": [],
         "snippets": [],
+        "bodies": [],          # NEW: full email body texts for richer classification
+        "contact_subjects": defaultdict(list),  # NEW: subjects per contact email for role inference
     })
 
     for row in pending_emails:
@@ -735,6 +785,16 @@ def group_emails_by_company(pending_emails):
         # Track body snippets for enriched context
         if snippet and snippet != "nan" and len(co["snippets"]) < 10:
             co["snippets"].append(snippet[:200])
+
+        # Track full body text for richer AI classification (new column from GAS)
+        body_text = str(row.get("body_text", "")).strip()
+        if body_text and body_text != "nan" and len(co["bodies"]) < 10:
+            co["bodies"].append(body_text[:1000])
+
+        # Track subjects per contact for role inference
+        if from_email and subject:
+            if len(co["contact_subjects"][from_email]) < 5:
+                co["contact_subjects"][from_email].append(subject)
 
     return dict(companies)
 
@@ -820,25 +880,81 @@ def process_pipeline(reprocess=False):
         if blocked_domains:
             print(f"  → {len(blocked_domains)} dominios en blocklist")
 
-    # 5. Classify NEW domains with Gemini
-    print("  [5/7] Clasificando empresas nuevas con IA...")
-    new_domains = [
-        (d, grouped[d]["subjects"], grouped[d]["snippets"])
-        for d in grouped if d not in all_companies
-    ]
+    # 5. Classify NEW domains + RE-CLASSIFY existing domains that need it
+    print("  [5/7] Clasificando empresas con IA...")
+
+    new_domains = []
+    reclassify_domains = []
+
+    for d in grouped:
+        if d in blocked_domains:
+            continue
+        if d not in all_companies:
+            # New domain — classify from scratch
+            new_domains.append(
+                (d, grouped[d]["subjects"], grouped[d]["snippets"],
+                 d.split(".")[0].title(), grouped[d].get("bodies", []))
+            )
+        else:
+            # Existing domain — check if re-classification needed
+            existing = all_companies[d]
+            enrichment = existing.get("enrichment") or {}
+            needs_reclassify = False
+
+            # Case 1: No enrichment at all (pre-enrichment imports)
+            if not enrichment or enrichment.get("_tv") != 2:
+                needs_reclassify = True
+
+            # Case 2: Classified as "No relevante" or "Other" but receiving new emails
+            elif enrichment.get("role") == "No relevante" or enrichment.get("grp") == "Other":
+                needs_reclassify = True
+
+            # Case 3: Significantly more emails since last classification
+            elif enrichment.get("_email_count", 0) > 0:
+                current_interactions = existing.get("interactions", 0)
+                prev_count = enrichment.get("_email_count", 0)
+                if current_interactions >= prev_count * 2 and current_interactions - prev_count >= 5:
+                    needs_reclassify = True
+
+            if needs_reclassify:
+                # Use ALL available data (existing + new) for re-classification
+                all_subjects = existing.get("subjects", []) + grouped[d]["subjects"]
+                all_snippets = existing.get("snippets", []) + grouped[d]["snippets"]
+                all_bodies = grouped[d].get("bodies", [])
+                name = existing.get("name", d.split(".")[0].title())
+                reclassify_domains.append(
+                    (d, all_subjects[:20], all_snippets[:15], name, all_bodies)
+                )
+
+    classifications = {}
+
     if new_domains:
         print(f"  → {len(new_domains)} dominios nuevos a clasificar")
-        classifications = classify_domains_with_gemini(new_domains)
-        log_classifications_batch(sheet, classifications, "gemini-2.0-flash")
-    else:
-        print("  → No hay dominios nuevos (solo actualizaciones)")
-        classifications = {}
+        new_cls = classify_domains_with_gemini(new_domains)
+        classifications.update(new_cls)
+        log_classifications_batch(sheet, new_cls, "gemini-2.5-flash-new")
 
-    # Classify roles for new contacts
+    if reclassify_domains:
+        print(f"  → {len(reclassify_domains)} dominios existentes a re-clasificar")
+        recls = classify_domains_with_gemini(reclassify_domains)
+        classifications.update(recls)
+        log_classifications_batch(sheet, recls, "gemini-2.5-flash-reclassify")
+
+    if not new_domains and not reclassify_domains:
+        print("  → No hay dominios que clasificar")
+
+    # Classify roles for new contacts (with email context for better accuracy)
     all_new_contacts = []
     for domain, data in grouped.items():
+        if domain in blocked_domains:
+            continue
+        contact_subjects = data.get("contact_subjects", {})
+        bodies = data.get("bodies", [])
         for email, contact in data["contacts"].items():
-            all_new_contacts.append((contact["name"], email, domain))
+            subjs = contact_subjects.get(email, [])
+            # Pass the first body where this contact appears (for signature detection)
+            contact_bodies = bodies[:2] if bodies else []
+            all_new_contacts.append((contact["name"], email, domain, subjs, contact_bodies))
 
     role_map = {}
     if all_new_contacts:
@@ -897,11 +1013,16 @@ def process_pipeline(reprocess=False):
                 emp_id,
             )
 
-            # Assign enrichment for NEW companies only (don't overwrite existing)
-            if is_new:
+            # Assign enrichment: for NEW companies always, for existing if re-classified
+            if is_new or domain in classifications:
                 enr = cls.get("enrichment")
                 if enr:
+                    # Add classification metadata for tracking re-classification triggers
+                    enr["_classified_at"] = datetime.utcnow().isoformat()
+                    enr["_email_count"] = all_companies[domain].get("interactions", 0)
                     all_companies[domain]["enrichment"] = enr
+
+            if is_new:
                 new_count += 1
                 # Only count once per domain
                 break

@@ -11,6 +11,11 @@ React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 - `python scripts/sync_airtable_opportunities.py` — sync Airtable Opportunities -> JSON
 - `python scripts/process_sheet_emails.py` — pipeline Gmail -> companies.json (diario en CI)
 - `python scripts/process_sheet_emails.py --reprocess` — releer emails ya procesados (backfill)
+- `python scripts/backfill_classifications.py` — re-clasificar todas las empresas con pipeline mejorado
+- `python scripts/backfill_classifications.py --top 500` — re-clasificar top 500 por interacciones
+- `python scripts/backfill_classifications.py --unclassified` — solo empresas sin enrichment v2
+- `python scripts/backfill_classifications.py --roles` — tambien re-clasificar roles de contactos
+- `python scripts/backfill_classifications.py --dry-run` — preview sin escribir
 - `python scripts/create_prospects_table.py` — crear tabla Prospects en Airtable (una vez)
 
 ## Architecture
@@ -19,6 +24,7 @@ React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 - **Datos pipeline**: live API Airtable (`src/utils/airtable.js`) + static `src/data/opportunities.json`
 - **Datos prospects**: live API Airtable (`src/utils/airtableProspects.js`), tabla "BETA-Prospects"
 - **Enrichment**: AI-generated taxonomy con localStorage overrides editables inline
+- **Quality Score**: `qualityScore` (0-100) en `data.js` mide completitud de datos (enrichment, roles contacto, timeline, contexto, market roles). Labels: alta/media/baja. Dot visual en CompanyTable
 
 ### Flujo de ventas
 ```
@@ -28,17 +34,23 @@ Lead -> Interesado -> Reunion -> Doc. Pendiente -> Term-Sheet  |  conversion aut
 
 ### Pipeline automatico Gmail -> Dashboard
 ```
-Gmail (2 buzones: Salvador + Leticia)
+Gmail (8 buzones: Salvador, Leticia, Javier, Miguel, Carlos, Gonzalo, Rafael + historico Guillermo)
     |
 Google Apps Script (scanMailboxes.gs, trigger ~03:12 UTC)
+    | format=full: captura subject + snippet + body_text (max 2000 chars)
     |
-Google Sheet "alter5-bi-pipeline" (tab raw_emails, status=pending)
+Google Sheet "alter5-bi-pipeline" (tab raw_emails, 10 columnas, status=pending)
     |
 GitHub Actions (04:00 UTC, process-emails.yml)
     |
-process_sheet_emails.py (Gemini filtra + clasifica)
+process_sheet_emails.py (Gemini filtra + clasifica + re-clasifica)
+    | - Filtro relevancia: usa body_text completo (no solo snippet)
+    | - Clasificacion: 15 subjects + 5 bodies (2000 chars) por empresa
+    | - Re-clasificacion automatica: empresas sin enrichment, "No relevante", o con muchos emails nuevos
+    | - Roles de contacto: usa subjects + body para inferir cargo (no solo nombre+email)
     |
 companies_full.json + companies.json (merge incremental)
+    | enrichment._classified_at, _email_count para tracking de re-clasificacion
     |
 git commit + push -> Vercel auto-deploy
 ```
@@ -65,9 +77,10 @@ Nota: Guillermo Souto ya no esta en la empresa. Su buzon no se escanea, pero sus
 - `src/utils/airtableCerebro.js` — Airtable REST client para Cerebro-Knowledge (base de conocimiento)
 - `src/utils/gemini.js` — Gemini AI client + queryCerebro() (busqueda en 4 fases)
 - `scripts/create_cerebro_table.py` — crear tabla Cerebro-Knowledge en Airtable (una vez, YA EJECUTADO)
-- `scripts/process_sheet_emails.py` — Pipeline Gmail: Sheet -> Gemini -> JSON (soporta --reprocess)
+- `scripts/process_sheet_emails.py` — Pipeline Gmail: Sheet -> Gemini -> JSON (soporta --reprocess, re-clasificacion automatica)
+- `scripts/backfill_classifications.py` — Re-clasificacion masiva de empresas existentes (--top N, --unclassified, --roles, --dry-run)
 - `scripts/sync_airtable_opportunities.py` — Airtable Opportunities -> JSON sync
-- `scripts/gas/scanMailboxes.gs` — Google Apps Script que escanea Gmail
+- `scripts/gas/scanMailboxes.gs` — Google Apps Script que escanea Gmail (format=full, captura body_text)
 - `scripts/create_prospects_table.py` — crear tabla Prospects via Meta API
 - `.github/workflows/process-emails.yml` — CI/CD diario + dispatch manual con opcion reprocess
 

@@ -3,10 +3,14 @@
  *  Alter5 BI — Gmail Scanner (Google Apps Script)
  * ═══════════════════════════════════════════════════════════
  *
- *  Escanea los buzones de Salvador y Leticia buscando emails
- *  recibidos desde la última ejecución. Escribe las filas en
- *  la Google Sheet "alter5-bi-pipeline" y dispara el workflow
+ *  Escanea los buzones del equipo buscando emails recibidos
+ *  desde la última ejecución. Extrae metadatos + cuerpo completo
+ *  (text/plain o HTML stripped, max 2000 chars). Escribe las filas
+ *  en la Google Sheet "alter5-bi-pipeline" y dispara el workflow
  *  de GitHub Actions.
+ *
+ *  Columns: status | employee_id | date | from_email | from_name |
+ *           from_domain | subject | body_snippet | thread_id | body_text
  *
  *  SETUP:
  *  1. Copiar este código al editor de Apps Script
@@ -81,8 +85,13 @@ function getEmployeesFromSheet_(ss) {
   return employees;
 }
 
+// ---- Config ----
+var MAX_RUNTIME_MS = 25 * 60 * 1000;  // 25 min safety margin (GAS limit: 30 min manual)
+var SCAN_START_TIME_ = null;           // set in scanMailboxes()
+
 // ---- Main ----
 function scanMailboxes() {
+  SCAN_START_TIME_ = new Date().getTime();
   var props = PropertiesService.getScriptProperties();
   var sheetId = props.getProperty('SHEET_ID');
   if (!sheetId) throw new Error('SHEET_ID no configurado en Script Properties');
@@ -98,50 +107,115 @@ function scanMailboxes() {
   var EMPLOYEES = getEmployeesFromSheet_(ss);
   var existingThreadIds = getExistingThreadIds_(rawSheet);
   var totalNew = 0;
+  var timedOut = false;
 
-  EMPLOYEES.forEach(function(emp) {
+  for (var ei = 0; ei < EMPLOYEES.length; ei++) {
+    var emp = EMPLOYEES[ei];
+
+    // Check if we're approaching the time limit
+    if (isTimeLimitReached_()) {
+      Logger.log('TIME LIMIT before starting ' + emp.id + '. Scheduling continuation...');
+      timedOut = true;
+      break;
+    }
+
     var lastScan = getConfigValue_(configSheet, emp.configKey);
     var afterDate = lastScan
       ? Utilities.formatDate(new Date(lastScan), 'Europe/Madrid', 'yyyy/MM/dd')
-      : '2024/01/01';
+      : '2020/01/01';
+
+    // Skip employees already scanned recently (within last hour)
+    if (lastScan) {
+      var lastScanDate = new Date(lastScan);
+      var hoursSince = (new Date().getTime() - lastScanDate.getTime()) / (1000 * 60 * 60);
+      if (hoursSince < 1) {
+        Logger.log(emp.id + ': already scanned ' + Math.round(hoursSince * 60) + ' min ago, skipping');
+        continue;
+      }
+    }
 
     Logger.log('Scanning ' + emp.id + ' after ' + afterDate);
 
-    var rows = scanDelegatedGmail_(emp, afterDate, existingThreadIds);
+    var result = scanDelegatedGmailStreaming_(emp, afterDate, existingThreadIds, rawSheet);
+    totalNew += result.count;
 
-    if (rows.length > 0) {
-      rawSheet.getRange(
-        rawSheet.getLastRow() + 1, 1, rows.length, rows[0].length
-      ).setValues(rows);
-      totalNew += rows.length;
-      Logger.log(emp.id + ': ' + rows.length + ' new emails');
-    } else {
-      Logger.log(emp.id + ': no new emails');
+    if (result.timedOut) {
+      Logger.log('TIME LIMIT during ' + emp.id + '. Wrote ' + result.count + ' emails so far. Scheduling continuation...');
+      // Do NOT update lastScanDate — next run retries this employee
+      // Thread deduplication prevents duplicates
+      timedOut = true;
+      break;
     }
 
+    Logger.log(emp.id + ': ' + result.count + ' new emails written (complete)');
     setConfigValue_(configSheet, emp.configKey, new Date().toISOString());
-  });
+  }
 
-  Logger.log('Total new emails: ' + totalNew);
+  Logger.log('Total new emails this run: ' + totalNew);
 
-  if (totalNew > 0) {
-    triggerGitHubActions_();
+  if (timedOut) {
+    scheduleContinuation_();
+  } else {
+    cleanContinuationTriggers_();
+    Logger.log('ALL EMPLOYEES COMPLETE');
+    if (totalNew > 0) {
+      triggerGitHubActions_();
+    }
   }
 }
 
-// ---- Gmail API con delegación de dominio ----
-function scanDelegatedGmail_(emp, afterDate, existingThreadIds) {
-  var accessToken = getServiceAccountToken_(emp.email);
-  var queryDate = afterDate.replace(/\//g, '/');
-  var query = 'after:' + queryDate + ' -from:me';
-  var rows = [];
+function isTimeLimitReached_() {
+  return (new Date().getTime() - SCAN_START_TIME_) > MAX_RUNTIME_MS;
+}
 
-  // List messages matching the query
+/**
+ * Schedule a continuation run in 2 minutes via time-based trigger.
+ */
+function scheduleContinuation_() {
+  cleanContinuationTriggers_();
+  ScriptApp.newTrigger('scanMailboxes')
+    .timeBased()
+    .after(2 * 60 * 1000)
+    .create();
+  Logger.log('Continuation scheduled in 2 minutes');
+}
+
+/**
+ * Remove any existing continuation triggers to avoid duplicates.
+ */
+function cleanContinuationTriggers_() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'scanMailboxes' &&
+        triggers[i].getTriggerSource() === ScriptApp.TriggerSource.CLOCK) {
+      try {
+        ScriptApp.deleteTrigger(triggers[i]);
+      } catch(e) {
+        Logger.log('Could not delete trigger: ' + e);
+      }
+    }
+  }
+}
+
+// ---- Gmail API con delegación de dominio (streaming) ----
+
+/**
+ * Scan an employee's Gmail, writing rows to the sheet in real-time.
+ * No message count limit — paginates through ALL messages.
+ * Checks time limit after each batch write.
+ * Returns { count: N, timedOut: bool }
+ */
+function scanDelegatedGmailStreaming_(emp, afterDate, existingThreadIds, rawSheet) {
+  var accessToken = getServiceAccountToken_(emp.email);
+  var query = 'after:' + afterDate + ' -from:me';
+  var totalWritten = 0;
+
+  // Paginate through ALL message IDs (no cap)
   var pageToken = '';
   var messageIds = [];
 
   do {
-    var url = 'https://gmail.googleapis.com/gmail/v1/users/' + emp.email + '/messages?q=' + encodeURIComponent(query) + '&maxResults=100';
+    var url = 'https://gmail.googleapis.com/gmail/v1/users/' + emp.email + '/messages?q=' + encodeURIComponent(query) + '&maxResults=500';
     if (pageToken) url += '&pageToken=' + pageToken;
 
     var response = UrlFetchApp.fetch(url, {
@@ -151,26 +225,46 @@ function scanDelegatedGmail_(emp, afterDate, existingThreadIds) {
 
     if (response.getResponseCode() !== 200) {
       Logger.log('Gmail API error for ' + emp.email + ': ' + response.getContentText());
-      return rows;
+      return { count: totalWritten, timedOut: false };
     }
 
     var data = JSON.parse(response.getContentText());
     var messages = data.messages || [];
     messages.forEach(function(m) { messageIds.push(m.id); });
     pageToken = data.nextPageToken || '';
-  } while (pageToken && messageIds.length < 500);
+  } while (pageToken);
 
-  Logger.log(emp.id + ': ' + messageIds.length + ' message IDs to fetch');
+  Logger.log(emp.id + ': ' + messageIds.length + ' total message IDs');
 
-  // Fetch messages in batches of 100 using Gmail batch API
-  var BATCH_SIZE = 100;
+  // Fetch and write in batches of 50
+  var BATCH_SIZE = 50;
   for (var batchStart = 0; batchStart < messageIds.length; batchStart += BATCH_SIZE) {
+    // Time check before each batch
+    if (isTimeLimitReached_()) {
+      Logger.log(emp.id + ': time limit at batch ' + (batchStart / BATCH_SIZE + 1) + ', wrote ' + totalWritten + ' so far');
+      return { count: totalWritten, timedOut: true };
+    }
+
     var batchIds = messageIds.slice(batchStart, batchStart + BATCH_SIZE);
     var batchRows = fetchMessageBatch_(emp.email, accessToken, batchIds, emp.id, existingThreadIds);
-    rows = rows.concat(batchRows);
+
+    // Write immediately to sheet (streaming)
+    if (batchRows.length > 0) {
+      rawSheet.getRange(
+        rawSheet.getLastRow() + 1, 1, batchRows.length, batchRows[0].length
+      ).setValues(batchRows);
+      totalWritten += batchRows.length;
+    }
+
+    // Progress log every 10 batches
+    var batchNum = batchStart / BATCH_SIZE + 1;
+    var totalBatches = Math.ceil(messageIds.length / BATCH_SIZE);
+    if (batchNum % 10 === 0 || batchNum === totalBatches) {
+      Logger.log(emp.id + ': batch ' + batchNum + '/' + totalBatches + ' — ' + totalWritten + ' emails written');
+    }
   }
 
-  return rows;
+  return { count: totalWritten, timedOut: false };
 }
 
 /**
@@ -185,7 +279,7 @@ function fetchMessageBatch_(userEmail, accessToken, msgIds, empId, existingThrea
     batchBody += '--' + boundary + '\r\n';
     batchBody += 'Content-Type: application/http\r\n';
     batchBody += 'Content-ID: <msg' + i + '>\r\n\r\n';
-    batchBody += 'GET /gmail/v1/users/' + userEmail + '/messages/' + msgId + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date\r\n\r\n';
+    batchBody += 'GET /gmail/v1/users/' + userEmail + '/messages/' + msgId + '?format=full\r\n\r\n';
   });
   batchBody += '--' + boundary + '--';
 
@@ -235,6 +329,15 @@ function fetchMessageBatch_(userEmail, accessToken, msgIds, empId, existingThrea
       dateStr = Utilities.formatDate(new Date(parseInt(msg.internalDate)), 'Europe/Madrid', 'yyyy-MM-dd');
     }
 
+    // Extract and clean the full email body text (max 2000 chars)
+    var bodyText = '';
+    try {
+      bodyText = extractPlainText_(msg.payload);
+      bodyText = cleanEmailBody_(bodyText).substring(0, 2000);
+    } catch(e) {
+      bodyText = (msg.snippet || '').substring(0, 300);  // fallback to snippet
+    }
+
     rows.push([
       'pending',
       empId,
@@ -245,6 +348,7 @@ function fetchMessageBatch_(userEmail, accessToken, msgIds, empId, existingThrea
       (headers['subject'] || '').substring(0, 200),
       (msg.snippet || '').substring(0, 300),
       msg.threadId,
+      bodyText,           // NEW: column 10 — full email body text
     ]);
 
     existingThreadIds[msg.threadId] = true;
@@ -278,6 +382,108 @@ function getServiceAccountToken_(impersonateEmail) {
   }
 
   return service.getAccessToken();
+}
+
+// ---- Email body extraction ----
+
+/**
+ * Extract plain text body from Gmail message payload (recursive for multipart).
+ * Tries text/plain first, falls back to text/html with tag stripping.
+ */
+function extractPlainText_(payload) {
+  if (!payload) return '';
+
+  // Simple message with body directly on payload
+  if (payload.mimeType === 'text/plain' && payload.body && payload.body.data) {
+    return decodeBase64Url_(payload.body.data);
+  }
+
+  // Multipart — search parts recursively
+  if (payload.parts && payload.parts.length > 0) {
+    // First pass: look for text/plain
+    for (var i = 0; i < payload.parts.length; i++) {
+      var part = payload.parts[i];
+      if (part.mimeType === 'text/plain' && part.body && part.body.data) {
+        return decodeBase64Url_(part.body.data);
+      }
+      if (part.parts) {
+        var nested = extractPlainText_(part);
+        if (nested) return nested;
+      }
+    }
+    // Second pass: fallback to text/html stripped
+    for (var i = 0; i < payload.parts.length; i++) {
+      var part = payload.parts[i];
+      if (part.mimeType === 'text/html' && part.body && part.body.data) {
+        return stripHtml_(decodeBase64Url_(part.body.data));
+      }
+      if (part.parts) {
+        for (var j = 0; j < part.parts.length; j++) {
+          if (part.parts[j].mimeType === 'text/html' && part.parts[j].body && part.parts[j].body.data) {
+            return stripHtml_(decodeBase64Url_(part.parts[j].body.data));
+          }
+        }
+      }
+    }
+  }
+
+  // Last resort: snippet is always available
+  return '';
+}
+
+function decodeBase64Url_(data) {
+  var base64 = data.replace(/-/g, '+').replace(/_/g, '/');
+  try {
+    return Utilities.newBlob(Utilities.base64Decode(base64)).getDataAsString('UTF-8');
+  } catch(e) {
+    return '';
+  }
+}
+
+function stripHtml_(html) {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Clean email body: remove common signatures, disclaimers, forwarded headers.
+ * Keep the meaningful content for AI classification.
+ */
+function cleanEmailBody_(text) {
+  if (!text) return '';
+
+  // Cut at common signature/disclaimer markers
+  var cutMarkers = [
+    /\n--\s*\n/,                            // standard sig delimiter
+    /\nSent from my /i,
+    /\nEnviado desde mi /i,
+    /\n_{3,}/,                              // ___ underscores
+    /\nDISCLAIMER/i,
+    /\nAVISO LEGAL/i,
+    /\nCONFIDENTIALITY/i,
+    /\nEste mensaje .* confidencial/i,
+    /\nThis (?:e-?mail|message) .* confidential/i,
+  ];
+
+  for (var i = 0; i < cutMarkers.length; i++) {
+    var match = text.match(cutMarkers[i]);
+    if (match && match.index > 50) {  // keep at least 50 chars
+      text = text.substring(0, match.index);
+    }
+  }
+
+  return text.trim();
 }
 
 // ---- Helpers ----

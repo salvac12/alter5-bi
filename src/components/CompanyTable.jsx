@@ -148,9 +148,12 @@ export default function CompanyTable({
                 </td>
               )}
 
-              {/* Score */}
+              {/* Score + Quality */}
               <td style={{ padding: "10px" }}>
-                <ScoreChip score={c.score} />
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <ScoreChip score={c.score} />
+                  <QualityDot quality={c.qualityLabel} score={c.qualityScore} />
+                </div>
               </td>
 
               {/* Company */}
@@ -252,6 +255,20 @@ function ScoreChip({ score }) {
     }}>
       {score}
     </div>
+  );
+}
+
+/* ── Data quality indicator dot ── */
+function QualityDot({ quality, score }) {
+  const colors = { alta: "#10B981", media: "#F59E0B", baja: "#EF4444" };
+  const labels = { alta: "Datos fiables", media: "Datos parciales", baja: "Datos incompletos" };
+  const color = colors[quality] || colors.baja;
+  return (
+    <div title={`${labels[quality] || "Sin datos"} (${score}/100)`} style={{
+      width: 8, height: 8, borderRadius: "50%",
+      background: color, flexShrink: 0,
+      boxShadow: `0 0 0 2px ${color}33`,
+    }} />
   );
 }
 
