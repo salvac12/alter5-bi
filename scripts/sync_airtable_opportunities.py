@@ -61,8 +61,13 @@ def fetch_all_records():
     records = []
     offset = None
     base_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{urllib.request.quote(TABLE_NAME)}"
-    # Only fetch active Transactions (exclude Internal Initiatives + Inactive/Archived)
-    formula = urllib.request.quote('AND({Type of opportunity} = "Transaction", {Record Status} = "Active")')
+    # Only fetch active Transactions (exclude Internal Initiatives + Inactive/Archived + Stand-by).
+    # Note: Airtable view-level "hidden" rows still have Record Status = "Active".
+    # To properly hide a deal from the dashboard, set its Record Status to "Inactive"/"Archived"
+    # or set Global Status = "Stand-by" in Airtable.
+    formula = urllib.request.quote(
+        'AND({Type of opportunity} = "Transaction", {Record Status} = "Active", {Global Status} != "Stand-by")'
+    )
 
     while True:
         url = f"{base_url}?filterByFormula={formula}"
@@ -137,6 +142,11 @@ def extract_opportunity(record):
 
     # Skip archived/deleted/inactive records
     if record_status and record_status.lower() in ("archived", "deleted", "inactive"):
+        return None
+
+    # Skip Stand-by records — paused/on-hold deals should not appear in the dashboard.
+    # (The API filter already excludes these, but this is a defence-in-depth check.)
+    if stage and stage.lower() == "stand-by":
         return None
 
     # Skip Internal Initiatives — only keep Transactions

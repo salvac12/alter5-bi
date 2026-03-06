@@ -509,7 +509,7 @@ export default function ProspectPanel({
           <FormField label={`Contactos (${contacts.length})`}>
             {contacts.map((c, idx) => (
               <div key={idx} style={{
-                display: 'grid', gridTemplateColumns: '1fr 1fr auto',
+                display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto',
                 gap: 8, marginBottom: 8, alignItems: 'start',
               }}>
                 <input
@@ -540,6 +540,20 @@ export default function ProspectPanel({
                   onFocus={focusStyle}
                   onBlur={blurStyle}
                 />
+                <input
+                  type="text"
+                  value={c.role}
+                  onChange={(e) => {
+                    const updated = [...contacts];
+                    updated[idx] = { ...updated[idx], role: e.target.value };
+                    setContacts(updated);
+                  }}
+                  placeholder="Cargo"
+                  disabled={loading}
+                  style={{ ...inputStyle(loading), fontSize: 13 }}
+                  onFocus={focusStyle}
+                  onBlur={blurStyle}
+                />
                 <button
                   onClick={() => setContacts(contacts.filter((_, i) => i !== idx))}
                   disabled={loading}
@@ -553,7 +567,7 @@ export default function ProspectPanel({
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   title="Eliminar contacto"
                 >
-                  \u2715
+                  ✕
                 </button>
               </div>
             ))}
@@ -570,7 +584,7 @@ export default function ProspectPanel({
               onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = '#EDE9FE'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = '#F5F3FF'; }}
             >
-              + Anadir contacto
+              + Añadir contacto
             </button>
           </FormField>
 

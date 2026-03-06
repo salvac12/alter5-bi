@@ -7,6 +7,7 @@ import {
   STAGE_COLORS,
   STAGE_SHORT_LABELS
 } from '../utils/airtable';
+import { TEAM_MEMBERS } from '../utils/airtableProspects';
 
 /**
  * OpportunityPanel - Slide-in panel for creating/editing Airtable opportunities
@@ -36,6 +37,7 @@ export default function OpportunityPanel({
     phase: '',
     amount: '',
     currency: 'EUR',
+    dealManager: '',
     notes: ''
   });
 
@@ -53,6 +55,7 @@ export default function OpportunityPanel({
         phase: '',
         amount: '',
         currency: 'EUR',
+        dealManager: '',
         notes: ''
       });
     } else if (opportunity) {
@@ -64,6 +67,7 @@ export default function OpportunityPanel({
         phase: opportunity.phase || '',
         amount: opportunity.amount ? String(opportunity.amount) : '',
         currency: opportunity.currency || 'EUR',
+        dealManager: opportunity.dealManager || raw['Deal Manager'] || raw['Responsible'] || '',
         notes: raw['Notes'] || ''
       });
     }
@@ -121,8 +125,14 @@ export default function OpportunityPanel({
         'Workflow Phase (Debt)': formData.phase.trim(),
         'Targeted Ticket Size': parseAmount(formData.amount),
         'Currency': formData.currency,
+        'Deal Manager': formData.dealManager || undefined,
         'Notes': formData.notes.trim()
       };
+
+      // Remove undefined fields
+      Object.keys(fields).forEach(k => {
+        if (fields[k] === undefined || fields[k] === '') delete fields[k];
+      });
 
       let result;
       if (isNew) {
@@ -465,6 +475,43 @@ export default function OpportunityPanel({
                 e.currentTarget.style.boxShadow = 'none';
               }}
             />
+          </FormField>
+
+          {/* Deal Manager */}
+          <FormField label="Deal Manager">
+            <select
+              value={formData.dealManager}
+              onChange={(e) => updateField('dealManager', e.target.value)}
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                fontSize: 14,
+                fontWeight: 500,
+                color: '#1A2B3D',
+                background: '#FFFFFF',
+                border: '2px solid #E2E8F0',
+                borderRadius: 8,
+                outline: 'none',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
+                opacity: loading ? 0.6 : 1,
+                transition: 'all 0.15s'
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#3B82F6';
+                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#E2E8F0';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <option value="">-- Sin asignar --</option>
+              {TEAM_MEMBERS.map(m => (
+                <option key={m.email} value={m.name}>{m.name}</option>
+              ))}
+            </select>
           </FormField>
 
           {/* Amount and Currency */}
