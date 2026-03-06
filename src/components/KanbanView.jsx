@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   fetchAllOpportunities,
   updateOpportunity,
@@ -30,6 +30,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
   const [businessFilter, setBusinessFilter] = useState('All');
   const [draggedCard, setDraggedCard] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
+  const [toast, setToast] = useState(null);
 
   // Fetch data on mount
   useEffect(() => {
@@ -71,10 +72,15 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
       setOpportunities(normalized);
     } catch (err) {
       console.error('Failed to load opportunities:', err);
-      setError(err.message || 'Failed to load opportunities');
+      setError(err.message || 'Error al cargar oportunidades');
     } finally {
       setLoading(false);
     }
+  }
+
+  function showToast(type, message) {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
   }
 
   // Drag handlers
@@ -124,11 +130,12 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
 
       // Update in Airtable
       await updateOpportunity(draggedCard.id, { "Global Status": targetStage });
+      showToast('success', `"${draggedCard.name}" movido a ${STAGE_SHORT_LABELS[targetStage] || targetStage}`);
     } catch (err) {
       console.error('Failed to update opportunity stage:', err);
       // Revert on error
       setOpportunities(opportunities);
-      alert('Failed to update stage: ' + err.message);
+      showToast('error', 'Error al mover oportunidad: ' + err.message);
     }
   }
 
@@ -139,14 +146,22 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
   }, {});
 
   const totalCount = filteredOpportunities.length;
+  const totalAmount = filteredOpportunities.reduce((sum, opp) => sum + (opp.amount || 0), 0);
 
   return (
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.headerLeft}>
-          <h2 style={styles.title}>Pipeline Board</h2>
-          <span style={styles.count}>{totalCount} opportunities</span>
+          <h2 style={styles.title}>Pipeline</h2>
+          <span style={styles.count}>
+            {totalCount} oportunidades
+            {totalAmount > 0 && (
+              <span style={{ marginLeft: 8, color: '#3B82F6', fontWeight: 700 }}>
+                {formatAmount(totalAmount, 'EUR')}
+              </span>
+            )}
+          </span>
         </div>
 
         <div style={styles.headerRight}>
@@ -158,7 +173,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
             </svg>
             <input
               type="text"
-              placeholder="Search opportunities..."
+              placeholder="Buscar oportunidades..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={styles.searchInput}
@@ -184,7 +199,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
                   ...(businessFilter === filter ? styles.filterButtonActive : {}),
                 }}
               >
-                {filter}
+                {filter === 'All' ? 'Todos' : filter}
               </button>
             ))}
           </div>
@@ -201,7 +216,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
             }}
           >
             <span style={styles.createIcon}>+</span>
-            New Opportunity
+            Nueva Oportunidad
           </button>
         </div>
       </div>
@@ -211,11 +226,11 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
         <div style={styles.errorContainer}>
           <div style={styles.errorIcon}>⚠</div>
           <div>
-            <div style={styles.errorTitle}>Failed to load opportunities</div>
+            <div style={styles.errorTitle}>Error al cargar oportunidades</div>
             <div style={styles.errorMessage}>{error}</div>
           </div>
           <button onClick={loadOpportunities} style={styles.retryButton}>
-            Retry
+            Reintentar
           </button>
         </div>
       )}
@@ -242,6 +257,31 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
           ))}
         </div>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24,
+          background: toast.type === 'success' ? '#10B981' : '#EF4444',
+          color: '#FFFFFF', padding: '14px 20px', borderRadius: 10,
+          fontSize: 14, fontWeight: 600,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 200,
+          display: 'flex', alignItems: 'center', gap: 10, maxWidth: 400,
+          animation: 'slideInUp 0.3s ease-out',
+        }}>
+          <span style={{ fontSize: 18 }}>
+            {toast.type === 'success' ? '✓' : '✗'}
+          </span>
+          {toast.message}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes slideInUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -265,6 +305,8 @@ function KanbanColumn({
 }) {
   const colors = STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
   const shortLabel = STAGE_SHORT_LABELS[stage] || stage;
+
+  const totalAmount = opportunities.reduce((sum, opp) => sum + (opp.amount || 0), 0);
 
   const columnStyle = {
     ...styles.column,
@@ -315,6 +357,16 @@ function KanbanColumn({
         </button>
       </div>
 
+      {/* Amount summary */}
+      {totalAmount > 0 && (
+        <div style={{
+          padding: '4px 16px 8px', fontSize: 11, fontWeight: 600,
+          color: colors.color, opacity: 0.8,
+        }}>
+          {formatAmount(totalAmount, 'EUR')}
+        </div>
+      )}
+
       {/* Cards */}
       <div style={styles.cardsContainer}>
         {loading ? (
@@ -326,7 +378,7 @@ function KanbanColumn({
         ) : opportunities.length === 0 ? (
           <div style={styles.emptyState}>
             <div style={{ fontSize: 32, opacity: 0.3, marginBottom: 8 }}>📋</div>
-            <div style={styles.emptyText}>No opportunities</div>
+            <div style={styles.emptyText}>Sin oportunidades</div>
           </div>
         ) : (
           opportunities.map((opportunity) => (
@@ -369,11 +421,22 @@ function OpportunityCard({
   return (
     <div
       draggable
+      tabIndex={0}
+      role="button"
+      aria-label={`Oportunidad: ${opportunity.name}${formattedAmount ? ', ' + formattedAmount : ''}`}
       onDragStart={(e) => onDragStart(e, opportunity)}
       onDragEnd={onDragEnd}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsHovered(true)}
+      onBlur={() => setIsHovered(false)}
       style={cardStyle}
     >
       {/* Drag handle */}
@@ -386,7 +449,7 @@ function OpportunityCard({
       {/* Content */}
       <div style={styles.cardContent}>
         <div style={styles.cardTitle}>
-          {opportunity.name || 'Unnamed Opportunity'}
+          {opportunity.name || 'Sin nombre'}
         </div>
 
         {formattedAmount && (

@@ -230,7 +230,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect }) {
 
           {/* Origin filter */}
           <div style={styles.filterGroup}>
-            {['All', ...ORIGIN_OPTIONS.slice(0, 3)].map(filter => (
+            {['All', ...ORIGIN_OPTIONS].map(filter => (
               <button
                 key={filter}
                 onClick={() => setOriginFilter(filter)}
