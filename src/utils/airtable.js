@@ -34,9 +34,12 @@ export function isAirtableConfigured() {
 export async function fetchAllOpportunities() {
   const all = [];
   let offset = null;
-  // Only fetch active Transactions (exclude Internal Initiatives + Inactive/Archived)
+  // Only fetch active Transactions (exclude Internal Initiatives + Inactive/Archived + Stand-by).
+  // Note: Airtable view-level "hidden" rows are NOT excluded by {Record Status} alone —
+  // records hidden in a view still have Record Status = "Active". To properly hide a deal,
+  // set its Record Status to "Inactive" or "Archived" in Airtable, or move it to "Stand-by".
   const formula = encodeURIComponent(
-    'AND({Type of opportunity} = "Transaction", {Record Status} = "Active")'
+    'AND({Type of opportunity} = "Transaction", {Record Status} = "Active", {Global Status} != "Stand-by")'
   );
 
   do {
@@ -166,6 +169,10 @@ export function isValidOpportunity(opp) {
   if (JUNK_EXACT.has(name.toLowerCase())) return false;
   // Archived, deleted, or inactive records
   if (opp.recordStatus && /^(archived|deleted|inactive)$/i.test(opp.recordStatus)) return false;
+  // Stand-by records are paused/on-hold — exclude from active pipeline views.
+  // In Airtable, deals hidden via "hide in view" still have Record Status = "Active";
+  // to properly exclude them, set Global Status = "Stand-by" or change Record Status.
+  if (opp.stage && opp.stage.toLowerCase() === "stand-by") return false;
   // No stage assigned — orphan record
   if (!opp.stage) return false;
   return true;
