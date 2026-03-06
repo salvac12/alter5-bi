@@ -23,7 +23,11 @@ export default function CompanyTable({
   page, totalPages, setPage, productMatches,
   cleanupMode, cleanupSelection, onToggleCleanup, suspiciousMap,
   verifiedCompanies,
+  bulkSelection, onToggleBulkSelect, onSelectAllPage, onBulkHide, onClearBulkSelection,
 }) {
+  const hasBulkSelection = bulkSelection && bulkSelection.size > 0;
+  const allPageSelected = companies.length > 0 && companies.every(c => bulkSelection?.has(c.domain));
+  const somePageSelected = companies.some(c => bulkSelection?.has(c.domain));
   const SortIcon = ({ col }) => {
     if (sortBy !== col) {
       return <span style={{ color: "#CBD5E1", fontSize: 12, opacity: 0.6, marginLeft: 4 }}>↕</span>;
@@ -46,6 +50,20 @@ export default function CompanyTable({
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr>
+            {/* Bulk select checkbox header */}
+            <th style={{
+              padding: "16px 6px", width: 36, borderBottom: "2px solid #E2E8F0",
+              textAlign: "center", verticalAlign: "middle",
+            }}>
+              <input
+                type="checkbox"
+                checked={allPageSelected}
+                ref={el => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                onChange={onSelectAllPage}
+                title={allPageSelected ? "Deseleccionar pagina" : "Seleccionar toda la pagina"}
+                style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#3B82F6" }}
+              />
+            </th>
             {cleanupMode && (
               <th style={{ padding: "16px 8px", width: 36, borderBottom: "2px solid #E2E8F0" }} />
             )}
@@ -96,6 +114,7 @@ export default function CompanyTable({
         <tbody>
           {companies.map((c, i) => {
             const isSelected = selected?.idx === c.idx;
+            const isBulkChecked = bulkSelection?.has(c.domain);
             const isChecked = cleanupMode && cleanupSelection?.has(c.domain);
             const suspectReason = cleanupMode && suspiciousMap?.get(c.domain);
             const verifiedStatus = verifiedCompanies?.get?.(c.domain)?.status;
@@ -106,18 +125,22 @@ export default function CompanyTable({
                 className="row-hover fade-in"
                 style={{
                   cursor: "pointer",
-                  background: isChecked
-                    ? "rgba(239, 68, 68, 0.06)"
-                    : isSelected
-                      ? "linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.03) 100%)"
-                      : "#FFFFFF",
+                  background: isBulkChecked
+                    ? "rgba(59, 130, 246, 0.06)"
+                    : isChecked
+                      ? "rgba(239, 68, 68, 0.06)"
+                      : isSelected
+                        ? "linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.03) 100%)"
+                        : "#FFFFFF",
                   animationDelay: `${i * 12}ms`,
                   borderBottom: "1px solid #F1F5F9",
-                  borderLeft: isChecked
-                    ? "4px solid #EF4444"
-                    : suspectReason
-                      ? "4px solid #F59E0B"
-                      : isSelected ? "4px solid #3B82F6" : "4px solid transparent",
+                  borderLeft: isBulkChecked
+                    ? "4px solid #3B82F6"
+                    : isChecked
+                      ? "4px solid #EF4444"
+                      : suspectReason
+                        ? "4px solid #F59E0B"
+                        : isSelected ? "4px solid #3B82F6" : "4px solid transparent",
                   transition: "all 0.15s ease",
                 }}
                 onMouseEnter={(e) => {
@@ -137,6 +160,17 @@ export default function CompanyTable({
                   }
                 }}
               >
+              {/* Bulk select checkbox */}
+              <td style={{ padding: "10px 6px", width: 36, textAlign: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={isBulkChecked || false}
+                  onChange={() => onToggleBulkSelect(c.domain)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#3B82F6" }}
+                />
+              </td>
+
               {/* Cleanup checkbox */}
               {cleanupMode && (
                 <td style={{ padding: "10px 8px", width: 36, textAlign: "center" }}>
@@ -242,6 +276,49 @@ export default function CompanyTable({
           <PageBtn onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}>
             Siguiente →
           </PageBtn>
+        </div>
+      )}
+
+      {/* Floating bulk action bar */}
+      {hasBulkSelection && (
+        <div style={{
+          position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+          background: "#0A1628", borderRadius: 12, padding: "12px 20px",
+          display: "flex", alignItems: "center", gap: 16,
+          border: "1px solid #2A4A6C",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          zIndex: 90,
+          animation: "fadeIn 0.2s ease both",
+        }}>
+          <span style={{ fontSize: 13, color: "#94A3B8", fontWeight: 500 }}>
+            <strong style={{ color: "#FFFFFF" }}>{bulkSelection.size}</strong> empresa{bulkSelection.size !== 1 ? "s" : ""} seleccionada{bulkSelection.size !== 1 ? "s" : ""}
+          </span>
+          <button
+            onClick={onClearBulkSelection}
+            style={{
+              background: "#132238", border: "1px solid #2A4A6C",
+              color: "#94A3B8", padding: "7px 14px", borderRadius: 6,
+              fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#1B3A5C"; e.currentTarget.style.color = "#FFFFFF"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#132238"; e.currentTarget.style.color = "#94A3B8"; }}
+          >
+            Deseleccionar
+          </button>
+          <button
+            onClick={onBulkHide}
+            style={{
+              background: "#EF4444", border: "none",
+              color: "#FFFFFF", padding: "7px 16px", borderRadius: 6,
+              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#DC2626"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#EF4444"; e.currentTarget.style.transform = "translateY(0)"; }}
+          >
+            Ocultar seleccionadas
+          </button>
         </div>
       )}
     </div>

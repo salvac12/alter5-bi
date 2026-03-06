@@ -181,6 +181,8 @@ export default function App() {
   const [cleanupMode, setCleanupMode] = useState(false);
   const [cleanupSelection, setCleanupSelection] = useState(new Set());
   const [cleanupFilter, setCleanupFilter] = useState(null); // null | 'suspicious' | 'selected'
+  const [bulkSelection, setBulkSelection] = useState(new Set());
+  const [showBulkHideConfirm, setShowBulkHideConfirm] = useState(false);
   const [page, setPage] = useState(0);
 
   const productMatches = useMemo(() => calculateProductMatches(companies), [companies]);
@@ -322,6 +324,42 @@ export default function App() {
       setSelected(null);
     }
     return success;
+  };
+
+  // ── Bulk selection handlers ──
+  const handleToggleBulkSelect = (domain) => {
+    setBulkSelection(prev => {
+      const next = new Set(prev);
+      if (next.has(domain)) next.delete(domain);
+      else next.add(domain);
+      return next;
+    });
+  };
+
+  const handleSelectAllPage = () => {
+    setBulkSelection(prev => {
+      const allOnPage = paginated.map(c => c.domain);
+      const allSelected = allOnPage.every(d => prev.has(d));
+      const next = new Set(prev);
+      if (allSelected) {
+        // Deselect all on page
+        allOnPage.forEach(d => next.delete(d));
+      } else {
+        // Select all on page
+        allOnPage.forEach(d => next.add(d));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkHide = () => {
+    if (bulkSelection.size === 0) return;
+    bulkSelection.forEach(domain => hideCompany(domain));
+    setHiddenCompanies(getHiddenCompanies());
+    setBulkSelection(new Set());
+    setShowBulkHideConfirm(false);
+    setSelected(null);
+    setPage(0);
   };
 
   // ── Cleanup handlers ──
@@ -683,6 +721,11 @@ export default function App() {
               onToggleCleanup={handleToggleCleanup}
               suspiciousMap={suspiciousMap}
               verifiedCompanies={verifiedCompanies}
+              bulkSelection={bulkSelection}
+              onToggleBulkSelect={handleToggleBulkSelect}
+              onSelectAllPage={handleSelectAllPage}
+              onBulkHide={() => setShowBulkHideConfirm(true)}
+              onClearBulkSelection={() => setBulkSelection(new Set())}
             />
           </div>
         </div>
@@ -812,6 +855,68 @@ export default function App() {
             setShowUserSelector(false);
           }}
         />
+      )}
+
+      {/* ── Bulk Hide Confirmation Modal ── */}
+      {showBulkHideConfirm && (
+        <>
+          <div
+            onClick={() => setShowBulkHideConfirm(false)}
+            style={{
+              position: "fixed", inset: 0,
+              background: "rgba(10,22,40,0.7)", zIndex: 200,
+            }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "#0A1628", borderRadius: 12, padding: 28,
+            maxWidth: 480, width: "90%",
+            border: "1px solid #1B3A5C",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+            zIndex: 201,
+          }}>
+            <div style={{
+              fontSize: 20, fontWeight: 800, color: "#FFFFFF",
+              marginBottom: 12, display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <span style={{ fontSize: 28 }}>&#9888;&#65039;</span>
+              Confirmar ocultacion masiva
+            </div>
+            <p style={{
+              fontSize: 14, color: "#94A3B8", lineHeight: 1.6, marginBottom: 8,
+            }}>
+              Vas a ocultar <strong style={{ color: "#FFFFFF" }}>{bulkSelection.size}</strong> empresa{bulkSelection.size !== 1 ? "s" : ""} de la vista.
+            </p>
+            <p style={{
+              fontSize: 12, color: "#6B7F94", lineHeight: 1.5, marginBottom: 20,
+            }}>
+              Las empresas desapareceran de la tabla pero no se eliminan permanentemente. Se pueden restaurar desde localStorage.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowBulkHideConfirm(false)}
+                style={{
+                  background: "#132238", border: "1px solid #2A4A6C",
+                  color: "#94A3B8", padding: "10px 20px", borderRadius: 8,
+                  fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleBulkHide}
+                style={{
+                  background: "#EF4444", border: "none",
+                  color: "#FFFFFF", padding: "10px 20px", borderRadius: 8,
+                  fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Ocultar {bulkSelection.size} empresa{bulkSelection.size !== 1 ? "s" : ""}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
