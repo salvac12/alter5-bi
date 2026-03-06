@@ -34,6 +34,7 @@ export default function ProspectPanel({
   onSaved,
   onDeleted,
   onConverted,
+  companies = [],
 }) {
   if (!prospect && !isNew) return null;
 
@@ -121,6 +122,34 @@ export default function ProspectPanel({
     setMeetingNotesInput('');
     setAiError(null);
   }, [prospect, isNew]);
+
+  // ── Match prospect to company in CRM data ──
+  const matchedCompany = (() => {
+    if (!companies.length || isNew) return null;
+    const prospectName = (formData.name || '').trim().toLowerCase();
+    const prospectEmails = contacts.map(c => (c.email || '').toLowerCase()).filter(Boolean);
+    const prospectDomains = prospectEmails.map(e => e.split('@')[1]).filter(Boolean);
+
+    // 1) Exact domain match from contact emails
+    for (const domain of prospectDomains) {
+      const match = companies.find(c => c.domain === domain);
+      if (match) return match;
+    }
+    // 2) Name exact match
+    if (prospectName) {
+      const match = companies.find(c => c.name.toLowerCase() === prospectName);
+      if (match) return match;
+    }
+    // 3) Name contains or is contained
+    if (prospectName && prospectName.length >= 4) {
+      const match = companies.find(c => {
+        const cn = c.name.toLowerCase();
+        return cn.includes(prospectName) || prospectName.includes(cn);
+      });
+      if (match) return match;
+    }
+    return null;
+  })();
 
   const handleAiProcess = async () => {
     setAiLoading(true);
@@ -756,6 +785,11 @@ export default function ProspectPanel({
             />
           </FormField>
 
+          {/* ── Company Activity Section (multi-mailbox timeline) ── */}
+          {matchedCompany && (
+            <CompanyActivitySection company={matchedCompany} />
+          )}
+
           {/* ── AI Meeting Notes Section ────────────────── */}
           <div style={{
             marginBottom: 22, padding: 16,
@@ -1056,6 +1090,269 @@ export default function ProspectPanel({
         }
       `}</style>
     </>
+  );
+}
+
+// ── Company Activity Section (multi-mailbox timeline) ───────────────
+
+function CompanyActivitySection({ company }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const detail = company.detail;
+  if (!detail) return null;
+
+  const sources = detail.sources || [];
+  const timeline = (detail.timeline || [])
+    .filter(t => t.emails > 0)
+    .sort((a, b) => b.quarter.localeCompare(a.quarter));
+  const datedSubjects = (detail.datedSubjects || [])
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  const totalEmails = company.interactions || 0;
+  const employeeNames = {
+    salvador_carrillo: 'Salvador',
+    leticia_menéndez: 'Leticia',
+    javier_ruiz: 'Javier',
+    miguel_solana: 'Miguel',
+    carlos_almodóvar: 'Carlos',
+    gonzalo_de_gracia: 'Gonzalo',
+    rafael_nevado: 'Rafael',
+    guillermo_souto: 'Guillermo',
+  };
+
+  const employeeColors = {
+    salvador_carrillo: '#3B82F6',
+    leticia_menéndez: '#8B5CF6',
+    javier_ruiz: '#F59E0B',
+    miguel_solana: '#10B981',
+    carlos_almodóvar: '#EF4444',
+    gonzalo_de_gracia: '#06B6D4',
+    rafael_nevado: '#F97316',
+    guillermo_souto: '#6B7280',
+  };
+
+  // Build per-employee stats from sources
+  const employeeStats = sources
+    .filter(s => s.interactions > 0)
+    .sort((a, b) => b.interactions - a.interactions);
+
+  // Recent subjects (last 8)
+  const recentSubjects = datedSubjects.slice(0, expanded ? 20 : 6);
+
+  return (
+    <div style={{
+      marginBottom: 22, padding: 16,
+      background: 'linear-gradient(135deg, #EFF6FF, #F0FDF4)',
+      borderRadius: 10, border: '1px solid #BFDBFE',
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 12,
+      }}>
+        <label style={{
+          fontSize: 12, fontWeight: 700, color: '#1D4ED8',
+          textTransform: 'uppercase', letterSpacing: '0.5px',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" style={{ verticalAlign: 'middle' }}>
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          Actividad CRM
+          <span style={{
+            fontSize: 10, fontWeight: 600, color: '#6B7F94',
+            textTransform: 'none', letterSpacing: 0,
+          }}>
+            ({company.domain})
+          </span>
+        </label>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span style={{
+            fontSize: 11, fontWeight: 700, color: '#1D4ED8',
+          }}>
+            {totalEmails} emails
+          </span>
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: '2px 6px',
+            borderRadius: 4,
+            background: company.status === 'active' ? '#D1FAE5' : company.status === 'dormant' ? '#FEF3C7' : '#FEE2E2',
+            color: company.status === 'active' ? '#059669' : company.status === 'dormant' ? '#D97706' : '#DC2626',
+          }}>
+            {company.status === 'active' ? 'Activa' : company.status === 'dormant' ? 'Dormida' : 'Inactiva'}
+          </span>
+        </div>
+      </div>
+
+      {/* Company classification badges */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
+        {company.role && company.role !== 'No relevante' && (
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: '2px 7px',
+            borderRadius: 4, background: '#EFF6FF', color: '#2563EB',
+            border: '1px solid #BFDBFE',
+          }}>{company.role}</span>
+        )}
+        {company.segment && (
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: '2px 7px',
+            borderRadius: 4, background: '#F0FDF4', color: '#16A34A',
+            border: '1px solid #BBF7D0',
+          }}>{company.segment}</span>
+        )}
+        {company.companyType && (
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: '2px 7px',
+            borderRadius: 4, background: '#FFF7ED', color: '#C2410C',
+            border: '1px solid #FED7AA',
+          }}>{company.companyType}</span>
+        )}
+      </div>
+
+      {/* Employee activity bars */}
+      {employeeStats.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, color: '#475569',
+            marginBottom: 8,
+          }}>
+            Actividad por buzon
+          </div>
+          {employeeStats.map(src => {
+            const empId = src.employee;
+            const empName = employeeNames[empId] || empId.replace(/_/g, ' ');
+            const empColor = employeeColors[empId] || '#6B7F94';
+            const pct = Math.min(100, Math.round((src.interactions / totalEmails) * 100));
+            return (
+              <div key={empId} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                marginBottom: 4,
+              }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, color: empColor,
+                  minWidth: 70, textAlign: 'right',
+                }}>
+                  {empName}
+                </span>
+                <div style={{
+                  flex: 1, height: 6, background: '#E2E8F0',
+                  borderRadius: 3, overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${pct}%`, height: '100%',
+                    background: empColor, borderRadius: 3,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+                <span style={{
+                  fontSize: 10, fontWeight: 600, color: '#6B7F94',
+                  minWidth: 28, textAlign: 'right',
+                }}>
+                  {src.interactions}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Timeline quarters */}
+      {timeline.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, color: '#475569',
+            marginBottom: 8,
+          }}>
+            Timeline de interacciones
+          </div>
+          <div style={{
+            display: 'flex', gap: 3, flexWrap: 'wrap',
+          }}>
+            {timeline.slice(0, expanded ? 20 : 8).map(t => (
+              <div key={t.quarter} style={{
+                padding: '3px 8px', borderRadius: 4,
+                background: '#FFFFFF', border: '1px solid #E2E8F0',
+                fontSize: 10, fontWeight: 500, color: '#475569',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }} title={t.summary || ''}>
+                <span style={{ fontWeight: 600, color: '#1A2B3D' }}>{t.quarter}</span>
+                <span style={{
+                  background: t.emails >= 10 ? '#3B82F6' : t.emails >= 5 ? '#60A5FA' : '#93C5FD',
+                  color: '#FFFFFF', fontSize: 9, fontWeight: 700,
+                  padding: '0 4px', borderRadius: 3, minWidth: 16, textAlign: 'center',
+                }}>
+                  {t.emails}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent email subjects */}
+      {recentSubjects.length > 0 && (
+        <div style={{ marginBottom: expanded ? 10 : 0 }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, color: '#475569',
+            marginBottom: 6,
+          }}>
+            Emails recientes
+          </div>
+          {recentSubjects.map((ds, i) => (
+            <div key={i} style={{
+              display: 'flex', gap: 8, alignItems: 'baseline',
+              padding: '3px 0', borderBottom: i < recentSubjects.length - 1 ? '1px solid #E2E8F020' : 'none',
+            }}>
+              <span style={{
+                fontSize: 10, fontWeight: 600, color: '#94A3B8',
+                minWidth: 62, flexShrink: 0,
+              }}>
+                {ds.date ? new Date(ds.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : ''}
+              </span>
+              <span style={{
+                fontSize: 11, color: '#1A2B3D', fontWeight: 400,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {ds.subject}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Context summary */}
+      {detail.context && expanded && (
+        <div style={{
+          marginTop: 10, padding: '8px 10px',
+          background: '#FFFFFF', borderRadius: 6,
+          border: '1px solid #E2E8F0',
+          fontSize: 11, color: '#475569', lineHeight: 1.5,
+          maxHeight: 120, overflow: 'auto',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6B7F94', marginBottom: 4, textTransform: 'uppercase' }}>
+            Contexto CRM
+          </div>
+          {detail.context}
+        </div>
+      )}
+
+      {/* Expand/collapse toggle */}
+      {(timeline.length > 8 || datedSubjects.length > 6 || detail.context) && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            marginTop: 8, padding: '4px 10px',
+            fontSize: 11, fontWeight: 600,
+            color: '#3B82F6', background: 'transparent',
+            border: 'none', cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {expanded ? 'Ver menos' : 'Ver mas detalle'}
+        </button>
+      )}
+    </div>
   );
 }
 

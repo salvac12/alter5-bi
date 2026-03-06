@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   fetchAllProspects,
   updateProspect,
@@ -19,7 +19,7 @@ import { isAirtableConfigured } from '../utils/airtable';
  * Drag & drop to move prospects between stages.
  * Auto-conversion to Opportunity when dropped in "Listo para Term-Sheet".
  */
-export default function ProspectsView({ onSelectProspect, onCreateProspect }) {
+export default function ProspectsView({ onSelectProspect, onCreateProspect, companies = [] }) {
   const [prospects, setProspects] = useState([]);
   const [filteredProspects, setFilteredProspects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -198,6 +198,37 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect }) {
   const totalCount = filteredProspects.length;
   const totalAmount = filteredProspects.reduce((sum, p) => sum + (p.amount || 0), 0);
 
+  // Build company name lookup for matching prospects to CRM data
+  const companyByName = useMemo(() => {
+    const map = new Map();
+    for (const c of companies) {
+      map.set(c.name.toLowerCase(), c);
+      map.set(c.domain, c);
+    }
+    return map;
+  }, [companies]);
+
+  function findCompanyForProspect(prospect) {
+    const name = (prospect.name || '').trim().toLowerCase();
+    // Direct name match
+    if (companyByName.has(name)) return companyByName.get(name);
+    // Domain from contacts
+    const emails = prospect.contacts?.map(c => c.email) || [];
+    if (prospect.contactEmail) emails.push(prospect.contactEmail);
+    for (const email of emails) {
+      const domain = (email || '').split('@')[1];
+      if (domain && companyByName.has(domain)) return companyByName.get(domain);
+    }
+    // Partial name match
+    if (name.length >= 4) {
+      for (const c of companies) {
+        const cn = c.name.toLowerCase();
+        if (cn.includes(name) || name.includes(cn)) return c;
+      }
+    }
+    return null;
+  }
+
   return (
     <div style={styles.container}>
       {/* Header */}
@@ -341,6 +372,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect }) {
               onCardDragEnd={handleDragEnd}
               onCardClick={onSelectProspect}
               onAddClick={() => onCreateProspect && onCreateProspect(stage)}
+              findCompany={findCompanyForProspect}
             />
           ))}
         </div>
@@ -443,6 +475,7 @@ function ProspectColumn({
   stage, prospects, loading, isDragOver,
   onDragOver, onDragEnter, onDragLeave, onDrop,
   onCardDragStart, onCardDragEnd, onCardClick, onAddClick,
+  findCompany,
 }) {
   const colors = PROSPECT_STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
   const shortLabel = PROSPECT_STAGE_SHORT[stage] || stage;
@@ -541,6 +574,7 @@ function ProspectColumn({
               onDragStart={onCardDragStart}
               onDragEnd={onCardDragEnd}
               onClick={() => onCardClick && onCardClick(prospect)}
+              matchedCompany={findCompany ? findCompany(prospect) : null}
             />
           ))
         )}
@@ -551,7 +585,7 @@ function ProspectColumn({
 
 // ── Card Component ──────────────────────────────────────────────────
 
-function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick }) {
+function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick, matchedCompany }) {
   const [isHovered, setIsHovered] = useState(false);
   const formattedAmount = formatAmount(prospect.amount, prospect.currency);
 
@@ -561,6 +595,28 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick })
     boxShadow: isHovered
       ? '0 8px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(139, 92, 246, 0.3)'
       : '0 2px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+  };
+
+  // Employee initials for activity dots
+  const employeeColors = {
+    salvador_carrillo: '#3B82F6',
+    leticia_menéndez: '#8B5CF6',
+    javier_ruiz: '#F59E0B',
+    miguel_solana: '#10B981',
+    carlos_almodóvar: '#EF4444',
+    gonzalo_de_gracia: '#06B6D4',
+    rafael_nevado: '#F97316',
+    guillermo_souto: '#6B7280',
+  };
+  const employeeInitials = {
+    salvador_carrillo: 'SC',
+    leticia_menéndez: 'LM',
+    javier_ruiz: 'JR',
+    miguel_solana: 'MS',
+    carlos_almodóvar: 'CA',
+    gonzalo_de_gracia: 'GG',
+    rafael_nevado: 'RN',
+    guillermo_souto: 'GS',
   };
 
   return (
@@ -640,6 +696,55 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick })
               <circle cx="12" cy="7" r="4"/>
             </svg>
             {prospect.dealManager}
+          </div>
+        )}
+
+        {/* CRM Activity indicator */}
+        {matchedCompany && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            marginTop: 4, padding: '4px 6px',
+            background: '#F0F9FF', borderRadius: 4,
+            border: '1px solid #E0F2FE',
+          }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2.5">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#1D4ED8' }}>
+              {matchedCompany.interactions} emails
+            </span>
+            <span style={{
+              fontSize: 9, fontWeight: 600, padding: '0 4px',
+              borderRadius: 3,
+              background: matchedCompany.status === 'active' ? '#D1FAE5' : matchedCompany.status === 'dormant' ? '#FEF3C7' : '#FEE2E2',
+              color: matchedCompany.status === 'active' ? '#059669' : matchedCompany.status === 'dormant' ? '#D97706' : '#DC2626',
+            }}>
+              {matchedCompany.status === 'active' ? 'Activa' : matchedCompany.status === 'dormant' ? 'Dormida' : 'Inactiva'}
+            </span>
+            {/* Employee dots */}
+            <div style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
+              {matchedCompany.employees.slice(0, 4).map(empId => (
+                <div key={empId} title={empId.replace(/_/g, ' ')} style={{
+                  width: 14, height: 14, borderRadius: '50%',
+                  background: employeeColors[empId] || '#6B7F94',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 6, fontWeight: 800, color: '#FFFFFF',
+                  letterSpacing: '-0.5px',
+                }}>
+                  {employeeInitials[empId] || '?'}
+                </div>
+              ))}
+              {matchedCompany.employees.length > 4 && (
+                <div style={{
+                  width: 14, height: 14, borderRadius: '50%',
+                  background: '#94A3B8',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 7, fontWeight: 700, color: '#FFFFFF',
+                }}>
+                  +{matchedCompany.employees.length - 4}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -735,6 +735,7 @@ export default function App() {
           key={prospectsKey}
           onSelectProspect={handleSelectProspect}
           onCreateProspect={handleCreateProspect}
+          companies={companies}
         />
       ) : activeView === "campanas" && selectedCampaignId && selectedCampaignName && selectedCampaignName.toLowerCase().includes('bridge') ? (
         /* ── Bridge Energy Program — full standalone dashboard ── */
@@ -813,6 +814,7 @@ export default function App() {
           onSaved={handleProspectSaved}
           onDeleted={handleProspectDeleted}
           onConverted={handleProspectConverted}
+          companies={companies}
         />
       )}
 
