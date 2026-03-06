@@ -88,6 +88,10 @@ export async function fetchAllVerified() {
       notes: r.fields.Notes || "",
       mismatch: r.fields.Mismatch || false,
       confidence: r.fields.Confidence || "",
+      employeeCount: r.fields["Employee Count"] || null,
+      employeeCountSource: r.fields["Employee Count Source"] || "",
+      estimatedRevenueEur: r.fields["Estimated Revenue EUR"] || null,
+      revenueSource: r.fields["Revenue Source"] || "",
     });
   }
 

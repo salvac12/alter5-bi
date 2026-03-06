@@ -16,6 +16,7 @@
 
     python scripts/verify_classifications.py                     # top 50 by interactions
     python scripts/verify_classifications.py --top 200           # top 200
+    python scripts/verify_classifications.py --all               # ALL unverified companies
     python scripts/verify_classifications.py --domain elonacapital.com  # single company
     python scripts/verify_classifications.py --unverified        # only unverified companies
     python scripts/verify_classifications.py --mismatched        # only flagged mismatches
@@ -217,11 +218,13 @@ Asuntos recientes: [{subj_text}]
 {f"Extractos de emails: [{body_text}]" if body_text else ""}
 
 ## INSTRUCCIONES:
-1. BUSCA en internet que hace realmente esta empresa: su web, LinkedIn, noticias, etc.
+1. BUSCA en internet que hace realmente esta empresa: su web, LinkedIn, noticias, registros mercantiles, etc.
 2. DISTINGUE entre "lo que la empresa ES" (su negocio real) y "de que habla con Alter5" (la relacion comercial).
    - Ejemplo: Un fondo de equity que habla de deuda con Alter5 sigue siendo un fondo de equity.
    - Ejemplo: Una empresa que busca financiacion para sus proyectos es "Originacion", no "Inversion".
 3. COMPARA tu hallazgo con la clasificacion actual y senala si hay discrepancia.
+4. BUSCA el numero aproximado de empleados (LinkedIn, web corporativa, informes).
+5. BUSCA la facturacion/ingresos anuales estimados (registros mercantiles, CNMV, Crunchbase, noticias). Si no encuentras datos fiables, pon null.
 
 ## TAXONOMIA (elige de estas opciones EXACTAS):
 - Role: {json.dumps(COMPANY_ROLES)}
@@ -245,10 +248,18 @@ Asuntos recientes: [{subj_text}]
   "verified_technologies": [...],
   "verified_geography": [...],
   "verified_market_roles": [...],
+  "employee_count": 150,
+  "employee_count_source": "LinkedIn|web|estimacion",
+  "estimated_revenue_eur": 25000000,
+  "revenue_source": "Registro mercantil|CNMV|Crunchbase|estimacion",
   "mismatch": true/false,
   "mismatch_explanation": "Explicacion de por que la clasificacion actual es incorrecta (o vacio si es correcta)",
   "confidence": "alta|media|baja"
-}}"""
+}}
+NOTAS sobre employee_count y estimated_revenue_eur:
+- employee_count: numero entero aproximado. Si no encuentras datos, pon null.
+- estimated_revenue_eur: facturacion anual en euros (entero, sin decimales). Si no hay dato fiable, pon null.
+- Indica la fuente en los campos _source correspondientes."""
 
     try:
         # Use Gemini REST API with google_search grounding tool
@@ -367,6 +378,22 @@ def build_airtable_fields(domain, name, current_enrichment, verification):
     if verification.get("mismatch_explanation"):
         fields["Notes"] = verification["mismatch_explanation"]
 
+    # Employee count
+    emp_count = verification.get("employee_count")
+    if emp_count is not None and isinstance(emp_count, (int, float)) and emp_count > 0:
+        fields["Employee Count"] = int(emp_count)
+    emp_source = verification.get("employee_count_source", "")
+    if emp_source:
+        fields["Employee Count Source"] = str(emp_source)[:200]
+
+    # Estimated revenue
+    revenue = verification.get("estimated_revenue_eur")
+    if revenue is not None and isinstance(revenue, (int, float)) and revenue > 0:
+        fields["Estimated Revenue EUR"] = int(revenue)
+    rev_source = verification.get("revenue_source", "")
+    if rev_source:
+        fields["Revenue Source"] = str(rev_source)[:200]
+
     # Only set classification fields if valid
     if v_role and v_role in COMPANY_ROLES:
         fields["Role"] = v_role
@@ -407,6 +434,7 @@ def main():
     args = sys.argv[1:]
     top_n = 50
     target_domain = None
+    process_all = False
     unverified_only = False
     mismatched_only = False
     dry_run = False
@@ -417,6 +445,9 @@ def main():
         if args[i] == "--top" and i + 1 < len(args):
             top_n = int(args[i + 1])
             i += 2
+        elif args[i] == "--all":
+            process_all = True
+            i += 1
         elif args[i] == "--domain" and i + 1 < len(args):
             target_domain = args[i + 1]
             i += 2
@@ -488,8 +519,8 @@ def main():
                 if status in ("Verified", "Edited"):
                     continue
 
-            # Skip "No relevante" with very few interactions (noise)
-            if enrichment.get("role") == "No relevante" and interactions < 5:
+            # In non-all mode, skip "No relevante" with very few interactions (noise)
+            if not process_all and enrichment.get("role") == "No relevante" and interactions < 3:
                 continue
 
         candidates.append({
@@ -504,8 +535,8 @@ def main():
     # Sort by interactions (most active first)
     candidates.sort(key=lambda x: x["interactions"], reverse=True)
 
-    # Apply --top N limit (unless targeting a single domain)
-    if not target_domain:
+    # Apply --top N limit (unless targeting a single domain or --all)
+    if not target_domain and not process_all:
         candidates = candidates[:top_n]
 
     if not candidates:
@@ -552,10 +583,17 @@ def main():
         is_mismatch = result.get("mismatch", False)
         confidence = result.get("confidence", "?")
         desc = (result.get("company_description", "") or "")[:100]
+        emp = result.get("employee_count")
+        rev = result.get("estimated_revenue_eur")
 
         status_icon = "!!" if is_mismatch else "OK"
+        extras = ""
+        if emp:
+            extras += f" emp={emp}"
+        if rev:
+            extras += f" rev={rev/1e6:.1f}M€" if rev >= 1e6 else f" rev={rev}€"
         print(f"  [{status_icon}] {result.get('verified_role', '?')} > {result.get('verified_type', '?')} "
-              f"(conf={confidence}) {desc}")
+              f"(conf={confidence}){extras} {desc}")
 
         if is_mismatch:
             mismatch_count += 1
