@@ -345,28 +345,63 @@ def build_airtable_fields(domain, name, current_enrichment, verification):
     v_geo = verification.get("verified_geography", [])
     v_mr = verification.get("verified_market_roles", [])
 
-    # Gemini sometimes returns singleSelect fields as arrays - take first element
-    if isinstance(v_role, list):
-        v_role = v_role[0] if v_role else ""
-    if isinstance(v_seg, list):
-        v_seg = v_seg[0] if v_seg else ""
-    if isinstance(v_type, list):
-        v_type = v_type[0] if v_type else ""
+    # Gemini sometimes returns singleSelect fields as arrays, dicts, or nested objects
+    def _to_str(val):
+        """Coerce Gemini value to a simple string (handles list, dict, etc.)."""
+        if isinstance(val, dict):
+            return val.get("name", val.get("value", str(val)))
+        if isinstance(val, list):
+            return _to_str(val[0]) if val else ""
+        return str(val) if val else ""
 
-    # Ensure web_sources is a string (Gemini sometimes returns an array)
+    v_role = _to_str(v_role)
+    v_seg = _to_str(v_seg)
+    v_type = _to_str(v_type)
+
+    # Ensure v_tech, v_geo, v_mr are lists of strings (not dicts)
+    def _to_str_list(val):
+        if not val:
+            return []
+        if not isinstance(val, list):
+            val = [val]
+        return [_to_str(item) for item in val if _to_str(item)]
+
+    v_tech = _to_str_list(v_tech)
+    v_geo = _to_str_list(v_geo)
+    v_mr = _to_str_list(v_mr)
+
+    # Ensure web_sources is a plain-text string (Gemini sometimes returns an array of URLs)
     web_sources_raw = verification.get("web_sources", "")
     if isinstance(web_sources_raw, list):
-        web_sources_raw = "\n".join(str(s) for s in web_sources_raw)
+        # Filter out grounding-api-redirect URLs (not useful for humans)
+        clean_urls = []
+        for s in web_sources_raw:
+            url_str = str(s)
+            if "grounding-api-redirect" in url_str:
+                continue
+            clean_urls.append(url_str)
+        web_sources_raw = "\n".join(clean_urls[:10])  # max 10 URLs
     web_desc_raw = verification.get("company_description", "")
     if isinstance(web_desc_raw, list):
         web_desc_raw = " ".join(str(s) for s in web_desc_raw)
+
+    # Ensure web_sources is plain text, not a JSON-stringified array
+    web_sources_str = str(web_sources_raw) if web_sources_raw else ""
+    if web_sources_str.startswith("[") or web_sources_str.startswith("{"):
+        # It was stringified as JSON — try to extract clean URLs
+        try:
+            parsed = json.loads(web_sources_str)
+            if isinstance(parsed, list):
+                web_sources_str = "\n".join(str(u) for u in parsed[:10])
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     fields = {
         "Domain": domain,
         "Company Name": name or domain,
         "Previous Classification": prev_class,
-        "Web Description": str(web_desc_raw)[:10000],
-        "Web Sources": str(web_sources_raw)[:10000],
+        "Web Description": str(web_desc_raw)[:5000],
+        "Web Sources": web_sources_str[:2000],
         "Status": "Pending Review",
         "Verified By": "agent",
         "Verified At": datetime.now().isoformat(),
@@ -401,23 +436,29 @@ def build_airtable_fields(domain, name, current_enrichment, verification):
     if rev_source:
         fields["Revenue Source"] = str(rev_source)[:200]
 
-    # Only set classification fields if valid
-    if v_role and v_role in COMPANY_ROLES:
+    # Only set classification fields if valid (strict match against taxonomy)
+    if v_role and isinstance(v_role, str) and v_role in COMPANY_ROLES:
         fields["Role"] = v_role
     valid_segments = ORIGINACION_SEGMENTS + INVERSION_SEGMENTS
-    if v_seg and v_seg in valid_segments:
+    if v_seg and isinstance(v_seg, str) and v_seg in valid_segments:
         fields["Segment"] = v_seg
     all_types = set()
     for types_list in COMPANY_TYPES_V2.values():
         all_types.update(types_list)
-    if v_type and v_type in all_types:
+    if v_type and isinstance(v_type, str) and v_type in all_types:
         fields["Type"] = v_type
-    if v_tech and isinstance(v_tech, list):
-        fields["Technologies"] = [t for t in v_tech if t in TECHNOLOGIES]
-    if v_geo and isinstance(v_geo, list):
-        fields["Geography"] = [g for g in v_geo if g in GEOGRAPHIES]
-    if v_mr and isinstance(v_mr, list):
-        fields["Market Roles"] = [r for r in v_mr if r in MARKET_ROLES_LIST]
+    if v_tech:
+        valid_tech = [t for t in v_tech if isinstance(t, str) and t in TECHNOLOGIES]
+        if valid_tech:
+            fields["Technologies"] = valid_tech
+    if v_geo:
+        valid_geo = [g for g in v_geo if isinstance(g, str) and g in GEOGRAPHIES]
+        if valid_geo:
+            fields["Geography"] = valid_geo
+    if v_mr:
+        valid_mr = [r for r in v_mr if isinstance(r, str) and r in MARKET_ROLES_LIST]
+        if valid_mr:
+            fields["Market Roles"] = valid_mr
 
     return fields
 
@@ -566,60 +607,65 @@ def main():
         name = cand["name"]
         enrichment = cand["enrichment"]
 
-        # Build bodies from dated_subjects (which contain [date, subject, extract])
-        bodies = []
-        for ds in cand.get("dated_subjects", []):
-            if len(ds) > 2 and ds[2]:
-                bodies.append(ds[2])
+        try:
+            # Build bodies from dated_subjects (which contain [date, subject, extract])
+            bodies = []
+            for ds in cand.get("dated_subjects", []):
+                if isinstance(ds, (list, tuple)) and len(ds) > 2 and ds[2]:
+                    bodies.append(str(ds[2]))
 
-        print(f"[{idx}/{len(candidates)}] {name or domain} ({cand['interactions']} interactions)...")
+            print(f"[{idx}/{len(candidates)}] {name or domain} ({cand['interactions']} interactions)...")
 
-        result = verify_company_with_gemini(
-            domain, name, enrichment,
-            subjects=cand["subjects"],
-            bodies=bodies,
-        )
+            result = verify_company_with_gemini(
+                domain, name, enrichment,
+                subjects=cand["subjects"],
+                bodies=bodies,
+            )
 
-        if not result:
-            error_count += 1
-            print(f"  FAILED - skipping")
-            if idx < len(candidates):
-                time.sleep(GEMINI_RPM_DELAY)
-            continue
-
-        is_mismatch = result.get("mismatch", False)
-        confidence = result.get("confidence", "?")
-        desc = (result.get("company_description", "") or "")[:100]
-        emp = result.get("employee_count")
-        rev = result.get("estimated_revenue_eur")
-
-        status_icon = "!!" if is_mismatch else "OK"
-        extras = ""
-        if emp:
-            extras += f" emp={emp}"
-        if rev:
-            extras += f" rev={rev/1e6:.1f}M€" if rev >= 1e6 else f" rev={rev}€"
-        print(f"  [{status_icon}] {result.get('verified_role', '?')} > {result.get('verified_type', '?')} "
-              f"(conf={confidence}){extras} {desc}")
-
-        if is_mismatch:
-            mismatch_count += 1
-            expl = result.get("mismatch_explanation", "")
-            if expl:
-                print(f"  MISMATCH: {expl[:150]}")
-
-        # Write to Airtable
-        if not dry_run:
-            fields = build_airtable_fields(domain, name, enrichment, result)
-            record_id = upsert_verification(domain, fields, existing_records)
-            if record_id:
-                verified_count += 1
-                # Update existing_records for future upserts
-                existing_records[domain] = {"record_id": record_id, "status": "Pending Review"}
-            else:
+            if not result:
                 error_count += 1
-        else:
-            verified_count += 1
+                print(f"  FAILED - skipping")
+                if idx < len(candidates):
+                    time.sleep(GEMINI_RPM_DELAY)
+                continue
+
+            is_mismatch = result.get("mismatch", False)
+            confidence = result.get("confidence", "?")
+            desc = str(result.get("company_description", "") or "")[:100]
+            emp = result.get("employee_count")
+            rev = result.get("estimated_revenue_eur")
+
+            status_icon = "!!" if is_mismatch else "OK"
+            extras = ""
+            if emp:
+                extras += f" emp={emp}"
+            if rev and isinstance(rev, (int, float)):
+                extras += f" rev={rev/1e6:.1f}M€" if rev >= 1e6 else f" rev={rev}€"
+            print(f"  [{status_icon}] {result.get('verified_role', '?')} > {result.get('verified_type', '?')} "
+                  f"(conf={confidence}){extras} {desc}")
+
+            if is_mismatch:
+                mismatch_count += 1
+                expl = result.get("mismatch_explanation", "")
+                if expl:
+                    print(f"  MISMATCH: {expl[:150]}")
+
+            # Write to Airtable
+            if not dry_run:
+                fields = build_airtable_fields(domain, name, enrichment, result)
+                record_id = upsert_verification(domain, fields, existing_records)
+                if record_id:
+                    verified_count += 1
+                    # Update existing_records for future upserts
+                    existing_records[domain] = {"record_id": record_id, "status": "Pending Review"}
+                else:
+                    error_count += 1
+            else:
+                verified_count += 1
+
+        except Exception as e:
+            error_count += 1
+            print(f"  [ERROR] Unexpected error for {domain}: {type(e).__name__}: {e}")
 
         # Rate limit
         if idx < len(candidates):
