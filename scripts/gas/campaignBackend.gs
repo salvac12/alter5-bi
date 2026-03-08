@@ -66,6 +66,7 @@ function doPost(e) {
       'getFollowUps': handleGetFollowUps,
       'scheduleFollowUp': handleScheduleFollowUp,
       'cancelFollowUp': handleCancelFollowUp,
+      'sendTestEmail': handleSendTestEmail,
     };
 
     if (!handlers[action]) {
@@ -596,4 +597,41 @@ function handleCancelFollowUp(payload) {
   updateCell(sheet, rowIndex, FOLLOWUP_HEADERS, 'cancelledTime', now());
 
   return { id: followUpId, status: 'cancelled' };
+}
+
+/**
+ * sendTestEmail — Send a test copy of the campaign email to a specific address.
+ * Does NOT affect recipients list. Just sends a preview.
+ */
+function handleSendTestEmail(payload) {
+  var campaignId = payload.campaignId;
+  var testEmail = payload.testEmail;
+  if (!campaignId || !testEmail) return { error: 'Missing campaignId or testEmail' };
+
+  var campaigns = readAll(SHEET_CAMPAIGNS, CAMPAIGN_HEADERS);
+  var campaign = null;
+  for (var i = 0; i < campaigns.length; i++) {
+    if (campaigns[i].id === campaignId) { campaign = campaigns[i]; break; }
+  }
+  if (!campaign) return { error: 'Campaign not found' };
+
+  var subject = campaign.subjectA || '(Sin asunto)';
+  var body = campaign.bodyA || '';
+
+  // Replace placeholders with test values
+  subject = replacePlaceholders(subject, 'Test', 'TestCompany');
+  body = replacePlaceholders(body, 'Test', 'TestCompany');
+  // Prepend [TEST] to subject
+  subject = '[TEST] ' + subject;
+
+  try {
+    GmailApp.sendEmail(testEmail, subject, '', {
+      htmlBody: body,
+      from: campaign.senderEmail || '',
+      name: campaign.senderName || '',
+    });
+    return { success: true, sentTo: testEmail };
+  } catch (err) {
+    return { error: 'Failed to send test: ' + err.message };
+  }
 }

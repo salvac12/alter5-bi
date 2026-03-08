@@ -47,6 +47,7 @@ const POST_ACTIONS = new Set([
   'addNote',
   'generateFollowUp',
   'improveMessage',
+  'sendTestEmail',
 ]);
 
 const ALL_ACTIONS = new Set([...GET_ACTIONS, ...POST_ACTIONS]);

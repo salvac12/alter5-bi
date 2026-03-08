@@ -15,7 +15,7 @@ function getApiKey() {
   return (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
 }
 
-async function callGemini(prompt, temperature = 0.3) {
+export async function callGemini(prompt, temperature = 0.3) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("VITE_GEMINI_API_KEY no configurada");
 

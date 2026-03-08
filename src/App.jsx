@@ -740,6 +740,7 @@ export default function App() {
       ) : activeView === "campanas" && selectedCampaignId && selectedCampaignName && selectedCampaignName.toLowerCase().includes('bridge') ? (
         /* ── Bridge Energy Program — full standalone dashboard ── */
         <BridgeCampaignView
+          allCompanies={companies}
           onBack={() => { setSelectedCampaignId(null); setSelectedCampaignName(null); loadCampaigns(); }}
         />
       ) : activeView === "campanas" && selectedCampaignId ? (

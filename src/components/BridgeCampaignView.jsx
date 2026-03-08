@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import BridgeSlideOverPanel from "./BridgeSlideOverPanel";
+import BridgeExplorerView from "./BridgeExplorerView";
 
 // ============================================================
 // CONFIG
@@ -2422,7 +2423,8 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
 // ============================================================
 // MAIN
 // ============================================================
-export default function BridgeCampaignView({ onBack }) {
+export default function BridgeCampaignView({ onBack, allCompanies }) {
+  const [showExplorer, setShowExplorer] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mock, setMock] = useState(false);
@@ -3022,10 +3024,20 @@ export default function BridgeCampaignView({ onBack }) {
   const bWins = (m?.B?.tasaApertura||0) > (m?.A?.tasaApertura||0);
   const hasEnough = (m?.A?.enviados||0) >= 5 && (m?.B?.enviados||0) >= 5;
 
+  if (showExplorer) {
+    return (
+      <BridgeExplorerView
+        allCompanies={allCompanies || []}
+        campaignRef="Bridge_Q1"
+        currentUser="Salvador Carrillo"
+        onBack={() => setShowExplorer(false)}
+      />
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: T.bg }}>
       <style>{globalCSS}</style>
-
       {/* ─── HEADER ─── */}
       <header style={{
         background: T.white,
@@ -3112,6 +3124,24 @@ export default function BridgeCampaignView({ onBack }) {
           onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
           onMouseLeave={e => e.currentTarget.style.opacity = "1"}
           >↻ Actualizar</button>
+          <button onClick={() => setShowExplorer(true)} style={{
+            background: T.emerald,
+            border: "none",
+            borderRadius: 8,
+            color: T.white,
+            padding: "10px 20px",
+            cursor: "pointer",
+            fontSize: 14,
+            fontWeight: 600,
+            fontFamily: T.sans,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            transition: "opacity 0.2s",
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
+          onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+          >＋ Continuar con más candidatos</button>
         </div>
       </header>
 

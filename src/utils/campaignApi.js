@@ -213,6 +213,12 @@ export async function sendFollowUpBatch({ campaignId, contacts }) {
   return proxyFetch('sendFollowUpBatch', { campaignId, contacts });
 }
 
+// ── Test email ────────────────────────────────────────────────────
+
+export async function sendTestEmail(campaignId, testEmail) {
+  return proxyFetch('sendTestEmail', { campaignId, testEmail });
+}
+
 // ── Tracking domains ──────────────────────────────────────────────
 
 const GENERIC_DOMAINS = new Set([
