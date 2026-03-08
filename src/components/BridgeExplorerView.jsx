@@ -255,8 +255,9 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, currentU
         if (savedStatus === 'rejected') return false; // always exclude rejected
 
         if (statusFilter === 'pending') {
-          // Show pending (no record) + skipped
-          if (savedStatus && savedStatus !== 'pending' && savedStatus !== 'skipped' && savedStatus !== 'approved') return false;
+          // Show pending (no record), skipped, and approved (were approved but never sent)
+          const allowedStatuses = new Set(['pending', 'skipped', 'approved']);
+          if (savedStatus && !allowedStatuses.has(savedStatus)) return false;
         } else if (statusFilter === 'skipped') {
           if (savedStatus !== 'skipped') return false;
         }
@@ -1077,7 +1078,8 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                     borderRadius: 6, fontSize: 12, color: T.amber, fontFamily: T.sans,
                   }}>
                     ⚠ El remitente real depende de la cuenta Gmail que autorizó el script GAS.
-                    Seleccionar otro remitente puede requerir configuración adicional.
+                    Si el remitente seleccionado no es el propietario del script, el email puede enviarse
+                    "en nombre de" esa cuenta. Para enviar desde otra cuenta, contacta al administrador del script.
                   </div>
                 </div>
 
