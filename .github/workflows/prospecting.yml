@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     # Allow multiple parallel jobs (one per search criteria)
     # No concurrency group to enable parallelism
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +27,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install anthropic google-generativeai requests python-dotenv aiohttp
+          pip install -r scripts/prospecting/requirements.txt
 
       - name: Run Prospecting Agent
         env:

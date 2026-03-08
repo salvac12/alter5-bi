@@ -270,7 +270,7 @@ export default function ProspectingResultsView({ jobId, jobName, currentUser, on
               fontFamily: 'inherit',
             }}
           >
-            {exporting ? '⏳ Exportando...' : '📤 Exportar a CandidateSearch'}
+            {exporting ? '⏳ Exportando...' : '📤 Exportar a Candidatas'}
           </button>
         </div>
       )}

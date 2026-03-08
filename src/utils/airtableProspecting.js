@@ -276,7 +276,7 @@ export async function createProspectingJob(criteria, jobName, createdBy = "") {
   const token = getToken();
   if (!token) throw new Error("Airtable token not configured");
 
-  const jobId = `job_${new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 15)}_${Math.random().toString(36).slice(2, 8)}`;
+  const jobId = `job_${new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 15)}_${(typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10))}`;
 
   const fields = {
     JobId: jobId,

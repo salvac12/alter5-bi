@@ -239,7 +239,7 @@ export default function ProspectingCompanyCard({
               {/* Sales Nav + LinkedIn finder row */}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                 <a
-                  href={`https://www.linkedin.com/sales/search/people?keywords=${encodeURIComponent(company.companyName + ' CFO')}`}
+                  href={`https://www.linkedin.com/sales/search/people?keywords=${encodeURIComponent(company.companyName + ' CFO')}&currentCompany[]=${encodeURIComponent(company.companyName)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{

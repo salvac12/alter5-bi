@@ -245,10 +245,11 @@ def find_contact(company_name, domain, target_roles=None, linkedin_company_url=N
                 }
 
     # PASO 3: Fallback — return Sales Nav search URL for manual lookup
-    roles_query = " OR ".join(f'"{r}"' for r in target_roles[:3])
+    roles_str = target_roles[0].replace(' ', '+') if target_roles else 'CFO'
     sales_nav_url = (
         f"https://www.linkedin.com/sales/search/people"
-        f"?keywords={company_name.replace(' ', '+')}+{target_roles[0].replace(' ', '+')}"
+        f"?keywords={company_name.replace(' ', '+')}+{roles_str}"
+        f"&currentCompany[]={company_name.replace(' ', '%20')}"
     )
 
     print(f"[contact_finder] No contact found for {company_name}, manual required")
