@@ -18,6 +18,7 @@ import CampaignCreationPanel from './components/CampaignCreationPanel';
 import CampaignDetailView from './components/CampaignDetailView';
 import BridgeCampaignView from './components/BridgeCampaignView';
 import FollowUpQuickPanel from './components/FollowUpQuickPanel';
+import ProspectingView from './components/ProspectingView';
 import { getCampaigns } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
 import { fetchAllVerified, saveVerification, invalidateVerifiedCache, verifiedToEnrichmentOverride } from './utils/airtableVerified';
@@ -512,6 +513,7 @@ export default function App() {
               { id: "prospects", label: "Prospects", badge: "PR" },
               { id: "pipeline", label: "Pipeline", badge: "AT" },
               { id: "campanas", label: "Campañas", badge: "EM" },
+              { id: "prospeccion", label: "Prospección", badge: "IA" },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -531,10 +533,10 @@ export default function App() {
                     marginLeft: 6, fontSize: 8, fontWeight: 800,
                     padding: "1px 5px", borderRadius: 4,
                     background: activeView === tab.id
-                      ? (tab.id === "prospects" ? "#8B5CF620" : tab.id === "campanas" ? "#7C3AED20" : "#3B82F620")
+                      ? (tab.id === "prospects" ? "#8B5CF620" : tab.id === "campanas" ? "#7C3AED20" : tab.id === "prospeccion" ? "#10B98120" : "#3B82F620")
                       : "#E2E8F040",
                     color: activeView === tab.id
-                      ? (tab.id === "prospects" ? "#8B5CF6" : tab.id === "campanas" ? "#7C3AED" : "#3B82F6")
+                      ? (tab.id === "prospects" ? "#8B5CF6" : tab.id === "campanas" ? "#7C3AED" : tab.id === "prospeccion" ? "#10B981" : "#3B82F6")
                       : "#94A3B8",
                     textTransform: "uppercase", letterSpacing: "0.5px",
                     verticalAlign: "middle",
@@ -760,6 +762,9 @@ export default function App() {
           onCreateCampaign={() => setShowCampaignCreation(true)}
           onSelectCampaign={(c) => { setSelectedCampaignId(c.id); setSelectedCampaignName(c.name || ''); }}
         />
+      ) : activeView === "prospeccion" ? (
+        /* ── Prospecting AI view ── */
+        <ProspectingView currentUser={currentUser} />
       ) : (
         /* ── Pipeline (Kanban) view ── */
         <KanbanView
