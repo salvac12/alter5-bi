@@ -133,7 +133,7 @@ function Toast({ msg, onClose }) {
 
 // ── Main Component ────────────────────────────────────────────────────
 
-export default function BridgeExplorerView({ allCompanies, campaignRef, currentUser, onBack }) {
+export default function BridgeExplorerView({ allCompanies, campaignRef, previousTargets = {}, currentUser, onBack }) {
   // Data state
   const [trackingDomains, setTrackingDomains] = useState(new Set());
   const [trackingError, setTrackingError] = useState(false);
@@ -243,6 +243,10 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, currentU
         // Absolute shield: already contacted
         if (trackingDomains.has(domain)) return false;
 
+        // Exclude companies already approved/sent in previous waves
+        const prevStatus = previousTargets[domain]?.status;
+        if (prevStatus === 'approved' || prevStatus === 'sent' || prevStatus === 'selected') return false;
+
         // Only Originación companies (Bridge target segment)
         if (c.role !== 'Originación') return false;
 
@@ -255,8 +259,8 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, currentU
         if (savedStatus === 'rejected') return false; // always exclude rejected
 
         if (statusFilter === 'pending') {
-          // Show pending (no record), skipped, and approved (were approved but never sent)
-          const allowedStatuses = new Set(['pending', 'skipped', 'approved']);
+          // Show pending (no record) and skipped — approved excluded from Explorer
+          const allowedStatuses = new Set(['pending', 'skipped']);
           if (savedStatus && !allowedStatuses.has(savedStatus)) return false;
         } else if (statusFilter === 'skipped') {
           if (savedStatus !== 'skipped') return false;
@@ -315,7 +319,7 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, currentU
         }
         return b.explorerScore - a.explorerScore;
       });
-  }, [allCompanies, trackingDomains, savedTargets, segFilter, typeFilter,
+  }, [allCompanies, trackingDomains, savedTargets, previousTargets, segFilter, typeFilter,
       techFilter, geoFilter, targetFilter, statusFilter, searchQuery, minScore, llmOrdering]);
 
   // Unique filter values
@@ -1292,11 +1296,20 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
           </button>
           <div style={{ width: 1, height: 28, background: T.border }} />
           <div>
-            <div style={{ fontFamily: T.sans, fontWeight: 700, fontSize: 15, color: T.title }}>
+            <div style={{ fontFamily: T.sans, fontWeight: 700, fontSize: 15, color: T.title, display: 'flex', alignItems: 'center', gap: 8 }}>
               Bridge Energy Debt — Nuevos candidatos
+              <span style={{
+                fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                background: T.primaryBg, color: T.primary, border: `1px solid ${T.primary}33`,
+              }}>{campaignRef}</span>
             </div>
             <div style={{ fontFamily: T.sans, fontSize: 12, color: T.muted }}>
               {candidates.length} empresas por revisar · {selectedForSend.size} seleccionadas
+              {Object.keys(previousTargets).length > 0 && (
+                <span style={{ marginLeft: 6 }}>
+                  · {Object.values(previousTargets).filter(t => t.status === 'approved' || t.status === 'sent' || t.status === 'selected').length} excluidas de waves anteriores
+                </span>
+              )}
               {trackingError && (
                 <span style={{ color: T.amber, marginLeft: 8 }}>⚠ Error al cargar dominios enviados</span>
               )}

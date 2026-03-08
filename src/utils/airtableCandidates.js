@@ -118,6 +118,72 @@ export async function upsertCandidateTarget(record) {
   }
 }
 
+// ── FETCH ALL BRIDGE TARGETS (across all waves) ─────────────────────
+
+/**
+ * Fetch ALL CampaignTargets whose CampaignRef starts with a given prefix.
+ * Used to detect the next wave number and to find approved companies across waves.
+ * Returns { allTargets: Map<domain, record>, maxWave: number }
+ */
+export async function fetchAllBridgeTargets(refPrefix = "Bridge_Q1") {
+  const all = [];
+  let offset = null;
+  // FIND() with LEFT() to match prefix — e.g. Bridge_Q1, Bridge_Q1_W2, etc.
+  const formula = encodeURIComponent(
+    `FIND("${refPrefix}", {CampaignRef}) = 1`
+  );
+
+  do {
+    let url = `${API_ROOT}?filterByFormula=${formula}`;
+    if (offset) url += `&offset=${offset}`;
+    const res = await fetch(url, { headers: headers() });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Airtable CampaignTargets GET ${res.status}: ${body}`);
+    }
+    const data = await res.json();
+    all.push(...(data.records || []));
+    offset = data.offset || null;
+  } while (offset);
+
+  // Build domain → record map (latest wave wins for duplicates)
+  const map = {};
+  let maxWave = 1; // Wave 1 = Bridge_Q1 (original)
+
+  for (const rec of all) {
+    const domain = (rec.fields.Domain || "").toLowerCase();
+    const ref = rec.fields.CampaignRef || "";
+    // Detect wave number: Bridge_Q1 = W1, Bridge_Q1_W2 = W2, etc.
+    const waveMatch = ref.match(/_W(\d+)$/);
+    const waveNum = waveMatch ? parseInt(waveMatch[1], 10) : 1;
+    if (waveNum > maxWave) maxWave = waveNum;
+
+    if (domain) {
+      let selectedContacts = [];
+      try { selectedContacts = JSON.parse(rec.fields.SelectedContacts || "[]"); } catch { /* noop */ }
+      // Keep the most recent entry per domain (higher wave or same wave)
+      if (!map[domain] || waveNum >= (map[domain]._waveNum || 1)) {
+        map[domain] = {
+          id: rec.id,
+          domain,
+          companyName: rec.fields.CompanyName || "",
+          status: rec.fields.Status || "pending",
+          selectedContacts,
+          campaignRef: ref,
+          segment: rec.fields.Segment || "",
+          companyType: rec.fields.CompanyType || "",
+          technologies: (() => { try { return JSON.parse(rec.fields.Technologies || "[]"); } catch { return []; } })(),
+          reviewedBy: rec.fields.ReviewedBy || "",
+          reviewedAt: rec.fields.ReviewedAt || "",
+          notes: rec.fields.Notes || "",
+          _waveNum: waveNum,
+        };
+      }
+    }
+  }
+  return { allTargets: map, maxWave };
+}
+
 // ── DELETE ───────────────────────────────────────────────────────────
 
 export async function deleteCandidateTarget(recordId) {

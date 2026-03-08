@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import BridgeSlideOverPanel from "./BridgeSlideOverPanel";
 import BridgeExplorerView from "./BridgeExplorerView";
+import { fetchAllBridgeTargets } from "../utils/airtableCandidates";
 
 // ============================================================
 // CONFIG
@@ -2425,6 +2426,8 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
 // ============================================================
 export default function BridgeCampaignView({ onBack, allCompanies }) {
   const [showExplorer, setShowExplorer] = useState(false);
+  const [nextWaveRef, setNextWaveRef] = useState(null);
+  const [previousTargets, setPreviousTargets] = useState({}); // all targets across waves
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [mock, setMock] = useState(false);
@@ -2864,6 +2867,21 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Compute next wave ref when Explorer is opened
+  const handleOpenExplorer = useCallback(async () => {
+    try {
+      const { allTargets, maxWave } = await fetchAllBridgeTargets("Bridge_Q1");
+      const nextWave = maxWave + 1;
+      setNextWaveRef(`Bridge_Q1_W${nextWave}`);
+      setPreviousTargets(allTargets);
+    } catch {
+      // Fallback: use W2 if we can't detect
+      setNextWaveRef("Bridge_Q1_W2");
+      setPreviousTargets({});
+    }
+    setShowExplorer(true);
+  }, []);
+
   if (loading) return (
     <div style={{
       minHeight: "100vh",
@@ -3028,7 +3046,8 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
     return (
       <BridgeExplorerView
         allCompanies={allCompanies || []}
-        campaignRef="Bridge_Q1"
+        campaignRef={nextWaveRef || "Bridge_Q1_W2"}
+        previousTargets={previousTargets}
         currentUser="Salvador Carrillo"
         onBack={() => setShowExplorer(false)}
       />
@@ -3124,7 +3143,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
           onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
           onMouseLeave={e => e.currentTarget.style.opacity = "1"}
           >↻ Actualizar</button>
-          <button onClick={() => setShowExplorer(true)} style={{
+          <button onClick={handleOpenExplorer} style={{
             background: T.emerald,
             border: "none",
             borderRadius: 8,
