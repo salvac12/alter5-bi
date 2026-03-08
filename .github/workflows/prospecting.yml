@@ -1,0 +1,40 @@
+name: Prospecting Agent
+
+on:
+  repository_dispatch:
+    types: [run-prospecting]
+  workflow_dispatch:
+    inputs:
+      criteria_json:
+        description: 'JSON string with search criteria'
+        required: true
+
+jobs:
+  prospect:
+    runs-on: ubuntu-latest
+    # Allow multiple parallel jobs (one per search criteria)
+    # No concurrency group to enable parallelism
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r scripts/prospecting/requirements.txt
+
+      - name: Run Prospecting Agent
+        env:
+          AIRTABLE_PAT: ${{ secrets.AIRTABLE_PAT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          APOLLO_API_KEY: ${{ secrets.APOLLO_API_KEY }}
+          FINDYMAIL_API_KEY: ${{ secrets.FINDYMAIL_API_KEY }}
+          PROSPECTING_CRITERIA: ${{ github.event.client_payload.criteria || inputs.criteria_json }}
+        run: python scripts/prospecting/runner.py
