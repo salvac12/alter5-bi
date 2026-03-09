@@ -11,29 +11,33 @@ const EXAMPLES = [
   "Actividad autoconsumo industrial",
 ];
 
-const STATUS_COLORS = {
-  active: { bg: "#ECFDF5", color: "#059669", label: "Activa" },
-  dormant: { bg: "#FEF3C7", color: "#D97706", label: "Dormida" },
-  lost: { bg: "#FEE2E2", color: "#DC2626", label: "Perdida" },
+const STATUS_COLORS: Record<string, { bg: string; color: string; label: string }> = {
+  active: { bg: "#0D3321", color: "#10B981", label: "Activa" },
+  dormant: { bg: "#3D2E05", color: "#F59E0B", label: "Dormida" },
+  lost: { bg: "#3B1114", color: "#EF4444", label: "Perdida" },
 };
 
-export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
+export default function CerebroSearch({ companies, onClose, onSelectCompany }: {
+  companies: any[];
+  onClose: () => void;
+  onSelectCompany: (company: any) => void;
+}) {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null); // { answer, matchedCompanies }
-  const [error, setError] = useState(null);
-  const [recordId, setRecordId] = useState(null); // Airtable record ID for feedback
-  const [feedback, setFeedback] = useState(null); // "up" | "down" | null
-  const inputRef = useRef(null);
+  const [result, setResult] = useState<any>(null); // { answer, matchedCompanies }
+  const [error, setError] = useState<string | null>(null);
+  const [recordId, setRecordId] = useState<string | null>(null); // Airtable record ID for feedback
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
-    const handleKey = (e) => { if (e.key === "Escape") onClose(); };
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  const handleSearch = async (q) => {
+  const handleSearch = async (q?: string) => {
     const text = (q || question).trim();
     if (!text) return;
     if (!isGeminiConfigured()) {
@@ -52,9 +56,9 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
       setResult(res);
       // Resolve the Airtable save promise to get the record ID for feedback
       if (res.savePromise) {
-        res.savePromise.then(id => { if (id) setRecordId(id); });
+        res.savePromise.then((id: string) => { if (id) setRecordId(id); });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Cerebro error:", err);
       setError(err.message || "Error al consultar Gemini.");
     } finally {
@@ -62,12 +66,12 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
     }
   };
 
-  const handleExample = (ex) => {
+  const handleExample = (ex: string) => {
     setQuestion(ex);
     handleSearch(ex);
   };
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSearch();
@@ -78,16 +82,17 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
     <div
       style={{
         position: "fixed", inset: 0, zIndex: 100,
-        background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+        background: "rgba(10,22,40,0.8)", backdropFilter: "blur(8px)",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         style={{
-        width: "100%", maxWidth: 900, maxHeight: "90vh",
-          background: "#fff", borderRadius: 16,
-          boxShadow: "0 25px 60px rgba(0,0,0,0.3)",
+          width: "100%", maxWidth: 900, maxHeight: "90vh",
+          background: "#0A1628", borderRadius: 20,
+          border: "1px solid #1B3A5C",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.6)",
           display: "flex", flexDirection: "column", overflow: "hidden",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -110,7 +115,7 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
             onClick={onClose}
             style={{
               background: "rgba(255,255,255,0.2)", border: "none",
-              color: "#fff", width: 32, height: 32, borderRadius: 8,
+              color: "#fff", width: 32, height: 32, borderRadius: 10,
               fontSize: 18, cursor: "pointer", display: "flex",
               alignItems: "center", justifyContent: "center",
             }}
@@ -129,23 +134,31 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
               onKeyDown={handleKeyDown}
               placeholder="Escribe tu pregunta..."
               style={{
-                flex: 1, padding: "12px 16px", fontSize: 15,
-                border: "2px solid #E5E7EB", borderRadius: 10,
+                flex: 1, padding: "14px 18px", fontSize: 16,
+                border: "2px solid #1B3A5C", borderRadius: 14,
                 outline: "none", fontFamily: "inherit",
-                transition: "border-color 0.2s",
+                transition: "border-color 0.2s, box-shadow 0.2s",
+                background: "#132238", color: "#F1F5F9",
               }}
-              onFocus={(e) => (e.target.style.borderColor = "#8B5CF6")}
-              onBlur={(e) => (e.target.style.borderColor = "#E5E7EB")}
+              onFocus={(e) => {
+                e.target.style.borderColor = "#3B82F6";
+                e.target.style.boxShadow = "0 0 0 3px rgba(59, 130, 246, 0.25)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "#1B3A5C";
+                e.target.style.boxShadow = "none";
+              }}
             />
             <button
               onClick={() => handleSearch()}
               disabled={loading || !question.trim()}
               style={{
-                padding: "12px 20px", borderRadius: 10, border: "none",
+                padding: "14px 22px", borderRadius: 14, border: "none",
                 background: loading || !question.trim()
-                  ? "#D1D5DB"
+                  ? "#1E293B"
                   : "linear-gradient(135deg, #8B5CF6, #3B82F6)",
-                color: "#fff", fontSize: 15, fontWeight: 600,
+                color: loading || !question.trim() ? "#64748B" : "#fff",
+                fontSize: 15, fontWeight: 600,
                 cursor: loading || !question.trim() ? "default" : "pointer",
                 fontFamily: "inherit", whiteSpace: "nowrap",
               }}
@@ -154,28 +167,31 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
             </button>
           </div>
 
-          {/* Example chips */}
+          {/* Example chips — 2x2 grid suggestion cards */}
           {!result && !loading && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr",
+              gap: 10, marginTop: 16,
+            }}>
               {EXAMPLES.map((ex) => (
                 <button
                   key={ex}
                   onClick={() => handleExample(ex)}
                   style={{
-                    padding: "6px 14px", borderRadius: 20, fontSize: 13,
-                    border: "1px solid #E5E7EB", background: "#F9FAFB",
-                    color: "#374151", cursor: "pointer", fontFamily: "inherit",
-                    transition: "all 0.15s",
+                    padding: "10px 16px", borderRadius: 14, fontSize: 13,
+                    border: "1px solid #1B3A5C", background: "#132238",
+                    color: "#94A3B8", cursor: "pointer", fontFamily: "inherit",
+                    transition: "all 0.15s", textAlign: "left",
                   }}
                   onMouseEnter={(e) => {
-                    e.target.style.background = "#EDE9FE";
-                    e.target.style.borderColor = "#8B5CF6";
-                    e.target.style.color = "#7C3AED";
+                    (e.target as HTMLElement).style.background = "#243B53";
+                    (e.target as HTMLElement).style.borderColor = "#8B5CF6";
+                    (e.target as HTMLElement).style.color = "#F1F5F9";
                   }}
                   onMouseLeave={(e) => {
-                    e.target.style.background = "#F9FAFB";
-                    e.target.style.borderColor = "#E5E7EB";
-                    e.target.style.color = "#374151";
+                    (e.target as HTMLElement).style.background = "#132238";
+                    (e.target as HTMLElement).style.borderColor = "#1B3A5C";
+                    (e.target as HTMLElement).style.color = "#94A3B8";
                   }}
                 >
                   {ex}
@@ -187,18 +203,37 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
 
         {/* Results area */}
         <div style={{ flex: 1, overflow: "auto", padding: "16px 24px 24px" }}>
-          {/* Loading */}
+          {/* Loading — typing indicator */}
           {loading && (
-            <div style={{ textAlign: "center", padding: "48px 0", color: "#6B7280" }}>
-              <div
-                style={{
-                  width: 36, height: 36, border: "3px solid #E5E7EB",
-                  borderTopColor: "#8B5CF6", borderRadius: "50%",
-                  margin: "0 auto 16px",
-                  animation: "cerebro-spin 0.8s linear infinite",
-                }}
-              />
-              <style>{`@keyframes cerebro-spin { to { transform: rotate(360deg); } }`}</style>
+            <div style={{
+              textAlign: "center", padding: "48px 0", color: "#94A3B8",
+            }}>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 6, marginBottom: 16,
+              }}>
+                <span className="cerebro-dot" style={{
+                  width: 8, height: 8, borderRadius: "50%", background: "#8B5CF6",
+                  animation: "cerebroDotBounce 1.2s infinite ease-in-out",
+                  animationDelay: "0s",
+                }} />
+                <span className="cerebro-dot" style={{
+                  width: 8, height: 8, borderRadius: "50%", background: "#8B5CF6",
+                  animation: "cerebroDotBounce 1.2s infinite ease-in-out",
+                  animationDelay: "0.2s",
+                }} />
+                <span className="cerebro-dot" style={{
+                  width: 8, height: 8, borderRadius: "50%", background: "#8B5CF6",
+                  animation: "cerebroDotBounce 1.2s infinite ease-in-out",
+                  animationDelay: "0.4s",
+                }} />
+              </div>
+              <style>{`
+                @keyframes cerebroDotBounce {
+                  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+                  40% { transform: translateY(-8px); opacity: 1; }
+                }
+              `}</style>
               <p style={{ fontSize: 14, margin: 0 }}>
                 Buscando en {companies.length.toLocaleString()} empresas...
               </p>
@@ -209,9 +244,9 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
           {error && (
             <div
               style={{
-                padding: "14px 18px", borderRadius: 10,
-                background: "#FEF2F2", color: "#DC2626",
-                fontSize: 14, marginTop: 8,
+                padding: "14px 18px", borderRadius: 14,
+                background: "#2D1215", border: "1px solid #7F1D1D",
+                color: "#FCA5A5", fontSize: 14, marginTop: 8,
               }}
             >
               {error}
@@ -224,7 +259,9 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
               <div
                 style={{
                   whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.7,
-                  color: "#1F2937", padding: "16px 0",
+                  color: "#F1F5F9", padding: "16px 20px",
+                  background: "#132238", borderRadius: 14,
+                  border: "1px solid #1B3A5C",
                 }}
               >
                 {result.answer}
@@ -233,10 +270,10 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
               {/* Feedback buttons */}
               <div style={{
                 display: "flex", alignItems: "center", gap: 8,
-                paddingBottom: 12, marginBottom: 12,
-                borderBottom: result.matchedCompanies.length > 0 ? "1px solid #E5E7EB" : "none",
+                paddingTop: 12, paddingBottom: 12, marginBottom: 12,
+                borderBottom: result.matchedCompanies.length > 0 ? "1px solid #1B3A5C" : "none",
               }}>
-                <span style={{ fontSize: 12, color: "#9CA3AF" }}>
+                <span style={{ fontSize: 12, color: "#64748B" }}>
                   {feedback ? (feedback === "up" ? "Gracias por el feedback" : "Se usara para mejorar") : "Esta respuesta fue util?"}
                 </span>
                 <button
@@ -245,10 +282,10 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
                     if (recordId) updateFeedback(recordId, true);
                   }}
                   style={{
-                    background: feedback === "up" ? "#ECFDF5" : "transparent",
-                    border: feedback === "up" ? "1px solid #10B981" : "1px solid #E5E7EB",
+                    background: feedback === "up" ? "#0D3321" : "transparent",
+                    border: feedback === "up" ? "1px solid #10B981" : "1px solid #1B3A5C",
                     borderRadius: 6, padding: "4px 10px", cursor: "pointer",
-                    fontSize: 14, color: feedback === "up" ? "#059669" : "#9CA3AF",
+                    fontSize: 14, color: feedback === "up" ? "#10B981" : "#64748B",
                     transition: "all 0.15s",
                   }}
                   title="Respuesta util"
@@ -261,10 +298,10 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
                     if (recordId) updateFeedback(recordId, false);
                   }}
                   style={{
-                    background: feedback === "down" ? "#FEF2F2" : "transparent",
-                    border: feedback === "down" ? "1px solid #EF4444" : "1px solid #E5E7EB",
+                    background: feedback === "down" ? "#3B1114" : "transparent",
+                    border: feedback === "down" ? "1px solid #EF4444" : "1px solid #1B3A5C",
                     borderRadius: 6, padding: "4px 10px", cursor: "pointer",
-                    fontSize: 14, color: feedback === "down" ? "#DC2626" : "#9CA3AF",
+                    fontSize: 14, color: feedback === "down" ? "#EF4444" : "#64748B",
                     transition: "all 0.15s",
                   }}
                   title="Respuesta no util"
@@ -277,7 +314,7 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
               {result.matchedCompanies.length > 0 && (
                 <div style={{ marginTop: 16 }}>
                   <p style={{
-                    fontSize: 13, fontWeight: 600, color: "#6B7280",
+                    fontSize: 13, fontWeight: 600, color: "#94A3B8",
                     textTransform: "uppercase", letterSpacing: "0.5px",
                     margin: "0 0 12px",
                   }}>
@@ -293,36 +330,38 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
                       gap: 8,
                     }}
                   >
-                    {result.matchedCompanies.map((c) => {
+                    {result.matchedCompanies.map((c: any) => {
                       const st = STATUS_COLORS[c.status] || STATUS_COLORS.lost;
                       return (
                         <button
                           key={c.domain}
                           onClick={() => onSelectCompany(c)}
                           style={{
-                            textAlign: "left", padding: "10px 14px",
-                            borderRadius: 8, border: "1px solid #E5E7EB",
-                            background: "#FAFAFA", cursor: "pointer",
+                            textAlign: "left", padding: "12px 16px",
+                            borderRadius: 14, border: "1px solid #1B3A5C",
+                            background: "#132238", cursor: "pointer",
                             fontFamily: "inherit", transition: "all 0.15s",
                             display: "flex", flexDirection: "column", gap: 4,
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = "#8B5CF6";
-                            e.currentTarget.style.boxShadow = "0 2px 8px rgba(139,92,246,0.15)";
+                            (e.currentTarget as HTMLElement).style.borderColor = "#8B5CF6";
+                            (e.currentTarget as HTMLElement).style.background = "#243B53";
+                            (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(139,92,246,0.2)";
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = "#E5E7EB";
-                            e.currentTarget.style.boxShadow = "none";
+                            (e.currentTarget as HTMLElement).style.borderColor = "#1B3A5C";
+                            (e.currentTarget as HTMLElement).style.background = "#132238";
+                            (e.currentTarget as HTMLElement).style.boxShadow = "none";
                           }}
                         >
-                          <span style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: "#F1F5F9" }}>
                             {c.name}
                           </span>
                           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                             {c.detail?.enrichment?.st && (
                               <span style={{
                                 fontSize: 11, padding: "2px 8px", borderRadius: 10,
-                                background: "#EDE9FE", color: "#7C3AED", fontWeight: 500,
+                                background: "#8B5CF620", color: "#A78BFA", fontWeight: 500,
                               }}>
                                 {c.detail.enrichment.st}
                               </span>
@@ -333,12 +372,12 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }) {
                             }}>
                               {st.label}
                             </span>
-                            <span style={{ fontSize: 11, color: "#9CA3AF" }}>
+                            <span style={{ fontSize: 11, color: "#64748B" }}>
                               {c.interactions} emails
                             </span>
                           </div>
                           {c.detail?.enrichment?.fc && (
-                            <span style={{ fontSize: 12, color: "#6B7280" }}>
+                            <span style={{ fontSize: 12, color: "#94A3B8" }}>
                               Fase: {c.detail.enrichment.fc}
                             </span>
                           )}

@@ -21,16 +21,19 @@ import {
  * - Loading and error states
  * - Responsive design
  */
-export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }) {
-  const [opportunities, setOpportunities] = useState([]);
-  const [filteredOpportunities, setFilteredOpportunities] = useState([]);
+export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }: {
+  onSelectOpportunity?: (opportunity: any) => void;
+  onCreateOpportunity?: (stage: string | null) => void;
+}) {
+  const [opportunities, setOpportunities] = useState<any[]>([]);
+  const [filteredOpportunities, setFilteredOpportunities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [businessFilter, setBusinessFilter] = useState('All');
-  const [draggedCard, setDraggedCard] = useState(null);
-  const [dragOverColumn, setDragOverColumn] = useState(null);
-  const [toast, setToast] = useState(null);
+  const [draggedCard, setDraggedCard] = useState<any>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
 
   // Fetch data on mount
   useEffect(() => {
@@ -70,7 +73,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
       const records = await fetchAllOpportunities();
       const normalized = records.map(normalizeRecord).filter(isValidOpportunity);
       setOpportunities(normalized);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load opportunities:', err);
       setError(err.message || 'Error al cargar oportunidades');
     } finally {
@@ -78,31 +81,31 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
     }
   }
 
-  function showToast(type, message) {
+  function showToast(type: string, message: string) {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3500);
   }
 
   // Drag handlers
-  function handleDragStart(e, opportunity) {
+  function handleDragStart(e: React.DragEvent, opportunity: any) {
     setDraggedCard(opportunity);
     e.dataTransfer.effectAllowed = 'move';
     // Add a subtle opacity to the dragged element
-    e.currentTarget.style.opacity = '0.5';
+    (e.currentTarget as HTMLElement).style.opacity = '0.5';
   }
 
-  function handleDragEnd(e) {
-    e.currentTarget.style.opacity = '1';
+  function handleDragEnd(e: React.DragEvent) {
+    (e.currentTarget as HTMLElement).style.opacity = '1';
     setDraggedCard(null);
     setDragOverColumn(null);
   }
 
-  function handleDragOver(e) {
+  function handleDragOver(e: React.DragEvent) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   }
 
-  function handleDragEnter(stage) {
+  function handleDragEnter(stage: string) {
     setDragOverColumn(stage);
   }
 
@@ -111,7 +114,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
     // This prevents flickering when moving over child elements
   }
 
-  async function handleDrop(e, targetStage) {
+  async function handleDrop(e: React.DragEvent, targetStage: string) {
     e.preventDefault();
     setDragOverColumn(null);
 
@@ -131,7 +134,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
       // Update in Airtable
       await updateOpportunity(draggedCard.id, { "Global Status": targetStage });
       showToast('success', `"${draggedCard.name}" movido a ${STAGE_SHORT_LABELS[targetStage] || targetStage}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update opportunity stage:', err);
       // Revert on error
       setOpportunities(opportunities);
@@ -140,20 +143,23 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
   }
 
   // Group opportunities by stage
-  const opportunitiesByStage = KANBAN_STAGES.reduce((acc, stage) => {
+  const opportunitiesByStage = KANBAN_STAGES.reduce((acc: any, stage: string) => {
     acc[stage] = filteredOpportunities.filter(opp => opp.stage === stage);
     return acc;
   }, {});
 
   // Pre-compute totals for the funnel strip (uses all opportunities, not filtered)
-  const stageTotals = KANBAN_STAGES.reduce((acc, stage) => {
+  const stageTotals = KANBAN_STAGES.reduce((acc: any, stage: string) => {
     const opps = opportunities.filter(o => o.stage === stage);
-    acc[stage] = { count: opps.length, amount: opps.reduce((s, o) => s + (o.amount || 0), 0) };
+    acc[stage] = { count: opps.length, amount: opps.reduce((s: number, o: any) => s + (o.amount || 0), 0) };
     return acc;
   }, {});
 
+  // Funnel strip: compute segment widths
+  const totalPipelineCount = opportunities.length || 1;
+
   const totalCount = filteredOpportunities.length;
-  const totalAmount = filteredOpportunities.reduce((sum, opp) => sum + (opp.amount || 0), 0);
+  const totalAmount = filteredOpportunities.reduce((sum: number, opp: any) => sum + (opp.amount || 0), 0);
 
   return (
     <div style={styles.container}>
@@ -190,7 +196,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
                 onClick={() => setSearchQuery('')}
                 style={styles.clearButton}
               >
-                ×
+                x
               </button>
             )}
           </div>
@@ -216,10 +222,10 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
             onClick={() => onCreateOpportunity && onCreateOpportunity(null)}
             style={styles.createButton}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #2563EB, #059669)';
+              (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #2563EB, #059669)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #3B82F6, #10B981)';
+              (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #3B82F6, #10B981)';
             }}
           >
             <span style={styles.createIcon}>+</span>
@@ -231,7 +237,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
       {/* Error state */}
       {error && (
         <div style={styles.errorContainer}>
-          <div style={styles.errorIcon}>⚠</div>
+          <div style={styles.errorIcon}>{'\u26A0'}</div>
           <div>
             <div style={styles.errorTitle}>Error al cargar oportunidades</div>
             <div style={styles.errorMessage}>{error}</div>
@@ -242,51 +248,76 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
         </div>
       )}
 
-      {/* Pipeline stats strip */}
+      {/* Funnel strip — colored horizontal bar showing stage distribution */}
       {!loading && opportunities.length > 0 && (
         <div style={{
-          display: 'flex', alignItems: 'center', overflowX: 'auto',
-          padding: '8px 24px', background: '#F8FAFC',
-          borderBottom: '1px solid #E2E8F0', gap: 4, flexShrink: 0,
+          padding: '8px 24px', background: '#0F1D32',
+          borderBottom: '1px solid #1B3A5C', flexShrink: 0,
         }}>
-          {KANBAN_STAGES.map((stage, i) => {
-            const { count, amount: stageAmount } = stageTotals[stage] || { count: 0, amount: 0 };
-            const colors = STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
-            const shortLabel = STAGE_SHORT_LABELS[stage] || stage;
-            return (
-              <React.Fragment key={stage}>
-                {i > 0 && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="2.5" style={{ flexShrink: 0 }}>
-                    <path d="M9 18l6-6-6-6"/>
-                  </svg>
-                )}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0,
-                  background: count > 0 ? colors.bg : 'transparent',
-                  border: count > 0 ? `1px solid ${colors.border}` : '1px solid transparent',
-                }}>
-                  <span style={{ color: colors.color, fontWeight: 700, fontSize: 11 }}>{shortLabel}</span>
-                  <span style={{
-                    background: colors.color, color: '#FFFFFF',
-                    borderRadius: 999, padding: '0 5px', fontSize: 10, fontWeight: 800, lineHeight: '16px',
-                  }}>{count}</span>
-                  {stageAmount > 0 && (
-                    <span style={{ color: '#6B7F94', fontSize: 10 }}>
-                      {formatAmount(stageAmount, 'EUR')}
-                    </span>
+          {/* Funnel bar */}
+          <div style={{
+            display: 'flex', height: 6, borderRadius: 9999, overflow: 'hidden',
+            background: '#1E293B', marginBottom: 8,
+          }}>
+            {KANBAN_STAGES.map((stage: string) => {
+              const { count } = stageTotals[stage] || { count: 0 };
+              const pct = (count / totalPipelineCount) * 100;
+              const stageColors = STAGE_COLORS[stage] || { color: '#6B7F94' };
+              if (pct === 0) return null;
+              return (
+                <div
+                  key={stage}
+                  title={`${STAGE_SHORT_LABELS[stage] || stage}: ${count}`}
+                  style={{
+                    width: `${pct}%`, height: '100%',
+                    background: stageColors.color,
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              );
+            })}
+          </div>
+          {/* Stage labels */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto' }}>
+            {KANBAN_STAGES.map((stage: string, i: number) => {
+              const { count, amount: stageAmount } = stageTotals[stage] || { count: 0, amount: 0 };
+              const stageColors = STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
+              const shortLabel = STAGE_SHORT_LABELS[stage] || stage;
+              return (
+                <React.Fragment key={stage}>
+                  {i > 0 && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                      <path d="M9 18l6-6-6-6"/>
+                    </svg>
                   )}
-                </div>
-              </React.Fragment>
-            );
-          })}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0,
+                    background: count > 0 ? `${stageColors.color}15` : 'transparent',
+                    border: count > 0 ? `1px solid ${stageColors.color}30` : '1px solid transparent',
+                  }}>
+                    <span style={{ color: stageColors.color, fontWeight: 700, fontSize: 11 }}>{shortLabel}</span>
+                    <span style={{
+                      background: stageColors.color, color: '#FFFFFF',
+                      borderRadius: 999, padding: '0 5px', fontSize: 10, fontWeight: 800, lineHeight: '16px',
+                    }}>{count}</span>
+                    {stageAmount > 0 && (
+                      <span style={{ color: '#94A3B8', fontSize: 10 }}>
+                        {formatAmount(stageAmount, 'EUR')}
+                      </span>
+                    )}
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {/* Board */}
       <div style={styles.boardContainer}>
         <div style={styles.board}>
-          {KANBAN_STAGES.map((stage) => (
+          {KANBAN_STAGES.map((stage: string) => (
             <KanbanColumn
               key={stage}
               stage={stage}
@@ -296,7 +327,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
               onDragOver={handleDragOver}
               onDragEnter={() => handleDragEnter(stage)}
               onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, stage)}
+              onDrop={(e: React.DragEvent) => handleDrop(e, stage)}
               onCardDragStart={handleDragStart}
               onCardDragEnd={handleDragEnd}
               onCardClick={onSelectOpportunity}
@@ -313,12 +344,12 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity })
           background: toast.type === 'success' ? '#10B981' : '#EF4444',
           color: '#FFFFFF', padding: '14px 20px', borderRadius: 10,
           fontSize: 14, fontWeight: 600,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 200,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 200,
           display: 'flex', alignItems: 'center', gap: 10, maxWidth: 400,
           animation: 'slideInUp 0.3s ease-out',
         }}>
           <span style={{ fontSize: 18 }}>
-            {toast.type === 'success' ? '✓' : '✗'}
+            {toast.type === 'success' ? '\u2713' : '\u2717'}
           </span>
           {toast.message}
         </div>
@@ -350,20 +381,33 @@ function KanbanColumn({
   onCardDragEnd,
   onCardClick,
   onAddClick,
+}: {
+  stage: string;
+  opportunities: any[];
+  loading: boolean;
+  isDragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragEnter: () => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent) => void;
+  onCardDragStart: (e: React.DragEvent, opportunity: any) => void;
+  onCardDragEnd: (e: React.DragEvent) => void;
+  onCardClick?: (opportunity: any) => void;
+  onAddClick: () => void;
 }) {
   const colors = STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
   const shortLabel = STAGE_SHORT_LABELS[stage] || stage;
 
-  const totalAmount = opportunities.reduce((sum, opp) => sum + (opp.amount || 0), 0);
+  const totalAmount = opportunities.reduce((sum: number, opp: any) => sum + (opp.amount || 0), 0);
 
-  const columnStyle = {
+  const columnStyle: React.CSSProperties = {
     ...styles.column,
     background: isDragOver
-      ? `linear-gradient(to bottom, ${colors.bg}, #FFFFFF)`
-      : colors.bg,
-    borderTop: `3px solid ${isDragOver ? colors.color : colors.border}`,
+      ? `linear-gradient(to bottom, ${colors.color}10, #132238)`
+      : '#132238',
+    borderTop: `3px solid ${isDragOver ? colors.color : colors.color + '40'}`,
     boxShadow: isDragOver
-      ? `0 0 0 2px ${colors.color}40, 0 8px 16px rgba(0,0,0,0.08)`
+      ? `0 0 0 2px ${colors.color}40, 0 8px 16px rgba(0,0,0,0.2)`
       : 'none',
   };
 
@@ -390,15 +434,15 @@ function KanbanColumn({
           style={{
             ...styles.columnAddButton,
             color: colors.color,
-            borderColor: colors.border,
+            borderColor: '#1B3A5C',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = colors.bg;
-            e.currentTarget.style.borderColor = colors.color;
+            (e.currentTarget as HTMLElement).style.background = '#243B53';
+            (e.currentTarget as HTMLElement).style.borderColor = colors.color;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.borderColor = colors.border;
+            (e.currentTarget as HTMLElement).style.background = 'transparent';
+            (e.currentTarget as HTMLElement).style.borderColor = '#1B3A5C';
           }}
         >
           +
@@ -425,11 +469,11 @@ function KanbanColumn({
           </>
         ) : opportunities.length === 0 ? (
           <div style={styles.emptyState}>
-            <div style={{ fontSize: 32, opacity: 0.3, marginBottom: 8 }}>📋</div>
+            <div style={{ fontSize: 32, opacity: 0.3, marginBottom: 8 }}>{'\u{1F4CB}'}</div>
             <div style={styles.emptyText}>Sin oportunidades</div>
           </div>
         ) : (
-          opportunities.map((opportunity) => (
+          opportunities.map((opportunity: any) => (
             <OpportunityCard
               key={opportunity.id}
               opportunity={opportunity}
@@ -454,16 +498,23 @@ function OpportunityCard({
   onDragStart,
   onDragEnd,
   onClick
+}: {
+  opportunity: any;
+  stageColor: string;
+  onDragStart: (e: React.DragEvent, opportunity: any) => void;
+  onDragEnd: (e: React.DragEvent) => void;
+  onClick: () => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const formattedAmount = formatAmount(opportunity.amount, opportunity.currency);
 
-  const cardStyle = {
+  const cardStyle: React.CSSProperties = {
     ...styles.card,
+    borderLeft: `3px solid ${stageColor}`,
     transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
     boxShadow: isHovered
-      ? '0 8px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(59, 130, 246, 0.3)'
-      : '0 2px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+      ? '0 8px 16px rgba(0,0,0,0.15), 0 0 0 1px rgba(59, 130, 246, 0.3)'
+      : '0 2px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
   };
 
   return (
@@ -575,8 +626,8 @@ function SkeletonCard() {
 /**
  * StatusDot - Colored dot for record status
  */
-function StatusDot({ status }) {
-  const colorMap = {
+function StatusDot({ status }: { status: string }) {
+  const colorMap: Record<string, string> = {
     'Active': '#10B981',
     'Dormant': '#F59E0B',
     'Lost': '#EF4444',
@@ -597,7 +648,7 @@ function StatusDot({ status }) {
 /**
  * Format amount helper
  */
-function formatAmount(amount, currency = "EUR") {
+function formatAmount(amount: number | null | undefined, currency = "EUR"): string | null {
   if (!amount || amount === 0) return null;
   if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M ${currency}`;
   if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}K ${currency}`;
@@ -607,12 +658,12 @@ function formatAmount(amount, currency = "EUR") {
 /**
  * Styles
  */
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: '#F7F9FC',
+    background: '#0A1628',
     overflow: 'hidden',
   },
 
@@ -622,8 +673,8 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '20px 24px',
-    background: '#FFFFFF',
-    borderBottom: '1px solid #E2E8F0',
+    background: '#132238',
+    borderBottom: '1px solid #1B3A5C',
   },
   headerLeft: {
     display: 'flex',
@@ -633,13 +684,13 @@ const styles = {
   title: {
     fontSize: 20,
     fontWeight: 800,
-    color: '#1A2B3D',
+    color: '#F1F5F9',
     margin: 0,
     letterSpacing: '-0.5px',
   },
   count: {
     fontSize: 13,
-    color: '#6B7F94',
+    color: '#94A3B8',
     fontWeight: 500,
   },
   headerRight: {
@@ -657,26 +708,27 @@ const styles = {
   searchIcon: {
     position: 'absolute',
     left: 12,
-    color: '#94A3B8',
+    color: '#64748B',
     pointerEvents: 'none',
   },
   searchInput: {
     padding: '8px 36px 8px 36px',
-    borderRadius: 8,
-    border: '1px solid #E2E8F0',
+    borderRadius: 10,
+    border: '1px solid #1B3A5C',
     fontSize: 13,
     fontFamily: "'DM Sans', system-ui",
     width: 260,
     outline: 'none',
     transition: 'all 0.2s ease',
-    background: '#FFFFFF',
+    background: '#1E293B',
+    color: '#F1F5F9',
   },
   clearButton: {
     position: 'absolute',
     right: 8,
     background: 'none',
     border: 'none',
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 20,
     cursor: 'pointer',
     padding: 4,
@@ -688,18 +740,18 @@ const styles = {
   filterGroup: {
     display: 'flex',
     gap: 0,
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
-    border: '1px solid #E2E8F0',
+    border: '1px solid #1B3A5C',
   },
   filterButton: {
     padding: '7px 14px',
     fontSize: 12,
     fontWeight: 600,
-    color: '#6B7F94',
-    background: '#FFFFFF',
+    color: '#94A3B8',
+    background: '#1E293B',
     border: 'none',
-    borderRight: '1px solid #E2E8F0',
+    borderRight: '1px solid #1B3A5C',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
     fontFamily: "'DM Sans', system-ui",
@@ -718,7 +770,7 @@ const styles = {
     background: 'linear-gradient(135deg, #3B82F6, #10B981)',
     color: '#FFFFFF',
     border: 'none',
-    borderRadius: 8,
+    borderRadius: 10,
     fontSize: 13,
     fontWeight: 600,
     cursor: 'pointer',
@@ -738,9 +790,9 @@ const styles = {
     gap: 16,
     margin: '20px 24px',
     padding: '16px 20px',
-    background: '#FEF2F2',
-    border: '1px solid #FEE2E2',
-    borderRadius: 8,
+    background: '#2D1215',
+    border: '1px solid #7F1D1D',
+    borderRadius: 10,
   },
   errorIcon: {
     fontSize: 24,
@@ -749,20 +801,20 @@ const styles = {
   errorTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: '#DC2626',
+    color: '#FCA5A5',
     marginBottom: 4,
   },
   errorMessage: {
     fontSize: 12,
-    color: '#991B1B',
+    color: '#F87171',
   },
   retryButton: {
     marginLeft: 'auto',
     padding: '6px 14px',
-    background: '#FFFFFF',
-    border: '1px solid #FCA5A5',
+    background: '#1E293B',
+    border: '1px solid #7F1D1D',
     borderRadius: 6,
-    color: '#DC2626',
+    color: '#FCA5A5',
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
@@ -788,8 +840,8 @@ const styles = {
     maxWidth: 280,
     display: 'flex',
     flexDirection: 'column',
-    background: '#FFFFFF',
-    borderRadius: 10,
+    background: '#132238',
+    borderRadius: 14,
     transition: 'all 0.2s ease',
   },
   columnHeader: {
@@ -797,7 +849,9 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '14px 16px',
-    borderBottom: '1px solid #E2E8F0',
+    background: '#1E293B',
+    borderRadius: '14px 14px 0 0',
+    borderBottom: '1px solid #1B3A5C',
   },
   columnTitle: {
     display: 'flex',
@@ -806,6 +860,7 @@ const styles = {
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
+    color: '#F1F5F9',
   },
   columnCount: {
     display: 'inline-flex',
@@ -814,17 +869,17 @@ const styles = {
     minWidth: 22,
     height: 22,
     padding: '0 6px',
-    background: '#F1F5F9',
+    background: '#243B53',
     borderRadius: 11,
     fontSize: 11,
     fontWeight: 700,
-    color: '#475569',
+    color: '#94A3B8',
   },
   columnAddButton: {
     width: 24,
     height: 24,
     borderRadius: 6,
-    border: '1px solid #E2E8F0',
+    border: '1px solid #1B3A5C',
     background: 'transparent',
     fontSize: 16,
     fontWeight: 600,
@@ -834,6 +889,7 @@ const styles = {
     justifyContent: 'center',
     transition: 'all 0.15s ease',
     lineHeight: 1,
+    color: '#94A3B8',
   },
 
   // Cards container
@@ -850,7 +906,7 @@ const styles = {
   // Card
   card: {
     background: '#FFFFFF',
-    borderRadius: 8,
+    borderRadius: 14,
     padding: '12px',
     cursor: 'grab',
     transition: 'all 0.2s ease',
@@ -922,20 +978,20 @@ const styles = {
   },
   emptyText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#64748B',
     fontWeight: 500,
   },
 
   // Skeleton
   skeleton: {
-    background: '#FFFFFF',
-    borderRadius: 8,
+    background: '#1E293B',
+    borderRadius: 14,
     padding: '12px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
   },
   skeletonLine: {
     height: 14,
-    background: 'linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%)',
+    background: 'linear-gradient(90deg, #1E293B 25%, #243B53 50%, #1E293B 75%)',
     backgroundSize: '200% 100%',
     animation: 'shimmer 1.5s infinite',
     borderRadius: 4,
