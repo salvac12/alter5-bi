@@ -12,6 +12,8 @@ import {
   ChevronDown,
   FileText,
   Send,
+  GitMerge,
+  CheckCircle2,
 } from 'lucide-react';
 import { colors, font, layout, transitions } from '../../theme/tokens';
 import type { ViewId } from '../../types';
@@ -49,6 +51,7 @@ const ACCENT: Record<string, string> = {
   prospects: '#FFFFFF',
   structuring: '#FFFFFF',
   distribution: '#FFFFFF',
+  closing: '#FFFFFF',
   campanas: colors.accent.orange,
   'bridge-campaigns': colors.accent.orange,
   'bridge-explorer': colors.accent.orange,
@@ -71,10 +74,17 @@ const NAV_SECTIONS: NavSectionDef[] = [
   {
     title: 'Ventas',
     items: [
-      { id: 'pipeline', label: 'Pipeline', icon: <TrendingUp size={16} /> },
-      { id: 'prospects', label: 'Prospects', icon: <Users size={16} /> },
-      { id: 'structuring', label: 'Structuring', icon: <FileText size={16} /> },
-      { id: 'distribution', label: 'Distribution', icon: <Send size={16} /> },
+      {
+        id: 'pipeline',
+        label: 'Pipeline',
+        icon: <GitMerge size={16} />,
+        children: [
+          { id: 'prospects', label: 'Prospects', icon: <Users size={13} /> },
+          { id: 'structuring', label: 'Structuring', icon: <FileText size={13} /> },
+          { id: 'distribution', label: 'Distribution', icon: <Send size={13} /> },
+          { id: 'closing', label: 'Closing', icon: <CheckCircle2 size={13} /> },
+        ],
+      },
     ],
   },
   {

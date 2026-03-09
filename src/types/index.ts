@@ -203,7 +203,7 @@ export interface VerifiedCompany {
 
 // ── UI State ─────────────────────────────────────────────────────
 
-export type ViewId = 'empresas' | 'prospects' | 'pipeline' | 'structuring' | 'distribution' | 'campanas' | 'analysis' | 'prospeccion' | 'bridge-campaigns' | 'bridge-explorer' | 'candidates';
+export type ViewId = 'empresas' | 'prospects' | 'pipeline' | 'structuring' | 'distribution' | 'closing' | 'campanas' | 'analysis' | 'prospeccion' | 'bridge-campaigns' | 'bridge-explorer' | 'candidates';
 
 export interface NavItem {
   id: ViewId;

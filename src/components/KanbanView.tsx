@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import {
   fetchAllOpportunities,
   updateOpportunity,
@@ -9,6 +10,28 @@ import {
   STAGE_COLORS,
   STAGE_SHORT_LABELS
 } from '../utils/airtable';
+
+/* ─── Light theme constants ──────────────────────────────────── */
+
+const LIGHT = {
+  bg: '#F0F4F8',
+  surface: '#FFFFFF',
+  surfaceAlt: '#F8FAFC',
+  border: '#E2E8F0',
+  borderLight: '#F1F5F9',
+  textPrimary: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#94A3B8',
+  columnHeaderBg: '#1E293B',
+  columnHeaderText: '#F1F5F9',
+  columnHeaderBorder: '#334155',
+};
+
+const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
+  Debt: { bg: '#EFF6FF', text: '#3B82F6' },
+  'M&A': { bg: '#F0FDF4', text: '#10B981' },
+  Equity: { bg: '#F0FDF4', text: '#10B981' },
+};
 
 /**
  * KanbanView - Professional Kanban board for Alter5 BI
@@ -167,14 +190,19 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
       <div style={styles.header}>
         <div style={styles.headerLeft}>
           <h2 style={styles.title}>Pipeline</h2>
-          <span style={styles.count}>
-            {totalCount} oportunidades
-            {totalAmount > 0 && (
-              <span style={{ marginLeft: 8, color: '#3B82F6', fontWeight: 700 }}>
-                {formatAmount(totalAmount, 'EUR')}
+          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 11, color: LIGHT.textMuted, fontWeight: 500 }}>Total activo</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#3B82F6' }}>
+                {totalAmount > 0 ? formatAmount(totalAmount, 'EUR') : '—'}
               </span>
-            )}
-          </span>
+            </div>
+            <div style={{ width: 1, height: 28, background: LIGHT.border }} />
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 11, color: LIGHT.textMuted, fontWeight: 500 }}>Deals activos</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: LIGHT.textPrimary }}>{totalCount}</span>
+            </div>
+          </div>
         </div>
 
         <div style={styles.headerRight}>
@@ -251,13 +279,13 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
       {/* Funnel strip — colored horizontal bar showing stage distribution */}
       {!loading && opportunities.length > 0 && (
         <div style={{
-          padding: '8px 24px', background: '#0F1D32',
-          borderBottom: '1px solid #1B3A5C', flexShrink: 0,
+          padding: '10px 24px', background: LIGHT.surface,
+          borderBottom: `1px solid ${LIGHT.border}`, flexShrink: 0,
         }}>
           {/* Funnel bar */}
           <div style={{
             display: 'flex', height: 6, borderRadius: 9999, overflow: 'hidden',
-            background: '#1E293B', marginBottom: 8,
+            background: '#E2E8F0', marginBottom: 8,
           }}>
             {KANBAN_STAGES.map((stage: string) => {
               const { count } = stageTotals[stage] || { count: 0 };
@@ -286,15 +314,15 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
               return (
                 <React.Fragment key={stage}>
                   {i > 0 && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="2.5" style={{ flexShrink: 0 }}>
                       <path d="M9 18l6-6-6-6"/>
                     </svg>
                   )}
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 5,
                     padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0,
-                    background: count > 0 ? `${stageColors.color}15` : 'transparent',
-                    border: count > 0 ? `1px solid ${stageColors.color}30` : '1px solid transparent',
+                    background: count > 0 ? `${stageColors.color}10` : 'transparent',
+                    border: count > 0 ? `1px solid ${stageColors.color}20` : '1px solid transparent',
                   }}>
                     <span style={{ color: stageColors.color, fontWeight: 700, fontSize: 11 }}>{shortLabel}</span>
                     <span style={{
@@ -302,7 +330,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
                       borderRadius: 999, padding: '0 5px', fontSize: 10, fontWeight: 800, lineHeight: '16px',
                     }}>{count}</span>
                     {stageAmount > 0 && (
-                      <span style={{ color: '#94A3B8', fontSize: 10 }}>
+                      <span style={{ color: LIGHT.textMuted, fontSize: 10 }}>
                         {formatAmount(stageAmount, 'EUR')}
                       </span>
                     )}
@@ -344,7 +372,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
           background: toast.type === 'success' ? '#10B981' : '#EF4444',
           color: '#FFFFFF', padding: '14px 20px', borderRadius: 10,
           fontSize: 14, fontWeight: 600,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 200,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 200,
           display: 'flex', alignItems: 'center', gap: 10, maxWidth: 400,
           animation: 'slideInUp 0.3s ease-out',
         }}>
@@ -403,12 +431,14 @@ function KanbanColumn({
   const columnStyle: React.CSSProperties = {
     ...styles.column,
     background: isDragOver
-      ? `linear-gradient(to bottom, ${colors.color}10, #132238)`
-      : '#132238',
-    borderTop: `3px solid ${isDragOver ? colors.color : colors.color + '40'}`,
+      ? `linear-gradient(to bottom, ${colors.color}08, ${LIGHT.surfaceAlt})`
+      : LIGHT.surfaceAlt,
+    border: isDragOver
+      ? `1px solid ${colors.color}40`
+      : `1px solid ${LIGHT.border}`,
     boxShadow: isDragOver
-      ? `0 0 0 2px ${colors.color}40, 0 8px 16px rgba(0,0,0,0.2)`
-      : 'none',
+      ? `0 0 0 2px ${colors.color}20, 0 4px 12px rgba(0,0,0,0.08)`
+      : '0 1px 3px rgba(0,0,0,0.04)',
   };
 
   return (
@@ -422,7 +452,13 @@ function KanbanColumn({
       {/* Column Header */}
       <div style={styles.columnHeader}>
         <div style={styles.columnTitle}>
-          <span style={{ color: colors.color, fontWeight: 700 }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: colors.color,
+            boxShadow: `0 0 6px ${colors.color}`,
+            flexShrink: 0,
+          }} />
+          <span style={{ color: LIGHT.columnHeaderText, fontWeight: 700 }}>
             {shortLabel}
           </span>
           <span style={styles.columnCount}>
@@ -433,31 +469,48 @@ function KanbanColumn({
           onClick={onAddClick}
           style={{
             ...styles.columnAddButton,
-            color: colors.color,
-            borderColor: '#1B3A5C',
+            color: '#94A3B8',
+            borderColor: LIGHT.columnHeaderBorder,
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.background = '#243B53';
+            (e.currentTarget as HTMLElement).style.background = '#334155';
             (e.currentTarget as HTMLElement).style.borderColor = colors.color;
+            (e.currentTarget as HTMLElement).style.color = colors.color;
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.background = 'transparent';
-            (e.currentTarget as HTMLElement).style.borderColor = '#1B3A5C';
+            (e.currentTarget as HTMLElement).style.borderColor = LIGHT.columnHeaderBorder;
+            (e.currentTarget as HTMLElement).style.color = '#94A3B8';
           }}
         >
           +
         </button>
       </div>
 
-      {/* Amount summary */}
-      {totalAmount > 0 && (
-        <div style={{
-          padding: '4px 16px 8px', fontSize: 11, fontWeight: 600,
-          color: colors.color, opacity: 0.8,
+      {/* Amount summary + mini progress */}
+      <div style={{
+        padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8,
+        borderBottom: `1px solid ${LIGHT.border}`,
+      }}>
+        <span style={{
+          fontSize: 11, fontWeight: 600,
+          color: totalAmount > 0 ? colors.color : LIGHT.textMuted,
         }}>
-          {formatAmount(totalAmount, 'EUR')}
+          {totalAmount > 0 ? formatAmount(totalAmount, 'EUR') : '—'}
+        </span>
+        {/* Mini progress bar */}
+        <div style={{
+          flex: 1, height: 3, borderRadius: 2,
+          background: LIGHT.border,
+        }}>
+          <div style={{
+            height: '100%', borderRadius: 2,
+            background: colors.color,
+            width: `${Math.min(100, (opportunities.length / Math.max(1, 20)) * 100)}%`,
+            transition: 'width 0.3s ease',
+          }} />
         </div>
-      )}
+      </div>
 
       {/* Cards */}
       <div style={styles.cardsContainer}>
@@ -505,26 +558,18 @@ function OpportunityCard({
   onDragEnd: (e: React.DragEvent) => void;
   onClick: () => void;
 }) {
-  const [isHovered, setIsHovered] = useState(false);
   const formattedAmount = formatAmount(opportunity.amount, opportunity.currency);
-
-  const cardStyle: React.CSSProperties = {
-    ...styles.card,
-    borderLeft: `3px solid ${stageColor}`,
-    transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
-    boxShadow: isHovered
-      ? '0 8px 16px rgba(0,0,0,0.15), 0 0 0 1px rgba(59, 130, 246, 0.3)'
-      : '0 2px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
-  };
+  const initials = getInitials(opportunity.name);
+  const typeStyle = TYPE_COLORS[opportunity.businessType] || TYPE_COLORS.Debt;
 
   return (
-    <div
+    <motion.div
       draggable
       tabIndex={0}
       role="button"
       aria-label={`Oportunidad: ${opportunity.name}${formattedAmount ? ', ' + formattedAmount : ''}`}
-      onDragStart={(e) => onDragStart(e, opportunity)}
-      onDragEnd={onDragEnd}
+      onDragStart={(e) => onDragStart(e as any, opportunity)}
+      onDragEnd={(e) => onDragEnd(e as any)}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -532,50 +577,97 @@ function OpportunityCard({
           onClick();
         }
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onFocus={() => setIsHovered(true)}
-      onBlur={() => setIsHovered(false)}
-      style={cardStyle}
+      whileHover={{ y: -3 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      style={{
+        background: LIGHT.surface,
+        borderRadius: 12,
+        padding: 0,
+        cursor: 'grab',
+        userSelect: 'none',
+        overflow: 'hidden',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+      }}
     >
-      {/* Drag handle */}
-      <div style={styles.dragHandle}>
-        <div style={styles.dragHandleDot} />
-        <div style={styles.dragHandleDot} />
-        <div style={styles.dragHandleDot} />
-      </div>
+      {/* Top accent gradient */}
+      <div style={{
+        height: 3,
+        background: `linear-gradient(90deg, ${stageColor}, ${stageColor}80)`,
+      }} />
 
-      {/* Content */}
-      <div style={styles.cardContent}>
-        <div style={styles.cardTitle}>
-          {opportunity.name || 'Sin nombre'}
+      <div style={{ padding: '12px' }}>
+        {/* Avatar + Title */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: `${stageColor}15`,
+            color: stageColor,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700, flexShrink: 0,
+            letterSpacing: '0.5px',
+          }}>
+            {initials}
+          </div>
+          <div style={{
+            fontSize: 13, fontWeight: 600, color: LIGHT.textPrimary,
+            lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis',
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+            flex: 1,
+          }}>
+            {opportunity.name || 'Sin nombre'}
+          </div>
         </div>
 
+        {/* Amount */}
         {formattedAmount && (
-          <div style={styles.cardAmount}>
+          <div style={{
+            fontSize: 20, fontWeight: 700, color: '#3B82F6',
+            letterSpacing: '-0.5px', marginBottom: 8,
+          }}>
             {formattedAmount}
           </div>
         )}
 
         {/* Business type badge */}
         {opportunity.businessType && (
-          <div>
+          <div style={{ marginBottom: 6 }}>
             <span style={{
-              ...styles.phaseBadge,
-              background: opportunity.businessType === 'Debt' ? '#EFF6FF' : '#F0FDF4',
-              color: opportunity.businessType === 'Debt' ? '#3B82F6' : '#10B981',
+              display: 'inline-block', padding: '3px 10px', borderRadius: 999,
+              fontSize: 10, fontWeight: 600, letterSpacing: '0.3px', textTransform: 'uppercase',
+              background: typeStyle.bg, color: typeStyle.text,
             }}>
               {opportunity.businessType}
             </span>
           </div>
         )}
 
+        {/* Probability bar */}
+        {opportunity.probability != null && opportunity.probability > 0 && (
+          <div style={{ marginBottom: 6 }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              marginBottom: 3,
+            }}>
+              <span style={{ fontSize: 10, color: LIGHT.textMuted, fontWeight: 500 }}>Probabilidad</span>
+              <span style={{ fontSize: 10, color: stageColor, fontWeight: 700 }}>{opportunity.probability}%</span>
+            </div>
+            <div style={{
+              height: 4, borderRadius: 2, background: LIGHT.border,
+            }}>
+              <div style={{
+                height: '100%', borderRadius: 2, background: stageColor,
+                width: `${opportunity.probability}%`, transition: 'width 0.3s ease',
+              }} />
+            </div>
+          </div>
+        )}
+
         {opportunity.phase && (
-          <div style={styles.cardPhase}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
             <span style={{
-              ...styles.phaseBadge,
-              background: `${stageColor}15`,
-              color: stageColor,
+              display: 'inline-block', padding: '3px 8px', borderRadius: 4,
+              fontSize: 10, fontWeight: 600, letterSpacing: '0.3px', textTransform: 'uppercase',
+              background: `${stageColor}10`, color: stageColor,
             }}>
               {opportunity.phase}
             </span>
@@ -583,30 +675,54 @@ function OpportunityCard({
         )}
 
         {opportunity.recordStatus && (
-          <div style={styles.cardStatus}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
+          }}>
             <StatusDot status={opportunity.recordStatus} />
-            <span style={{ fontSize: 11, color: '#6B7F94' }}>
+            <span style={{ fontSize: 11, color: LIGHT.textMuted }}>
               {opportunity.recordStatus}
             </span>
           </div>
         )}
 
-        {/* Deal Manager */}
-        {opportunity.dealManager && (
+        {/* Footer: manager + date */}
+        {(opportunity.dealManager || opportunity.updatedAt) && (
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            fontSize: 11, color: '#3B82F6', fontWeight: 600,
-            marginTop: 2,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            paddingTop: 8, borderTop: `1px solid ${LIGHT.borderLight}`, marginTop: 4,
           }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-            {opportunity.dealManager}
+            {opportunity.dealManager && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{
+                  width: 20, height: 20, borderRadius: '50%',
+                  background: '#3B82F6', color: '#FFFFFF',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 700,
+                }}>
+                  {opportunity.dealManager.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <span style={{ fontSize: 11, color: LIGHT.textSecondary, fontWeight: 500 }}>
+                  {opportunity.dealManager.split(' ')[0]}
+                </span>
+              </div>
+            )}
+            {opportunity.updatedAt && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={LIGHT.textMuted} strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span style={{ fontSize: 10, color: LIGHT.textMuted }}>
+                  {formatDate(opportunity.updatedAt)}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -655,15 +771,30 @@ function formatAmount(amount: number | null | undefined, currency = "EUR"): stri
   return `${amount} ${currency}`;
 }
 
+function getInitials(name: string): string {
+  if (!name) return '?';
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  } catch {
+    return dateStr.slice(0, 10);
+  }
+}
+
 /**
- * Styles
+ * Styles — Light theme
  */
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: '#0A1628',
+    background: LIGHT.bg,
     overflow: 'hidden',
   },
 
@@ -672,26 +803,21 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '20px 24px',
-    background: '#132238',
-    borderBottom: '1px solid #1B3A5C',
+    padding: '16px 24px',
+    background: LIGHT.surface,
+    borderBottom: `1px solid ${LIGHT.border}`,
   },
   headerLeft: {
     display: 'flex',
-    alignItems: 'baseline',
-    gap: 12,
+    alignItems: 'center',
+    gap: 24,
   },
   title: {
     fontSize: 20,
     fontWeight: 800,
-    color: '#F1F5F9',
+    color: LIGHT.textPrimary,
     margin: 0,
     letterSpacing: '-0.5px',
-  },
-  count: {
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: 500,
   },
   headerRight: {
     display: 'flex',
@@ -708,27 +834,27 @@ const styles: Record<string, React.CSSProperties> = {
   searchIcon: {
     position: 'absolute',
     left: 12,
-    color: '#64748B',
+    color: LIGHT.textMuted,
     pointerEvents: 'none',
   },
   searchInput: {
     padding: '8px 36px 8px 36px',
     borderRadius: 10,
-    border: '1px solid #1B3A5C',
+    border: `1px solid ${LIGHT.border}`,
     fontSize: 13,
     fontFamily: "'DM Sans', system-ui",
-    width: 260,
+    width: 240,
     outline: 'none',
     transition: 'all 0.2s ease',
-    background: '#1E293B',
-    color: '#F1F5F9',
+    background: LIGHT.surfaceAlt,
+    color: LIGHT.textPrimary,
   },
   clearButton: {
     position: 'absolute',
     right: 8,
     background: 'none',
     border: 'none',
-    color: '#64748B',
+    color: LIGHT.textMuted,
     fontSize: 20,
     cursor: 'pointer',
     padding: 4,
@@ -742,22 +868,22 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 0,
     borderRadius: 10,
     overflow: 'hidden',
-    border: '1px solid #1B3A5C',
+    border: `1px solid ${LIGHT.border}`,
   },
   filterButton: {
     padding: '7px 14px',
     fontSize: 12,
     fontWeight: 600,
-    color: '#94A3B8',
-    background: '#1E293B',
+    color: LIGHT.textSecondary,
+    background: LIGHT.surface,
     border: 'none',
-    borderRight: '1px solid #1B3A5C',
+    borderRight: `1px solid ${LIGHT.border}`,
     cursor: 'pointer',
     transition: 'all 0.15s ease',
     fontFamily: "'DM Sans', system-ui",
   },
   filterButtonActive: {
-    background: '#3B82F6',
+    background: '#1E293B',
     color: '#FFFFFF',
   },
 
@@ -790,8 +916,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 16,
     margin: '20px 24px',
     padding: '16px 20px',
-    background: '#2D1215',
-    border: '1px solid #7F1D1D',
+    background: '#FEF2F2',
+    border: '1px solid #FECACA',
     borderRadius: 10,
   },
   errorIcon: {
@@ -801,20 +927,20 @@ const styles: Record<string, React.CSSProperties> = {
   errorTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: '#FCA5A5',
+    color: '#991B1B',
     marginBottom: 4,
   },
   errorMessage: {
     fontSize: 12,
-    color: '#F87171',
+    color: '#DC2626',
   },
   retryButton: {
     marginLeft: 'auto',
     padding: '6px 14px',
-    background: '#1E293B',
-    border: '1px solid #7F1D1D',
+    background: LIGHT.surface,
+    border: '1px solid #FECACA',
     borderRadius: 6,
-    color: '#FCA5A5',
+    color: '#DC2626',
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
@@ -829,9 +955,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   board: {
     display: 'flex',
-    gap: 16,
+    gap: 14,
     minHeight: '100%',
-    paddingTop: 20,
+    paddingTop: 16,
   },
 
   // Column
@@ -840,46 +966,46 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 280,
     display: 'flex',
     flexDirection: 'column',
-    background: '#132238',
+    background: LIGHT.surfaceAlt,
     borderRadius: 14,
+    border: `1px solid ${LIGHT.border}`,
     transition: 'all 0.2s ease',
   },
   columnHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '14px 16px',
-    background: '#1E293B',
+    padding: '12px 14px',
+    background: LIGHT.columnHeaderBg,
     borderRadius: '14px 14px 0 0',
-    borderBottom: '1px solid #1B3A5C',
   },
   columnTitle: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    fontSize: 12,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-    color: '#F1F5F9',
+    color: LIGHT.columnHeaderText,
   },
   columnCount: {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 22,
-    height: 22,
+    minWidth: 20,
+    height: 20,
     padding: '0 6px',
-    background: '#243B53',
-    borderRadius: 11,
-    fontSize: 11,
+    background: 'rgba(255,255,255,0.12)',
+    borderRadius: 10,
+    fontSize: 10,
     fontWeight: 700,
-    color: '#94A3B8',
+    color: '#CBD5E1',
   },
   columnAddButton: {
     width: 24,
     height: 24,
     borderRadius: 6,
-    border: '1px solid #1B3A5C',
+    border: '1px solid',
     background: 'transparent',
     fontSize: 16,
     fontWeight: 600,
@@ -889,82 +1015,17 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     transition: 'all 0.15s ease',
     lineHeight: 1,
-    color: '#94A3B8',
   },
 
   // Cards container
   cardsContainer: {
     flex: 1,
-    padding: '12px',
+    padding: '10px',
     overflowY: 'auto',
     overflowX: 'hidden',
     display: 'flex',
     flexDirection: 'column',
-    gap: 10,
-  },
-
-  // Card
-  card: {
-    background: '#FFFFFF',
-    borderRadius: 14,
-    padding: '12px',
-    cursor: 'grab',
-    transition: 'all 0.2s ease',
-    userSelect: 'none',
-  },
-  dragHandle: {
-    display: 'flex',
-    gap: 2,
-    marginBottom: 8,
-    opacity: 0.3,
-  },
-  dragHandleDot: {
-    width: 3,
-    height: 3,
-    borderRadius: '50%',
-    background: '#94A3B8',
-  },
-  cardContent: {
-    display: 'flex',
-    flexDirection: 'column',
     gap: 8,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#1A2B3D',
-    lineHeight: 1.4,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-  },
-  cardAmount: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: '#3B82F6',
-    letterSpacing: '-0.3px',
-  },
-  cardPhase: {
-    display: 'flex',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  phaseBadge: {
-    display: 'inline-block',
-    padding: '3px 8px',
-    borderRadius: 4,
-    fontSize: 10,
-    fontWeight: 600,
-    letterSpacing: '0.3px',
-    textTransform: 'uppercase',
-  },
-  cardStatus: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
   },
 
   // Empty state
@@ -978,20 +1039,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   emptyText: {
     fontSize: 12,
-    color: '#64748B',
+    color: LIGHT.textMuted,
     fontWeight: 500,
   },
 
   // Skeleton
   skeleton: {
-    background: '#1E293B',
-    borderRadius: 14,
+    background: LIGHT.surface,
+    borderRadius: 12,
     padding: '12px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+    border: `1px solid ${LIGHT.border}`,
   },
   skeletonLine: {
     height: 14,
-    background: 'linear-gradient(90deg, #1E293B 25%, #243B53 50%, #1E293B 75%)',
+    background: `linear-gradient(90deg, ${LIGHT.border} 25%, #F1F5F9 50%, ${LIGHT.border} 75%)`,
     backgroundSize: '200% 100%',
     animation: 'shimmer 1.5s infinite',
     borderRadius: 4,

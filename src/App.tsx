@@ -810,6 +810,8 @@ export default function App() {
         <PlaceholderView title="Structuring" description="Gestion de estructuracion de deals en curso." icon="FileText" />
       ) : activeView === "distribution" ? (
         <PlaceholderView title="Distribution" description="Distribucion y sindicacion de operaciones." icon="Send" />
+      ) : activeView === "closing" ? (
+        <PlaceholderView title="Closing" description="Gestion de cierre de operaciones." icon="CheckCircle2" />
       ) : (
         <KanbanView
           key={kanbanKey}
