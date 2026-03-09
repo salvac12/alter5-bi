@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { KPI } from './UI';
-import { fetchCandidateTargets, upsertCandidateTarget } from '../utils/airtableCandidates';
+import { fetchCandidateTargets, fetchAllBridgeTargets, upsertCandidateTarget } from '../utils/airtableCandidates';
 import { fetchSentDomains } from '../utils/campaignApi';
 import { getCurrentUser } from '../utils/userConfig';
 
@@ -146,6 +146,7 @@ export default function CandidateSearchView({
 }) {
   // Data state
   const [trackingDomains, setTrackingDomains] = useState(new Set());
+  const [allSentDomains, setAllSentDomains] = useState(new Set()); // domains from ALL Bridge targets (approved/sent)
   const [trackingOk, setTrackingOk] = useState(false); // true only if tracking loaded successfully with >0 domains
   const [savedTargets, setSavedTargets] = useState({});
   const [loadingData, setLoadingData] = useState(true);
@@ -196,6 +197,18 @@ export default function CandidateSearchView({
       setTrackingDomains(domainSet);
       setSavedTargets(targets || {});
 
+      // ALL Bridge targets across all waves (robust exclusion from Airtable)
+      try {
+        const { allTargets } = await fetchAllBridgeTargets("Bridge_Q1");
+        const sentSet = new Set();
+        for (const [domain, t] of Object.entries(allTargets)) {
+          if (t.status === 'approved' || t.status === 'sent' || t.status === 'selected') {
+            sentSet.add(domain);
+          }
+        }
+        setAllSentDomains(sentSet);
+      } catch { /* non-blocking */ }
+
       // Only warn if the API call itself failed (not if it returned 0 domains — that's normal initially)
       if (trackingFailed) {
         setTrackingWarning(true);
@@ -209,6 +222,20 @@ export default function CandidateSearchView({
       setLoadingData(false);
     }
   }
+
+  // ── Detect domains already contacted by Leticia (campaign sender) ──
+  const leticiaDomains = useMemo(() => {
+    const matched = new Set();
+    for (const c of allCompanies) {
+      const domain = c.domain?.toLowerCase();
+      if (!domain) continue;
+      const leticiaSource = (c.detail?.sources || []).find(
+        s => s.employee === 'leticia_menéndez'
+      );
+      if (leticiaSource && leticiaSource.interactions > 0) matched.add(domain);
+    }
+    return matched;
+  }, [allCompanies]);
 
   // ── Derive unique filter options from Originacion companies ──
   const originacionCompanies = useMemo(() => {
@@ -224,8 +251,8 @@ export default function CandidateSearchView({
     const techs = new Map();
 
     for (const c of originacionCompanies) {
-      const isExcluded = c.domain && trackingDomains.has(c.domain?.toLowerCase());
-      if (isExcluded) continue;
+      const d = c.domain?.toLowerCase();
+      if (d && (trackingDomains.has(d) || allSentDomains.has(d) || leticiaDomains.has(d))) continue;
       if (c.segment) segments.set(c.segment, (segments.get(c.segment) || 0) + 1);
       if (c.companyType) types.set(c.companyType, (types.get(c.companyType) || 0) + 1);
       for (const t of (c.technologies || [])) {
@@ -238,13 +265,18 @@ export default function CandidateSearchView({
       types: [...types.entries()].sort((a, b) => b[1] - a[1]),
       techs: [...techs.entries()].sort((a, b) => b[1] - a[1]),
     };
-  }, [originacionCompanies, trackingDomains]);
+  }, [originacionCompanies, trackingDomains, allSentDomains, leticiaDomains]);
 
   // ── Filter candidates ──
   const candidates = useMemo(() => {
     return originacionCompanies.filter(c => {
-      // Exclude already-sent domains
-      if (c.domain && trackingDomains.has(c.domain.toLowerCase())) return false;
+      const domain = c.domain?.toLowerCase();
+      // Exclude already-sent domains (GAS tracking)
+      if (domain && trackingDomains.has(domain)) return false;
+      // Exclude domains already in Bridge campaign (Airtable)
+      if (domain && allSentDomains.has(domain)) return false;
+      // Exclude domains contacted by Leticia via CRM
+      if (domain && leticiaDomains.has(domain)) return false;
       // Segment filter
       if (segFilter !== 'todas' && c.segment !== segFilter) return false;
       // Type filter
@@ -261,15 +293,19 @@ export default function CandidateSearchView({
       if (statusFilter !== 'all' && status !== statusFilter) return false;
       return true;
     });
-  }, [originacionCompanies, trackingDomains, segFilter, typeFilter, techFilter, searchQuery, statusFilter, savedTargets]);
+  }, [originacionCompanies, trackingDomains, allSentDomains, leticiaDomains, segFilter, typeFilter, techFilter, searchQuery, statusFilter, savedTargets]);
 
   const paginated = candidates.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(candidates.length / PAGE_SIZE);
 
   // ── KPI stats ──
   const kpis = useMemo(() => {
-    const available = originacionCompanies.filter(c => !trackingDomains.has(c.domain?.toLowerCase())).length;
-    const contacted = originacionCompanies.filter(c => trackingDomains.has(c.domain?.toLowerCase())).length;
+    const isExcluded = c => {
+      const d = c.domain?.toLowerCase();
+      return d && (trackingDomains.has(d) || allSentDomains.has(d) || leticiaDomains.has(d));
+    };
+    const available = originacionCompanies.filter(c => !isExcluded(c)).length;
+    const contacted = originacionCompanies.filter(c => isExcluded(c)).length;
     let approvedCount = 0;
     let approvedContacts = 0;
     for (const [, t] of Object.entries(savedTargets)) {
@@ -279,7 +315,7 @@ export default function CandidateSearchView({
       }
     }
     return { available, contacted, approvedCount, approvedContacts };
-  }, [originacionCompanies, trackingDomains, savedTargets]);
+  }, [originacionCompanies, trackingDomains, allSentDomains, leticiaDomains, savedTargets]);
 
   // ── Actions ──
 

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { fetchCandidateTargets, upsertCandidateTarget } from '../utils/airtableCandidates';
+import { fetchCandidateTargets, fetchAllBridgeTargets, upsertCandidateTarget } from '../utils/airtableCandidates';
 import { fetchSentDomains, getCampaigns, getCampaign, addRecipients, startCampaign, sendTestEmail } from '../utils/campaignApi';
 import { callGemini } from '../utils/gemini';
 import { getSenders } from '../utils/senderConfig';
@@ -136,6 +136,7 @@ function Toast({ msg, onClose }) {
 export default function BridgeExplorerView({ allCompanies, campaignRef, previousTargets = {}, currentUser, onBack }) {
   // Data state
   const [trackingDomains, setTrackingDomains] = useState(new Set());
+  const [allSentDomains, setAllSentDomains] = useState(new Set()); // domains from ALL Bridge targets (approved/sent)
   const [trackingError, setTrackingError] = useState(false);
   const [savedTargets, setSavedTargets] = useState({});
   const [loadingData, setLoadingData] = useState(true);
@@ -217,17 +218,29 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   async function loadData() {
     setLoadingData(true);
     try {
-      // 1. Sent domains (anti-duplicate shield)
+      // 1. Sent domains (anti-duplicate shield from GAS tracking)
       let domains = new Set();
       try { domains = await fetchSentDomains(); }
       catch { setTrackingError(true); }
       setTrackingDomains(domains);
 
-      // 2. Saved targets in Airtable
+      // 2. Saved targets in Airtable (current wave)
       const targets = await fetchCandidateTargets(campaignRef).catch(() => ({}));
       setSavedTargets(targets || {});
 
-      // 3. Auto-detect Bridge campaign ID
+      // 3. ALL Bridge targets across all waves (robust exclusion from Airtable)
+      try {
+        const { allTargets } = await fetchAllBridgeTargets("Bridge_Q1");
+        const sentSet = new Set();
+        for (const [domain, t] of Object.entries(allTargets)) {
+          if (t.status === 'approved' || t.status === 'sent' || t.status === 'selected') {
+            sentSet.add(domain);
+          }
+        }
+        setAllSentDomains(sentSet);
+      } catch { /* non-blocking — previousTargets prop is the fallback */ }
+
+      // 4. Auto-detect Bridge campaign ID
       try {
         const res = await getCampaigns();
         const campaigns = res.campaigns || [];
@@ -254,13 +267,16 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
         const domain = c.domain?.toLowerCase();
         if (!domain) return false;
 
-        // Absolute shield: already contacted via campaign system
+        // Absolute shield: already contacted via campaign system (GAS tracking)
         if (trackingDomains.has(domain)) return false;
 
-        // CRM shield: Leticia already emailed this company
+        // Airtable shield: already approved/sent in ANY Bridge wave (direct from Airtable)
+        if (allSentDomains.has(domain)) return false;
+
+        // CRM shield: Leticia already emailed this company (from CRM sources)
         if (leticiaDomains.has(domain)) return false;
 
-        // Exclude companies already approved/sent in previous waves
+        // Exclude companies already approved/sent in previous waves (prop from parent)
         const prevStatus = previousTargets[domain]?.status;
         if (prevStatus === 'approved' || prevStatus === 'sent' || prevStatus === 'selected') return false;
 
@@ -336,7 +352,7 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
         }
         return b.explorerScore - a.explorerScore;
       });
-  }, [allCompanies, trackingDomains, leticiaDomains, savedTargets, previousTargets, segFilter, typeFilter,
+  }, [allCompanies, trackingDomains, allSentDomains, leticiaDomains, savedTargets, previousTargets, segFilter, typeFilter,
       techFilter, geoFilter, targetFilter, statusFilter, searchQuery, minScore, llmOrdering]);
 
   // Unique filter values
@@ -1322,14 +1338,14 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
             </div>
             <div style={{ fontFamily: T.sans, fontSize: 12, color: T.muted }}>
               {candidates.length} empresas por revisar · {selectedForSend.size} seleccionadas
-              {Object.keys(previousTargets).length > 0 && (
-                <span style={{ marginLeft: 6 }}>
-                  · {Object.values(previousTargets).filter(t => t.status === 'approved' || t.status === 'sent' || t.status === 'selected').length} excluidas de waves anteriores
+              {allSentDomains.size > 0 && (
+                <span style={{ marginLeft: 6, color: '#3B82F6' }}>
+                  · {allSentDomains.size} excluidas (ya en campaña Bridge)
                 </span>
               )}
               {leticiaDomains.size > 0 && (
                 <span style={{ marginLeft: 6, color: '#7C3AED' }}>
-                  · {leticiaDomains.size} excluidas (ya contactadas por Leticia)
+                  · {leticiaDomains.size} excluidas (contactadas por Leticia CRM)
                 </span>
               )}
               {trackingError && (
