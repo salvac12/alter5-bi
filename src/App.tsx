@@ -1,11 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch } from './utils/data';
-import { PER_PAGE } from './utils/constants';
-import { KPI } from './components/UI';
-import Sidebar from './components/Sidebar';
+import { PER_PAGE, COMPANY_ROLES, TECHNOLOGIES, PRODUCTS, ALL_COMPANY_TYPES, STATUS_LABELS, STATUS_COLORS } from './utils/constants';
 import CompanyTable from './components/CompanyTable';
 import DetailPanel from './components/DetailPanel';
-import EmployeeTabs from './components/EmployeeTabs';
 import KanbanView from './components/KanbanView';
 import OpportunityPanel from './components/OpportunityPanel';
 import ProspectsView from './components/ProspectsView';
@@ -200,6 +197,7 @@ export default function App() {
   const [cleanupMode, setCleanupMode] = useState(false);
   const [cleanupSelection, setCleanupSelection] = useState(new Set());
   const [cleanupFilter, setCleanupFilter] = useState(null); // null | 'suspicious' | 'selected'
+  const [showFilters, setShowFilters] = useState(false);
   const [bulkSelection, setBulkSelection] = useState(new Set());
   const [showBulkHideConfirm, setShowBulkHideConfirm] = useState(false);
   const [page, setPage] = useState(0);
@@ -530,91 +528,248 @@ export default function App() {
     >
       {/* ── Content area ── */}
       {activeView === "empresas" ? (
-        <div style={{ display: "flex", height: `calc(100vh - 60px)` }}>
-          {/* Sidebar */}
-          <Sidebar
-            companies={companies} employees={employees}
-            selEmployees={selEmployees} setSelEmployees={setSelEmployees}
-            selGroups={selGroups} setSelGroups={setSelGroups}
-            selSegments={selSegments} setSelSegments={setSelSegments}
-            selTypes={selTypes} setSelTypes={setSelTypes}
-            selActivities={selActivities} setSelActivities={setSelActivities}
-            selTech={selTech} setSelTech={setSelTech}
-            selStatus={selStatus} setSelStatus={setSelStatus}
-            selProduct={selProduct} setSelProduct={setSelProduct}
-            selMarketRoles={selMarketRoles} setSelMarketRoles={setSelMarketRoles}
-            selPipeline={selPipeline} setSelPipeline={setSelPipeline}
-            productMatches={productMatches}
-            setPage={setPage}
-          />
-
-          {/* Main */}
-          <div style={{ flex: 1, overflow: "auto" }}>
-            {/* KPIs */}
-            <div style={{
-              padding: "16px 20px",
-              display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10,
-            }}>
-              <KPI label="Total empresas" value={stats.total} sub={`${filtered.length} filtradas`} />
-              <KPI label="Activas" value={stats.active} accent="#10B981" sub="< 6 meses"
-                onClick={() => handleKpiClick("active")} active={selStatus.length === 1 && selStatus[0] === "active"} />
-              <KPI label="Dormidas" value={stats.dormant} accent="#F59E0B" sub="6-18 meses"
-                onClick={() => handleKpiClick("dormant")} active={selStatus.length === 1 && selStatus[0] === "dormant"} />
-              <KPI label="Perdidas" value={stats.lost} accent="#EF4444" sub="> 18 meses"
-                onClick={() => handleKpiClick("lost")} active={selStatus.length === 1 && selStatus[0] === "lost"} />
-              <KPI label="Score medio" value={stats.avgScore} accent="#3B82F6" sub="/100 puntos" />
-            </div>
-
-            {/* Employee Tabs */}
-            <EmployeeTabs
-              activeTab={activeEmployeeTab}
-              onTabChange={handleTabChange}
-              totalCount={companies.length}
-            />
-
-            {/* Count */}
-            <div style={{
-              padding: "4px 20px 8px", fontSize: 11, color: "#6B7F94", fontWeight: 500,
-            }}>
-              {filtered.length} empresas · Pagina {page + 1}/{totalPages || 1}
-            </div>
-
-            {/* Cleanup Toolbar */}
-            {cleanupMode && (
-              <CleanupToolbar
-                selectionCount={cleanupSelection.size}
-                filteredCount={filtered.length}
-                suspiciousCount={suspiciousMap.size}
-                onSelectSuspicious={handleSelectSuspicious}
-                onSelectPage={handleSelectPage}
-                onClearSelection={() => { setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
-                onExport={handleExportBlocklist}
-                onExit={() => { setCleanupMode(false); setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
-                cleanupFilter={cleanupFilter}
-                onShowAll={() => { setCleanupFilter(null); setPage(0); }}
-                onShowSelected={() => { setCleanupFilter('selected'); setPage(0); }}
+        <div style={{ height: `calc(100vh - 60px)`, overflow: "auto", background: "#F0F4F8" }}>
+          {/* ── Toolbar: Search + Filtros + Export + Cerebro ── */}
+          <div style={{ padding: "18px 28px 0", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            {/* Search */}
+            <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
+              <svg style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input
+                placeholder="Buscar empresa..."
+                value={search}
+                onChange={e => { setSearch(e.target.value); setPage(0); }}
+                style={{
+                  width: "100%", background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8,
+                  padding: "8px 12px 8px 32px", fontSize: 13, color: "#0F172A", outline: "none",
+                  boxSizing: "border-box" as const, fontFamily: "'DM Sans', sans-serif",
+                }}
               />
-            )}
+            </div>
 
-            {/* Table */}
-            <CompanyTable
-              companies={paginated}
-              sortBy={sortBy} sortDir={sortDir} onSort={handleSort}
-              onSelect={setSelected} selected={selected}
-              page={page} totalPages={totalPages} setPage={setPage}
-              productMatches={productMatches}
-              cleanupMode={cleanupMode}
-              cleanupSelection={cleanupSelection}
-              onToggleCleanup={handleToggleCleanup}
-              suspiciousMap={suspiciousMap}
-              verifiedCompanies={verifiedCompanies}
-              bulkSelection={bulkSelection}
-              onToggleBulkSelect={handleToggleBulkSelect}
-              onSelectAllPage={handleSelectAllPage}
-              onBulkHide={() => setShowBulkHideConfirm(true)}
-              onClearBulkSelection={() => setBulkSelection(new Set())}
-            />
+            {/* Filtros toggle */}
+            <button
+              onClick={() => setShowFilters(f => !f)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                background: showFilters ? "#1E293B" : "#FFFFFF",
+                border: showFilters ? "none" : "1px solid #E2E8F0",
+                borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 500,
+                color: showFilters ? "#FFFFFF" : "#475569",
+                cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              Filtros
+              {(() => {
+                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0);
+                return count > 0 ? (
+                  <span style={{
+                    background: showFilters ? "#3B82F6" : "#3B82F6",
+                    color: "#FFFFFF", fontSize: 10, fontWeight: 700,
+                    borderRadius: 10, minWidth: 18, height: 18,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    padding: "0 5px",
+                  }}>{count}</span>
+                ) : null;
+              })()}
+            </button>
+
+            {/* Exportar CSV */}
+            <button onClick={() => downloadCSV(filtered, productMatches)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 500, color: "#3B82F6", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Exportar
+            </button>
+
+            {/* Cerebro AI */}
+            <button onClick={() => setShowCerebro(true)} style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg, #7C3AED, #4F46E5)", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, color: "#FFFFFF", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", boxShadow: "0 2px 8px rgba(124,58,237,0.3)" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+              Cerebro AI
+            </button>
+
+            {/* Spacer + count */}
+            <span style={{ marginLeft: "auto", fontSize: 12, color: "#94A3B8", whiteSpace: "nowrap" }}>{filtered.length} empresas</span>
           </div>
+
+          {/* ── Filter Dropdown Panel ── */}
+          {showFilters && (
+            <div style={{
+              margin: "10px 28px 0", padding: "16px 20px",
+              background: "#FFFFFF", borderRadius: 12,
+              border: "1px solid #E2E8F0",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+            }}>
+              {/* Active filters summary + clear */}
+              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct) && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid #F1F5F9" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>Activos:</span>
+                    {selGroups.map(g => (
+                      <span key={g} onClick={() => { setSelGroups(prev => prev.filter(x => x !== g)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#FEF3C7", color: "#92400E", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {g} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
+                    {selTypes.map(t => (
+                      <span key={t} onClick={() => { setSelTypes(prev => prev.filter(x => x !== t)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#EDE9FE", color: "#5B21B6", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {t} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
+                    {selTech.map(t => (
+                      <span key={t} onClick={() => { setSelTech(prev => prev.filter(x => x !== t)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#E0F2FE", color: "#075985", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {t} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
+                    {selStatus.map(s => (
+                      <span key={s} onClick={() => { setSelStatus(prev => prev.filter(x => x !== s)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: STATUS_COLORS[s] + "20", color: STATUS_COLORS[s], fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {(STATUS_LABELS as any)[s]} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
+                    {selProduct && (
+                      <span onClick={() => { setSelProduct(""); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#DBEAFE", color: "#1D4ED8", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {PRODUCTS.find(p => p.id === selProduct)?.name || selProduct} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setPage(0); }}
+                    style={{ fontSize: 11, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap", fontFamily: "'DM Sans', sans-serif" }}
+                  >Limpiar todo</button>
+                </div>
+              )}
+
+              {/* Filter rows */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Rol */}
+                <FilterRow label="Rol">
+                  {COMPANY_ROLES.map(r => {
+                    const active = selGroups.includes(r.id);
+                    const count = companies.filter(c => c.role === r.id).length;
+                    return (
+                      <FilterPill key={r.id} active={active} color={r.color}
+                        onClick={() => { setSelGroups(prev => prev.includes(r.id) ? prev.filter(x => x !== r.id) : [...prev, r.id]); setPage(0); }}>
+                        {r.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                      </FilterPill>
+                    );
+                  })}
+                </FilterRow>
+
+                {/* Tipo */}
+                <FilterRow label="Tipo">
+                  {ALL_COMPANY_TYPES.filter(t => {
+                    // Only show types that have at least 1 company
+                    return companies.some(c => c.companyType === t);
+                  }).map(t => {
+                    const active = selTypes.includes(t);
+                    const count = companies.filter(c => c.companyType === t).length;
+                    return (
+                      <FilterPill key={t} active={active} color="#8B5CF6"
+                        onClick={() => { setSelTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]); setPage(0); }}>
+                        {t} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                      </FilterPill>
+                    );
+                  })}
+                </FilterRow>
+
+                {/* Tecnología */}
+                <FilterRow label="Tecnología">
+                  {TECHNOLOGIES.map(t => {
+                    const active = selTech.includes(t.id);
+                    const count = companies.filter(c => c.technologies?.includes(t.id)).length;
+                    return (
+                      <FilterPill key={t.id} active={active} color="#0EA5E9"
+                        onClick={() => { setSelTech(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]); setPage(0); }}>
+                        {t.icon} {t.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                      </FilterPill>
+                    );
+                  })}
+                </FilterRow>
+
+                {/* Estado */}
+                <FilterRow label="Estado">
+                  {(["active", "dormant", "lost"] as const).map(s => {
+                    const active = selStatus.includes(s);
+                    const count = companies.filter(c => c.status === s).length;
+                    return (
+                      <FilterPill key={s} active={active} color={STATUS_COLORS[s]}
+                        onClick={() => { setSelStatus(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]); setPage(0); }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS_COLORS[s], display: "inline-block", flexShrink: 0 }} />
+                        {(STATUS_LABELS as any)[s]} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                      </FilterPill>
+                    );
+                  })}
+                </FilterRow>
+
+                {/* Producto */}
+                <FilterRow label="Producto">
+                  {PRODUCTS.map(p => {
+                    const active = selProduct === p.id;
+                    let count = 0;
+                    for (const c of companies) {
+                      const matches = productMatches?.get(c.idx) || [];
+                      if (matches.some((m: any) => m.id === p.id && m.score >= 15)) count++;
+                    }
+                    return (
+                      <FilterPill key={p.id} active={active} color={p.color}
+                        onClick={() => { setSelProduct(prev => prev === p.id ? "" : p.id); setPage(0); }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: active ? "#FFFFFF" : p.color, display: "inline-block", flexShrink: 0 }} />
+                        {p.name} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                      </FilterPill>
+                    );
+                  })}
+                </FilterRow>
+              </div>
+            </div>
+          )}
+
+          {/* KPI Row */}
+          <div style={{ display: "flex", gap: 14, padding: "18px 28px 0", flexShrink: 0 }}>
+            <KpiCard value={stats.total.toLocaleString('es-ES')} label="Total empresas" sub="en base de datos" color="#3B82F6" onClick={() => { setSelStatus([]); setPage(0); }} />
+            <KpiCard value={stats.active.toLocaleString('es-ES')} label="Activas" sub="ultimos 6 meses" color="#10B981" onClick={() => handleKpiClick("active")} active={selStatus.length === 1 && selStatus[0] === "active"} />
+            <KpiCard value={stats.dormant.toLocaleString('es-ES')} label="Dormidas" sub="6-18 meses" color="#F59E0B" onClick={() => handleKpiClick("dormant")} active={selStatus.length === 1 && selStatus[0] === "dormant"} />
+            <KpiCard value={stats.lost.toLocaleString('es-ES')} label="Perdidas" sub="mas de 18 meses" color="#EF4444" onClick={() => handleKpiClick("lost")} active={selStatus.length === 1 && selStatus[0] === "lost"} />
+            <KpiCard value={String(stats.avgScore)} label="Score medio" sub="de 100 posibles" color="#8B5CF6" />
+          </div>
+
+          {/* Cleanup Toolbar */}
+          {cleanupMode && (
+            <CleanupToolbar
+              selectionCount={cleanupSelection.size}
+              filteredCount={filtered.length}
+              suspiciousCount={suspiciousMap.size}
+              onSelectSuspicious={handleSelectSuspicious}
+              onSelectPage={handleSelectPage}
+              onClearSelection={() => { setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
+              onExport={handleExportBlocklist}
+              onExit={() => { setCleanupMode(false); setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
+              cleanupFilter={cleanupFilter}
+              onShowAll={() => { setCleanupFilter(null); setPage(0); }}
+              onShowSelected={() => { setCleanupFilter('selected'); setPage(0); }}
+            />
+          )}
+
+          {/* Table */}
+          <CompanyTable
+            companies={paginated}
+            sortBy={sortBy} sortDir={sortDir} onSort={handleSort}
+            onSelect={setSelected} selected={selected}
+            page={page} totalPages={totalPages} setPage={setPage}
+            productMatches={productMatches}
+            cleanupMode={cleanupMode}
+            cleanupSelection={cleanupSelection}
+            onToggleCleanup={handleToggleCleanup}
+            suspiciousMap={suspiciousMap}
+            verifiedCompanies={verifiedCompanies}
+            bulkSelection={bulkSelection}
+            onToggleBulkSelect={handleToggleBulkSelect}
+            onSelectAllPage={handleSelectAllPage}
+            onBulkHide={() => setShowBulkHideConfirm(true)}
+            onClearBulkSelection={() => setBulkSelection(new Set())}
+          />
         </div>
       ) : activeView === "prospects" ? (
         <ProspectsView
@@ -651,6 +806,10 @@ export default function App() {
         />
       ) : activeView === "analysis" ? (
         <AnalysisView />
+      ) : activeView === "structuring" ? (
+        <PlaceholderView title="Structuring" description="Gestion de estructuracion de deals en curso." icon="FileText" />
+      ) : activeView === "distribution" ? (
+        <PlaceholderView title="Distribution" description="Distribucion y sindicacion de operaciones." icon="Send" />
       ) : (
         <KanbanView
           key={kanbanKey}
@@ -817,5 +976,68 @@ export default function App() {
         </>
       )}
     </AppShell>
+  );
+}
+
+/* ── Filter helpers ── */
+function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+      <span style={{
+        fontSize: 10, fontWeight: 700, color: "#94A3B8", letterSpacing: "0.08em",
+        textTransform: "uppercase" as const, width: 80, flexShrink: 0, paddingTop: 6,
+        fontFamily: "'DM Sans', sans-serif",
+      }}>{label}</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{children}</div>
+    </div>
+  );
+}
+
+function FilterPill({ children, active, color, onClick }: {
+  children: React.ReactNode; active: boolean; color: string; onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} style={{
+      fontSize: 11, padding: "4px 10px", borderRadius: 6, cursor: "pointer",
+      fontFamily: "'DM Sans', sans-serif", transition: "all 0.12s ease",
+      display: "inline-flex", alignItems: "center", gap: 4, lineHeight: 1.4,
+      whiteSpace: "nowrap" as const,
+      fontWeight: active ? 600 : 400,
+      border: active ? "none" : "1px solid #E2E8F0",
+      background: active ? color : "#FFFFFF",
+      color: active ? "#FFFFFF" : "#64748B",
+    }}>
+      {children}
+    </button>
+  );
+}
+
+function KpiCard({ value, label, sub, color, onClick, active }: {
+  value: string; label: string; sub: string; color: string; onClick?: () => void; active?: boolean;
+}) {
+  return (
+    <div onClick={onClick} style={{
+      flex: 1, background: "#FFFFFF", borderRadius: 12, padding: "16px 18px",
+      boxShadow: active ? `0 0 0 2px ${color}40` : "0 2px 6px rgba(0,0,0,0.05)",
+      borderTop: `3px solid ${color}`, cursor: onClick ? "pointer" : "default",
+      transition: "box-shadow 0.15s ease",
+    }}>
+      <div style={{ fontSize: 22, fontWeight: 600, color: "#0F172A", fontFamily: "'DM Sans', sans-serif", letterSpacing: "-0.03em", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 12, color: "#475569", marginTop: 4 }}>{label}</div>
+      <div style={{ fontSize: 11, color: "#94A3B8" }}>{sub}</div>
+    </div>
+  );
+}
+
+function PlaceholderView({ title, description }: { title: string; description: string; icon?: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "calc(100vh - 60px)", background: "#F0F4F8", gap: 12 }}>
+      <div style={{ width: 64, height: 64, borderRadius: 16, background: "#E2E8F0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+      </div>
+      <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: "#0F172A", fontFamily: "'DM Sans', sans-serif" }}>{title}</h2>
+      <p style={{ margin: 0, fontSize: 14, color: "#64748B", maxWidth: 400, textAlign: "center" }}>{description}</p>
+      <span style={{ fontSize: 11, color: "#94A3B8", background: "#E2E8F0", padding: "4px 12px", borderRadius: 6, fontWeight: 500 }}>Proximamente</span>
+    </div>
   );
 }

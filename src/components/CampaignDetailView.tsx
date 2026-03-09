@@ -1,4 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ArrowLeft, Pause, Play, Edit2, Copy, Mail,
+  TrendingUp, MousePointer, MessageSquare, Eye, Users, Clock,
+} from 'lucide-react';
 import { KPI } from './UI';
 import {
   getCampaign, getConversation, sendDraft, saveDraft, composeFromInstructions,
@@ -10,7 +15,7 @@ const COLORS = {
   bg: '#F0F4F8',
   card: '#FFFFFF',
   border: '#E2E8F0',
-  text: '#1A2B3D',
+  text: '#0F172A',
   textSecondary: '#64748B',
   textMuted: '#94A3B8',
   accent: '#3B82F6',
@@ -19,9 +24,14 @@ const COLORS = {
   orange: '#F97316',
   yellow: '#F59E0B',
   red: '#EF4444',
+  dark: '#1E293B',
 };
 
 const RADIUS = { sm: 6, md: 10, lg: 14 };
+
+const FONT = "'DM Sans', sans-serif";
+
+const CARD_SHADOW = '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)';
 
 // ── Proxy helper for GAS GET endpoints ───────────────────────────
 async function proxyFetch(action, params = {}) {
@@ -38,10 +48,10 @@ async function proxyFetch(action, params = {}) {
 
 // ── Constants ─────────────────────────────────────────────────────
 const SUB_TABS = [
-  { id: 'resumen', label: 'Resumen' },
-  { id: 'contactos', label: 'Contactos' },
-  { id: 'respuestas', label: 'Respuestas' },
-  { id: 'seguimiento', label: 'Seguimiento' },
+  { id: 'resumen', label: 'Resumen', icon: TrendingUp },
+  { id: 'contactos', label: 'Contactos', icon: Users },
+  { id: 'respuestas', label: 'Respuestas', icon: MessageSquare },
+  { id: 'seguimiento', label: 'Seguimiento', icon: Clock },
 ];
 
 const ESTADO_MAP = {
@@ -86,6 +96,24 @@ function normalizeContact(c) {
   };
 }
 
+// ── Tab content animation ─────────────────────────────────────────
+const tabMotion = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+  transition: { duration: 0.2, ease: 'easeOut' },
+};
+
+// ── Helper: badge count for each tab ──────────────────────────────
+function getTabBadge(tabId, contactos) {
+  if (tabId === 'contactos') return contactos.length || null;
+  if (tabId === 'respuestas') {
+    const replied = contactos.filter(c => c.respondido).length;
+    return replied > 0 ? replied : null;
+  }
+  return null;
+}
+
 // ── Main component ────────────────────────────────────────────────
 export default function CampaignDetailView({ campaignId, onBack }) {
   const [subTab, setSubTab] = useState('resumen');
@@ -122,7 +150,7 @@ export default function CampaignDetailView({ campaignId, onBack }) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400, fontFamily: FONT }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 36, height: 36, borderRadius: '50%',
@@ -138,66 +166,165 @@ export default function CampaignDetailView({ campaignId, onBack }) {
 
   if (error) {
     return (
-      <div style={{ margin: 24, padding: 20, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: RADIUS.md, color: '#DC2626', fontSize: 13 }}>
+      <div style={{ margin: 24, padding: 20, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: RADIUS.md, color: '#DC2626', fontSize: 13, fontFamily: FONT }}>
         Error: {error}
-        <button onClick={loadData} style={{ marginLeft: 12, padding: '4px 12px', borderRadius: RADIUS.sm, border: '1px solid #DC2626', background: 'transparent', color: '#DC2626', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>Reintentar</button>
+        <button onClick={loadData} style={{ marginLeft: 12, padding: '4px 12px', borderRadius: RADIUS.sm, border: '1px solid #DC2626', background: 'transparent', color: '#DC2626', cursor: 'pointer', fontSize: 12, fontFamily: FONT }}>Reintentar</button>
       </div>
     );
   }
 
+  const isActive = campaign?.status === 'active' || campaign?.status === 'sending';
+  const statusColor = isActive ? COLORS.green : COLORS.orange;
+  const statusLabel = isActive ? 'Activa' : (campaign?.status || 'Borrador');
+
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* ── Header with subtle gradient ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
-        padding: '18px 22px', borderRadius: RADIUS.lg,
-        background: 'linear-gradient(135deg, #F8FAFC, #EFF6FF, #F0FDF4)',
-        border: `1px solid ${COLORS.border}`,
-      }}>
+    <div style={{ padding: '20px 24px', maxWidth: 1200, margin: '0 auto', fontFamily: FONT }}>
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 24 }}>
+        {/* Back link */}
         <button
           onClick={onBack}
           style={{
-            padding: '6px 12px', borderRadius: RADIUS.sm, border: `1px solid ${COLORS.border}`,
-            background: COLORS.card, color: '#334155', fontSize: 13, fontWeight: 600,
-            cursor: 'pointer', fontFamily: 'inherit',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: 0, border: 'none', background: 'transparent',
+            color: COLORS.textSecondary, fontSize: 13, fontWeight: 500,
+            cursor: 'pointer', fontFamily: FONT, marginBottom: 12,
           }}
-        >{'\u2190'} Volver</button>
-        <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: COLORS.text }}>
-            {campaign?.name || 'Campana'}
-          </h2>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: COLORS.textSecondary }}>
-            {campaign?.type === 'mass' ? 'Masiva' : '1-a-1'}
-            {campaign?.senderName ? ` \u00b7 ${campaign.senderName}` : ''}
-            {campaign?.status ? ` \u00b7 ${campaign.status}` : ''}
-            {contactos.length > 0 ? ` \u00b7 ${contactos.length} contactos` : ''}
-          </p>
+        >
+          <ArrowLeft size={15} />
+          Volver a Campanas
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            {/* Campaign name + status badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <h2 style={{
+                margin: 0, fontSize: 20, fontWeight: 600,
+                color: COLORS.text, letterSpacing: '-0.02em',
+              }}>
+                {campaign?.name || 'Campana'}
+              </h2>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '3px 10px', borderRadius: 20,
+                background: `${statusColor}14`, fontSize: 11, fontWeight: 600,
+                color: statusColor,
+              }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: statusColor,
+                }} />
+                {statusLabel}
+              </span>
+            </div>
+
+            {/* Subtitle */}
+            <p style={{ margin: 0, fontSize: 13, color: COLORS.textSecondary }}>
+              {campaign?.type === 'mass' ? 'Campana Masiva' : 'Campana Puntual'}
+              {campaign?.senderName ? ` \u00b7 ${campaign.senderName}` : ''}
+              {campaign?.createdTime ? ` \u00b7 Del ${new Date(campaign.createdTime).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}
+              {contactos.length > 0 ? ` \u00b7 ${contactos.length} contactos` : ''}
+            </p>
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '7px 14px', borderRadius: 8,
+              border: `1px solid ${COLORS.border}`, background: COLORS.card,
+              color: COLORS.textSecondary, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', fontFamily: FONT,
+            }}>
+              {isActive ? <Pause size={14} /> : <Play size={14} />}
+              {isActive ? 'Pausar' : 'Reanudar'}
+            </button>
+            <button style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '7px 14px', borderRadius: 8,
+              border: `1px solid ${COLORS.border}`, background: COLORS.card,
+              color: COLORS.textSecondary, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', fontFamily: FONT,
+            }}>
+              <Edit2 size={14} />
+              Editar
+            </button>
+            <button style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              padding: '7px 10px', borderRadius: 8,
+              border: `1px solid ${COLORS.border}`, background: COLORS.card,
+              color: COLORS.textSecondary, cursor: 'pointer',
+            }}>
+              <Copy size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ── Sub-tabs ── */}
-      <div style={{ display: 'flex', gap: 0, background: COLORS.bg, borderRadius: 8, padding: 3, marginBottom: 20 }}>
-        {SUB_TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setSubTab(t.id)}
-            style={{
-              padding: '6px 18px', borderRadius: RADIUS.sm, border: 'none',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'inherit', transition: 'all 0.15s ease',
-              background: subTab === t.id ? COLORS.card : 'transparent',
-              color: subTab === t.id ? COLORS.text : COLORS.textSecondary,
-              boxShadow: subTab === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-            }}
-          >{t.label}</button>
-        ))}
+      {/* ── Tab bar (Figma design) ── */}
+      <div style={{
+        display: 'flex', gap: 6, padding: 4, marginBottom: 24,
+        background: COLORS.card, borderRadius: 10,
+        border: `1px solid ${COLORS.border}`,
+      }}>
+        {SUB_TABS.map(t => {
+          const isActive = subTab === t.id;
+          const Icon = t.icon;
+          const badge = getTabBadge(t.id, contactos);
+          return (
+            <button
+              key={t.id}
+              onClick={() => setSubTab(t.id)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 16px', borderRadius: 7, border: 'none',
+                fontSize: 13, fontWeight: isActive ? 600 : 500,
+                cursor: 'pointer', fontFamily: FONT,
+                transition: 'all 0.15s ease',
+                background: isActive ? COLORS.dark : 'transparent',
+                color: isActive ? '#FFFFFF' : COLORS.textSecondary,
+              }}
+            >
+              <Icon size={15} />
+              {t.label}
+              {badge != null && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  minWidth: 18, height: 18, borderRadius: 9,
+                  padding: '0 5px', fontSize: 10, fontWeight: 700,
+                  background: COLORS.orange, color: '#FFFFFF',
+                  lineHeight: 1,
+                }}>{badge}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Sub-tab content ── */}
-      {subTab === 'resumen' && <TabResumen campaign={campaign} metricas={metricas} contactos={contactos} />}
-      {subTab === 'contactos' && <TabContactos contactos={contactos} />}
-      {subTab === 'respuestas' && <TabRespuestas contactos={contactos} campaign={campaign} campaignId={campaignId} />}
-      {subTab === 'seguimiento' && <TabSeguimiento campaign={campaign} campaignId={campaignId} contactos={contactos} />}
+      {/* ── Sub-tab content with AnimatePresence ── */}
+      <AnimatePresence mode="wait">
+        {subTab === 'resumen' && (
+          <motion.div key="resumen" {...tabMotion}>
+            <TabResumen campaign={campaign} metricas={metricas} contactos={contactos} />
+          </motion.div>
+        )}
+        {subTab === 'contactos' && (
+          <motion.div key="contactos" {...tabMotion}>
+            <TabContactos contactos={contactos} />
+          </motion.div>
+        )}
+        {subTab === 'respuestas' && (
+          <motion.div key="respuestas" {...tabMotion}>
+            <TabRespuestas contactos={contactos} campaign={campaign} campaignId={campaignId} />
+          </motion.div>
+        )}
+        {subTab === 'seguimiento' && (
+          <motion.div key="seguimiento" {...tabMotion}>
+            <TabSeguimiento campaign={campaign} campaignId={campaignId} contactos={contactos} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -217,6 +344,13 @@ function TabResumen({ campaign, metricas, contactos }) {
 
   const pct = (n) => totalSent > 0 ? ((n / totalSent) * 100).toFixed(1) + '%' : '\u2014';
 
+  const kpis = [
+    { label: 'Enviados', value: totalSent, sub: `de ${totalContacts}`, accent: COLORS.accent, icon: Mail },
+    { label: 'Abiertos', value: totalOpened, sub: pct(totalOpened), accent: COLORS.orange, icon: Eye },
+    { label: 'Con clic', value: totalClicked, sub: pct(totalClicked), accent: COLORS.purple, icon: MousePointer },
+    { label: 'Respondidos', value: totalReplied, sub: pct(totalReplied), accent: COLORS.green, icon: MessageSquare },
+  ];
+
   const funnel = [
     { label: 'Total contactos', value: totalContacts, color: '#64748B' },
     { label: 'Enviados', value: totalSent, color: COLORS.accent },
@@ -234,22 +368,46 @@ function TabResumen({ campaign, metricas, contactos }) {
 
   return (
     <div>
-      {/* KPIs with accent-colored borders */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 24 }}>
-        <AccentKpi label="Total" value={totalContacts} accent="#64748B" />
-        <AccentKpi label="Enviados" value={totalSent} accent={COLORS.accent} />
-        <AccentKpi label="Abiertos" value={`${totalOpened} (${pct(totalOpened)})`} accent={COLORS.green} />
-        <AccentKpi label="Clics" value={`${totalClicked} (${pct(totalClicked)})`} accent={COLORS.yellow} />
-        <AccentKpi label="Respondidos" value={`${totalReplied} (${pct(totalReplied)})`} accent={COLORS.purple} />
+      {/* KPI cards with colored top border + icon */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
+        {kpis.map(k => {
+          const Icon = k.icon;
+          return (
+            <div key={k.label} style={{
+              background: COLORS.card, borderRadius: 12,
+              borderTop: `3px solid ${k.accent}`,
+              padding: '16px 18px',
+              boxShadow: CARD_SHADOW,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, color: COLORS.textSecondary,
+                  textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: FONT,
+                }}>{k.label}</span>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: `${k.accent}14`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon size={16} color={k.accent} />
+                </div>
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: COLORS.text, fontFamily: FONT, lineHeight: 1 }}>
+                {k.value}
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>{k.sub}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Funnel */}
-      <div style={{ padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, marginBottom: 20 }}>
-        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text }}>Embudo de conversion</h3>
+      <div style={{ padding: 20, background: COLORS.card, borderRadius: 12, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text, fontFamily: FONT }}>Embudo de conversion</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {funnel.map(f => (
             <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ width: 110, fontSize: 12, color: COLORS.textSecondary, textAlign: 'right' }}>{f.label}</span>
+              <span style={{ width: 110, fontSize: 12, color: COLORS.textSecondary, textAlign: 'right', fontFamily: FONT }}>{f.label}</span>
               <div style={{ flex: 1, height: 28, background: COLORS.bg, borderRadius: RADIUS.sm, overflow: 'hidden' }}>
                 <div style={{
                   width: `${(f.value / maxVal) * 100}%`,
@@ -263,7 +421,7 @@ function TabResumen({ campaign, metricas, contactos }) {
                   )}
                 </div>
               </div>
-              <span style={{ width: 50, fontSize: 13, fontWeight: 700, color: COLORS.text }}>{f.value}</span>
+              <span style={{ width: 50, fontSize: 13, fontWeight: 700, color: COLORS.text, fontFamily: FONT }}>{f.value}</span>
             </div>
           ))}
         </div>
@@ -274,16 +432,16 @@ function TabResumen({ campaign, metricas, contactos }) {
 
       {/* A/B Test comparison */}
       {hasAB && (
-        <div style={{ padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text }}>Test A/B</h3>
+        <div style={{ padding: 20, background: COLORS.card, borderRadius: 12, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
+          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text, fontFamily: FONT }}>Test A/B</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <ABColumn label="A" subject={campaign?.subjectA} data={varA} color={COLORS.accent} />
             <ABColumn label="B" subject={campaign?.subjectB} data={varB} color={COLORS.yellow} />
           </div>
           {varFinal && varFinal.total > 0 && (
             <div style={{ marginTop: 16, padding: 14, background: COLORS.bg, borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.text, marginBottom: 8 }}>Grupo Final</div>
-              <div style={{ display: 'flex', gap: 20, fontSize: 12, color: COLORS.textSecondary }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.text, marginBottom: 8, fontFamily: FONT }}>Grupo Final</div>
+              <div style={{ display: 'flex', gap: 20, fontSize: 12, color: COLORS.textSecondary, fontFamily: FONT }}>
                 <span>Total: <strong style={{ color: COLORS.text }}>{varFinal.total}</strong></span>
                 <span>Enviados: <strong style={{ color: COLORS.text }}>{varFinal.enviados}</strong></span>
                 <span>Pendientes: <strong style={{ color: '#D97706' }}>{varFinal.pendientes}</strong></span>
@@ -297,8 +455,8 @@ function TabResumen({ campaign, metricas, contactos }) {
       )}
 
       {/* Campaign info */}
-      <div style={{ padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md }}>
-        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text }}>Informacion</h3>
+      <div style={{ padding: 20, background: COLORS.card, borderRadius: 12, boxShadow: CARD_SHADOW }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text, fontFamily: FONT }}>Informacion</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 13 }}>
           <InfoRow label="Remitente" value={campaign?.senderName || '\u2014'} />
           <InfoRow label="Tipo" value={campaign?.type === 'mass' ? 'Masiva' : '1-a-1'} />
@@ -312,33 +470,16 @@ function TabResumen({ campaign, metricas, contactos }) {
   );
 }
 
-function AccentKpi({ label, value, accent }) {
-  return (
-    <div style={{
-      background: COLORS.card,
-      border: `1px solid ${COLORS.border}`,
-      borderTop: `3px solid ${accent}`,
-      borderRadius: RADIUS.md,
-      padding: '14px 16px',
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.text }}>{value}</div>
-    </div>
-  );
-}
-
 function ABColumn({ label, subject, data = {}, color }) {
   const pct = (n) => data.enviados > 0 ? ((n / data.enviados) * 100).toFixed(1) + '%' : '\u2014';
 
   return (
     <div style={{ padding: 14, background: COLORS.bg, borderRadius: 8, border: `2px solid ${color}20` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 14, fontWeight: 800, color }}>Variante {label}</span>
+        <span style={{ fontSize: 14, fontWeight: 800, color, fontFamily: FONT }}>Variante {label}</span>
       </div>
       {subject && (
-        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.text, marginBottom: 10, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.text, marginBottom: 10, lineHeight: 1.4, fontFamily: FONT }}>
           {subject}
         </div>
       )}
@@ -367,10 +508,10 @@ function ABColumn({ label, subject, data = {}, color }) {
 function InfoRow({ label, value }) {
   return (
     <div>
-      <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: FONT }}>
         {label}
       </span>
-      <div style={{ fontSize: 13, color: COLORS.text, marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 13, color: COLORS.text, marginTop: 2, fontFamily: FONT }}>{value}</div>
     </div>
   );
 }
@@ -424,9 +565,9 @@ function TabContactos({ contactos }) {
             key={f.id}
             onClick={() => setFilter(f.id)}
             style={{
-              padding: '4px 12px', borderRadius: 20, border: 'none',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              background: filter === f.id ? COLORS.accent : COLORS.bg,
+              padding: '5px 14px', borderRadius: 20, border: 'none',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: FONT,
+              background: filter === f.id ? COLORS.dark : COLORS.bg,
               color: filter === f.id ? '#FFFFFF' : COLORS.textSecondary,
               transition: 'all 0.15s',
             }}
@@ -436,24 +577,25 @@ function TabContactos({ contactos }) {
           type="text" placeholder="Buscar nombre/email/empresa..."
           value={search} onChange={e => setSearch(e.target.value)}
           style={{
-            marginLeft: 'auto', padding: '5px 12px', borderRadius: 8,
-            border: `1px solid ${COLORS.border}`, fontSize: 12, fontFamily: 'inherit',
-            width: 220, outline: 'none',
+            marginLeft: 'auto', padding: '6px 14px', borderRadius: 8,
+            border: `1px solid ${COLORS.border}`, fontSize: 12, fontFamily: FONT,
+            width: 220, outline: 'none', background: COLORS.card,
           }}
         />
       </div>
 
-      <div style={{ marginBottom: 8, fontSize: 11, color: COLORS.textSecondary }}>
+      <div style={{ marginBottom: 8, fontSize: 11, color: COLORS.textSecondary, fontFamily: FONT }}>
         Mostrando {filtered.length} de {contactos.length} contactos
       </div>
 
       {/* Table */}
-      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, overflow: 'hidden' }}>
+      <div style={{ background: COLORS.card, borderRadius: 12, boxShadow: CARD_SHADOW, overflow: 'hidden' }}>
         {/* Header */}
         <div style={{
           display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 70px 80px 65px 65px 90px',
-          padding: '8px 14px', background: COLORS.bg, borderBottom: `1px solid ${COLORS.border}`,
-          fontSize: 10, fontWeight: 700, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px',
+          padding: '10px 16px', background: '#FAFAFA', borderBottom: `1px solid ${COLORS.border}`,
+          fontSize: 10, fontWeight: 700, color: COLORS.textMuted, textTransform: 'uppercase',
+          letterSpacing: '0.08em', fontFamily: FONT,
         }}>
           <span>Email</span>
           <span>Nombre</span>
@@ -471,18 +613,20 @@ function TabContactos({ contactos }) {
 
         {/* Rows */}
         {filtered.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13 }}>Sin contactos</div>
+          <div style={{ padding: 24, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13, fontFamily: FONT }}>Sin contactos</div>
         ) : filtered.map((c, i) => (
           <div key={c.email || i}>
             <div
               onClick={() => setExpanded(expanded === i ? null : i)}
               style={{
                 display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 70px 80px 65px 65px 90px',
-                padding: '10px 14px', borderBottom: '1px solid #F1F5F9',
-                fontSize: 12, color: '#334155', cursor: 'pointer',
-                background: expanded === i ? '#EFF6FF' : 'transparent',
+                padding: '10px 16px', borderBottom: '1px solid #F1F5F9',
+                fontSize: 12, color: '#334155', cursor: 'pointer', fontFamily: FONT,
+                background: expanded === i ? '#F8FAFC' : 'transparent',
                 transition: 'background 0.1s',
               }}
+              onMouseEnter={e => { if (expanded !== i) e.currentTarget.style.background = '#FAFAFA'; }}
+              onMouseLeave={e => { if (expanded !== i) e.currentTarget.style.background = 'transparent'; }}
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre || '\u2014'}</span>
@@ -506,8 +650,8 @@ function TabContactos({ contactos }) {
 
             {/* Expanded: tracking timeline */}
             {expanded === i && (
-              <div style={{ padding: '12px 14px 12px 28px', background: COLORS.bg, borderBottom: `1px solid ${COLORS.border}` }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12 }}>
+              <div style={{ padding: '12px 16px 12px 28px', background: '#F8FAFC', borderBottom: `1px solid ${COLORS.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12, fontFamily: FONT }}>
                   {c.fechaEnvio && (
                     <div>
                       <span style={{ color: COLORS.textSecondary }}>Enviado: </span>
@@ -562,19 +706,23 @@ function TabContactos({ contactos }) {
 
 function StatusBadge({ status }) {
   const config = {
-    sent: { label: 'Enviado', bg: '#EFF6FF', color: COLORS.accent },
+    sent: { label: 'Enviado', bg: '#ECFDF5', color: '#059669' },
     opened: { label: 'Abierto', bg: '#ECFDF5', color: '#059669' },
-    clicked: { label: 'Clic', bg: '#FFFBEB', color: '#D97706' },
-    replied: { label: 'Respondido', bg: '#F5F3FF', color: '#7C3AED' },
+    clicked: { label: 'Clic', bg: '#F5F3FF', color: '#7C3AED' },
+    replied: { label: 'Respondido', bg: '#FFF7ED', color: '#EA580C' },
     error: { label: 'Error', bg: '#FEF2F2', color: '#DC2626' },
-    pending: { label: 'Pendiente', bg: '#F1F5F9', color: COLORS.textSecondary },
+    pending: { label: 'Pendiente', bg: '#F1F5F9', color: '#CBD5E1' },
   };
   const c = config[status] || config.pending;
   return (
     <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
       padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
-      background: c.bg, color: c.color,
-    }}>{c.label}</span>
+      background: c.bg, color: c.color, fontFamily: FONT,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: c.color }} />
+      {c.label}
+    </span>
   );
 }
 
@@ -663,22 +811,27 @@ function TabRespuestas({ contactos, campaign, campaignId }) {
             key={f.id}
             onClick={() => setViewFilter(f.id)}
             style={{
-              padding: '5px 14px', borderRadius: 20, border: 'none',
-              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              background: viewFilter === f.id ? COLORS.purple : COLORS.bg,
+              padding: '6px 16px', borderRadius: 20, border: 'none',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: FONT,
+              background: viewFilter === f.id ? COLORS.dark : COLORS.bg,
               color: viewFilter === f.id ? '#FFFFFF' : COLORS.textSecondary,
+              transition: 'all 0.15s',
             }}
           >{f.label}</button>
         ))}
       </div>
 
       {visible.length === 0 ? (
-        <div style={{ padding: 32, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13, background: COLORS.bg, borderRadius: RADIUS.md, border: `1px dashed ${COLORS.border}` }}>
+        <div style={{
+          padding: 32, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13,
+          background: COLORS.card, borderRadius: 12, boxShadow: CARD_SHADOW,
+          border: `1px dashed ${COLORS.border}`, fontFamily: FONT,
+        }}>
           {viewFilter === 'pending' ? 'No hay respuestas pendientes de gestionar' : 'No hay respuestas procesadas'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {visible.map(c => (
+        <div style={{ background: COLORS.card, borderRadius: 12, boxShadow: CARD_SHADOW, overflow: 'hidden' }}>
+          {visible.map((c, idx) => (
             <ResponseCard
               key={c.email}
               contact={c}
@@ -693,6 +846,7 @@ function TabRespuestas({ contactos, campaign, campaignId }) {
               onCompose={() => handleCompose(c.email)}
               onSaveDraft={() => handleSaveDraft(c.email)}
               onSendDraft={() => handleSendDraft(c.email)}
+              isLast={idx === visible.length - 1}
             />
           ))}
         </div>
@@ -701,8 +855,9 @@ function TabRespuestas({ contactos, campaign, campaignId }) {
       {toast && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          padding: '8px 20px', borderRadius: 8, background: COLORS.text, color: '#FFFFFF',
+          padding: '8px 20px', borderRadius: 8, background: COLORS.dark, color: '#FFFFFF',
           fontSize: 13, fontWeight: 600, zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          fontFamily: FONT,
         }}>{toast}</div>
       )}
     </div>
@@ -712,41 +867,61 @@ function TabRespuestas({ contactos, campaign, campaignId }) {
 function ResponseCard({
   contact, isExpanded, onExpand, conversation, convLoading,
   draftText, setDraftText, draftLoading, sendingDraft,
-  onCompose, onSaveDraft, onSendDraft,
+  onCompose, onSaveDraft, onSendDraft, isLast,
 }) {
   return (
-    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, overflow: 'hidden' }}>
+    <div style={{ borderBottom: isLast ? 'none' : '1px solid #F1F5F9' }}>
       {/* Summary row */}
-      <div onClick={onExpand} style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div
+        onClick={onExpand}
+        style={{
+          padding: '14px 18px', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 12,
+          transition: 'background 0.1s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = '#FAFAFA'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+      >
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.text }}>
-            {contact.nombre || contact.email}
-            {contact.organizacion && <span style={{ fontWeight: 400, color: COLORS.textSecondary }}> \u2014 {contact.organizacion}</span>}
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.text, fontFamily: FONT }}>
+            {contact.organizacion || contact.nombre || contact.email}
           </div>
-          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{contact.email}</div>
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2, fontFamily: FONT }}>
+            {contact.nombre && contact.organizacion ? `${contact.nombre} \u00b7 ` : ''}{contact.email}
+          </div>
         </div>
+        <StatusBadge status={contact.status} />
         {contact.respuestaEnviada === 'Si' && (
-          <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: '#ECFDF5', color: '#059669' }}>
-            Resp. enviada
-          </span>
+          <span style={{
+            padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+            background: '#ECFDF5', color: '#059669', fontFamily: FONT,
+          }}>Resp. enviada</span>
         )}
-        <span style={{ fontSize: 14, color: COLORS.textSecondary }}>{isExpanded ? '\u25B2' : '\u25BC'}</span>
+        <button
+          onClick={e => { e.stopPropagation(); onExpand(); }}
+          style={{
+            padding: '5px 12px', borderRadius: 6, border: `1px solid ${COLORS.accent}`,
+            background: 'transparent', color: COLORS.accent, fontSize: 12,
+            fontWeight: 600, cursor: 'pointer', fontFamily: FONT,
+          }}
+        >Responder</button>
+        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{isExpanded ? '\u25B2' : '\u25BC'}</span>
       </div>
 
       {/* Expanded: conversation + draft */}
       {isExpanded && (
-        <div style={{ padding: '0 16px 16px', borderTop: '1px solid #F1F5F9' }}>
+        <div style={{ padding: '0 18px 18px', borderTop: '1px solid #F1F5F9' }}>
           {convLoading ? (
-            <div style={{ padding: 20, textAlign: 'center', color: COLORS.textSecondary, fontSize: 12 }}>Cargando conversacion...</div>
+            <div style={{ padding: 20, textAlign: 'center', color: COLORS.textSecondary, fontSize: 12, fontFamily: FONT }}>Cargando conversacion...</div>
           ) : conversation?.error ? (
-            <div style={{ padding: 12, color: '#DC2626', fontSize: 12 }}>Error cargando la conversacion</div>
+            <div style={{ padding: 12, color: '#DC2626', fontSize: 12, fontFamily: FONT }}>Error cargando la conversacion</div>
           ) : (
             <>
               {/* Last reply from contact */}
               {conversation?.respuesta && (
-                <div style={{ margin: '12px 0', padding: 12, background: '#FFF7ED', borderRadius: 8, border: '1px solid #FED7AA' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#EA580C', marginBottom: 4 }}>Respuesta del contacto</div>
-                  <div style={{ fontSize: 12, color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                <div style={{ margin: '12px 0', padding: 14, background: '#FFF7ED', borderRadius: 10, border: '1px solid #FED7AA' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#EA580C', marginBottom: 4, fontFamily: FONT }}>Respuesta del contacto</div>
+                  <div style={{ fontSize: 12, color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5, fontFamily: FONT }}>
                     {conversation.respuesta.cuerpo || conversation.respuesta}
                   </div>
                 </div>
@@ -754,8 +929,8 @@ function ResponseCard({
 
               {/* Existing draft */}
               {conversation?.borrador && conversation.borrador.cuerpo && (
-                <div style={{ margin: '8px 0', padding: 10, background: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent, marginBottom: 4 }}>
+                <div style={{ margin: '8px 0', padding: 12, background: '#EFF6FF', borderRadius: 10, border: '1px solid #BFDBFE' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent, marginBottom: 4, fontFamily: FONT }}>
                     Borrador existente ({conversation.borrador.estado || 'preparado'})
                   </div>
                 </div>
@@ -764,13 +939,13 @@ function ResponseCard({
               {/* Draft editor */}
               <div style={{ marginTop: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.text }}>Borrador de respuesta</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.text, fontFamily: FONT }}>Borrador de respuesta</span>
                   <button
                     onClick={onCompose} disabled={draftLoading}
                     style={{
-                      padding: '3px 10px', borderRadius: RADIUS.sm, border: '1px solid #DDD6FE',
+                      padding: '4px 12px', borderRadius: RADIUS.sm, border: '1px solid #DDD6FE',
                       background: '#F5F3FF', color: '#7C3AED', fontSize: 11, fontWeight: 600,
-                      cursor: draftLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                      cursor: draftLoading ? 'not-allowed' : 'pointer', fontFamily: FONT,
                     }}
                   >{draftLoading ? 'Generando...' : 'Generar con IA'}</button>
                 </div>
@@ -778,25 +953,26 @@ function ResponseCard({
                   value={draftText} onChange={e => setDraftText(e.target.value)} rows={6}
                   placeholder="Escribe o genera un borrador con IA..."
                   style={{
-                    width: '100%', padding: '10px 12px', borderRadius: 8,
-                    border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: 'inherit',
+                    width: '100%', padding: '10px 14px', borderRadius: 10,
+                    border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: FONT,
                     resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+                    background: '#FAFAFA',
                   }}
                 />
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button onClick={onSaveDraft} style={{
-                    padding: '6px 14px', borderRadius: RADIUS.sm, border: `1px solid ${COLORS.border}`,
+                    padding: '7px 16px', borderRadius: 8, border: `1px solid ${COLORS.border}`,
                     background: COLORS.card, color: '#334155', fontSize: 12, fontWeight: 600,
-                    cursor: 'pointer', fontFamily: 'inherit',
+                    cursor: 'pointer', fontFamily: FONT,
                   }}>Guardar borrador</button>
                   <button
                     onClick={onSendDraft} disabled={sendingDraft || !draftText.trim()}
                     style={{
-                      padding: '6px 14px', borderRadius: RADIUS.sm, border: 'none',
-                      background: sendingDraft || !draftText.trim() ? '#CBD5E1' : COLORS.green,
+                      padding: '7px 16px', borderRadius: 8, border: 'none',
+                      background: sendingDraft || !draftText.trim() ? '#CBD5E1' : COLORS.accent,
                       color: '#FFFFFF', fontSize: 12, fontWeight: 700,
                       cursor: sendingDraft || !draftText.trim() ? 'not-allowed' : 'pointer',
-                      fontFamily: 'inherit',
+                      fontFamily: FONT,
                     }}
                   >{sendingDraft ? 'Enviando...' : 'Enviar'}</button>
                 </div>
@@ -877,69 +1053,103 @@ function TabSeguimiento({ campaign, campaignId, contactos }) {
     <div>
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
-        <AccentKpi label="Elegibles follow-up" value={eligible.length} accent={COLORS.accent} />
-        <AccentKpi label="Programados" value={scheduled.length} accent="#7C3AED" />
-        <AccentKpi label="Generando" value={generatingFU.length} accent={COLORS.yellow} />
-        <AccentKpi label="Enviados" value={sent.length} accent={COLORS.green} />
+        {[
+          { label: 'Elegibles follow-up', value: eligible.length, accent: COLORS.accent, icon: Users },
+          { label: 'Programados', value: scheduled.length, accent: '#7C3AED', icon: Clock },
+          { label: 'Generando', value: generatingFU.length, accent: COLORS.yellow, icon: Mail },
+          { label: 'Enviados', value: sent.length, accent: COLORS.green, icon: MessageSquare },
+        ].map(k => {
+          const Icon = k.icon;
+          return (
+            <div key={k.label} style={{
+              background: COLORS.card, borderRadius: 12,
+              borderTop: `3px solid ${k.accent}`,
+              padding: '16px 18px', boxShadow: CARD_SHADOW,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, color: COLORS.textSecondary,
+                  textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: FONT,
+                }}>{k.label}</span>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: `${k.accent}14`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Icon size={16} color={k.accent} />
+                </div>
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 600, color: COLORS.text, fontFamily: FONT }}>{k.value}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-        <button
-          onClick={handleGenerateBatch}
-          disabled={generating || eligible.length === 0}
-          style={{
-            padding: '8px 18px', borderRadius: 8, border: 'none',
-            background: generating || eligible.length === 0 ? '#CBD5E1' : 'linear-gradient(135deg, #7C3AED, #3B82F6)',
-            color: '#FFFFFF', fontSize: 13, fontWeight: 700,
-            cursor: generating || eligible.length === 0 ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >{generating ? 'Generando...' : `Follow-up masivo (${eligible.length} elegibles)`}</button>
-
-        {scheduled.length > 0 && (
+      <div style={{
+        background: COLORS.card, borderRadius: 12, boxShadow: CARD_SHADOW,
+        padding: 20, marginBottom: 20,
+      }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text, fontFamily: FONT }}>Acciones</h3>
+        <div style={{ display: 'flex', gap: 10 }}>
           <button
-            onClick={handleSendBatch} disabled={sending}
+            onClick={handleGenerateBatch}
+            disabled={generating || eligible.length === 0}
             style={{
               padding: '8px 18px', borderRadius: 8, border: 'none',
-              background: sending ? '#CBD5E1' : COLORS.green,
+              background: generating || eligible.length === 0 ? '#CBD5E1' : COLORS.accent,
               color: '#FFFFFF', fontSize: 13, fontWeight: 700,
-              cursor: sending ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+              cursor: generating || eligible.length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: FONT,
             }}
-          >{sending ? 'Enviando...' : `Enviar ${scheduled.length} listos`}</button>
-        )}
+          >{generating ? 'Generando...' : `Activar seguimiento (${eligible.length} elegibles)`}</button>
+
+          {scheduled.length > 0 && (
+            <button
+              onClick={handleSendBatch} disabled={sending}
+              style={{
+                padding: '8px 18px', borderRadius: 8,
+                border: `1px solid ${COLORS.border}`,
+                background: sending ? '#CBD5E1' : COLORS.card,
+                color: sending ? '#FFFFFF' : COLORS.text, fontSize: 13, fontWeight: 600,
+                cursor: sending ? 'not-allowed' : 'pointer', fontFamily: FONT,
+              }}
+            >{sending ? 'Enviando...' : `Guardar borrador (${scheduled.length})`}</button>
+          )}
+        </div>
       </div>
 
       {/* Follow-up list */}
-      {loading ? (
-        <div style={{ padding: 24, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13 }}>Cargando follow-ups...</div>
-      ) : followUps.length === 0 ? (
-        <div style={{
-          padding: 32, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13,
-          background: COLORS.bg, borderRadius: RADIUS.md, border: `1px dashed ${COLORS.border}`,
-        }}>
-          No hay follow-ups registrados para esta campana
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {followUps.map(fu => (
-            <FollowUpRow key={fu.id} followUp={fu} />
-          ))}
-        </div>
-      )}
+      <div style={{ background: COLORS.card, borderRadius: 12, boxShadow: CARD_SHADOW, overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: 24, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13, fontFamily: FONT }}>Cargando follow-ups...</div>
+        ) : followUps.length === 0 ? (
+          <div style={{
+            padding: 32, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13,
+            fontFamily: FONT,
+          }}>
+            No hay follow-ups registrados para esta campana
+          </div>
+        ) : (
+          followUps.map((fu, idx) => (
+            <FollowUpRow key={fu.id} followUp={fu} isLast={idx === followUps.length - 1} />
+          ))
+        )}
+      </div>
 
       {toast && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          padding: '8px 20px', borderRadius: 8, background: COLORS.text, color: '#FFFFFF',
+          padding: '8px 20px', borderRadius: 8, background: COLORS.dark, color: '#FFFFFF',
           fontSize: 13, fontWeight: 600, zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          fontFamily: FONT,
         }}>{toast}</div>
       )}
     </div>
   );
 }
 
-function FollowUpRow({ followUp }) {
+function FollowUpRow({ followUp, isLast }) {
   const statusConfig = {
     scheduled: { label: 'Programado', color: '#7C3AED', bg: '#F5F3FF' },
     generating: { label: 'Generando', color: '#D97706', bg: '#FFFBEB' },
@@ -951,24 +1161,32 @@ function FollowUpRow({ followUp }) {
 
   return (
     <div style={{
-      padding: '10px 16px', background: COLORS.card,
-      border: `1px solid ${COLORS.border}`, borderRadius: 8,
+      padding: '12px 18px',
+      borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
       display: 'flex', alignItems: 'center', gap: 12,
-    }}>
+      transition: 'background 0.1s',
+    }}
+      onMouseEnter={e => { e.currentTarget.style.background = '#FAFAFA'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
       <span style={{
-        padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
-        background: st.bg, color: st.color,
-      }}>{st.label}</span>
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600,
+        background: st.bg, color: st.color, fontFamily: FONT,
+      }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: st.color }} />
+        {st.label}
+      </span>
       <div style={{ flex: 1 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.text }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.text, fontFamily: FONT }}>
           {followUp.name || followUp.email}
         </span>
         {followUp.email && (
-          <span style={{ fontSize: 12, color: COLORS.textSecondary, marginLeft: 8 }}>{followUp.email}</span>
+          <span style={{ fontSize: 12, color: COLORS.textSecondary, marginLeft: 8, fontFamily: FONT }}>{followUp.email}</span>
         )}
       </div>
       {followUp.scheduledAt && (
-        <span style={{ fontSize: 11, color: COLORS.textSecondary }}>
+        <span style={{ fontSize: 11, color: COLORS.textSecondary, fontFamily: FONT }}>
           {new Date(followUp.scheduledAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
         </span>
       )}

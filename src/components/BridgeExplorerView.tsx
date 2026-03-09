@@ -1,8 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { fetchCandidateTargets, fetchAllBridgeTargets, upsertCandidateTarget } from '../utils/airtableCandidates';
-import { fetchSentDomains, getCampaigns, getCampaign, addRecipients, startCampaign, sendTestEmail } from '../utils/campaignApi';
+import { fetchSentDomains } from '../utils/campaignApi';
 import { callGemini } from '../utils/gemini';
 import { getSenders } from '../utils/senderConfig';
+
+const BRIDGE_API_URL = import.meta.env.VITE_BRIDGE_WEB_APP_URL || '';
+const BRIDGE_API_TOKEN = import.meta.env.VITE_BRIDGE_API_TOKEN || '';
 
 // ── Design tokens (same palette as BridgeCampaignView) ──────────────
 const T = {
@@ -141,9 +144,8 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   const [savedTargets, setSavedTargets] = useState({});
   const [loadingData, setLoadingData] = useState(true);
 
-  // Campaign detection
-  const [bridgeCampaignId, setBridgeCampaignId] = useState(null);
-  const [bridgeCampaign, setBridgeCampaign] = useState(null);
+  // Bridge GAS readiness
+  const bridgeReady = !!BRIDGE_API_URL;
 
   // LLM ordering
   const [llmOpen, setLlmOpen] = useState(false);
@@ -187,7 +189,6 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   const [testEmailLoading, setTestEmailLoading] = useState(false);
   const [preparingLoading, setPreparingLoading] = useState(false);
   const [preparedOk, setPreparedOk] = useState(false);
-  const [launchLoading, setLaunchLoading] = useState(false);
   const [launchResult, setLaunchResult] = useState(null);
   const [confirmLaunch, setConfirmLaunch] = useState(false);
   const [wizardError, setWizardError] = useState('');
@@ -255,21 +256,6 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
         }
         setAllSentDomains(sentSet);
       } catch { /* non-blocking — previousTargets prop is the fallback */ }
-
-      // 4. Auto-detect Bridge campaign ID
-      try {
-        const res = await getCampaigns();
-        const campaigns = res.campaigns || [];
-        const bridgeCamps = campaigns.filter(c => (c.name || '').toLowerCase().includes('bridge'));
-        if (bridgeCamps.length > 0) {
-          bridgeCamps.sort((a, b) => new Date(b.createdTime) - new Date(a.createdTime));
-          const campId = bridgeCamps[0].id;
-          setBridgeCampaignId(campId);
-          // Fetch full campaign details for wizard
-          const detail = await getCampaign(campId).catch(() => null);
-          setBridgeCampaign(detail?.campaign || bridgeCamps[0]);
-        }
-      } catch { /* non-blocking */ }
 
     } finally {
       setLoadingData(false);
@@ -602,24 +588,40 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
 
   function getSubjectForWizard() {
     if (subjectMode === 'new') return customSubject;
-    if (bridgeCampaign) {
-      const winner = bridgeCampaign.abWinner;
-      if (winner === 'B' && bridgeCampaign.subjectB) return bridgeCampaign.subjectB;
-      return bridgeCampaign.subjectA || '';
-    }
-    return '';
+    return customSubject || 'Bridge Debt Energy — Alter5';
+  }
+
+  async function bridgeGasSend(contacts) {
+    if (!BRIDGE_API_URL) throw new Error('VITE_BRIDGE_WEB_APP_URL no configurada');
+    const res = await fetch(BRIDGE_API_URL + '?action=sendFollowUpBatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({
+        emails: contacts,
+        token: BRIDGE_API_TOKEN,
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Error del servidor Bridge GAS');
+    return data;
   }
 
   async function handleTestEmail() {
-    if (!bridgeCampaignId) {
-      setWizardError('No se encontró la campaña Bridge. No es posible enviar prueba.');
+    if (!bridgeReady) {
+      setWizardError('Bridge GAS no configurado. Verifica VITE_BRIDGE_WEB_APP_URL.');
       return;
     }
     setTestEmailLoading(true);
     setWizardError('');
     try {
-      await sendTestEmail(bridgeCampaignId, 'salvador.carrillo@alter-5.com');
+      const subject = getSubjectForWizard();
+      await bridgeGasSend([{
+        email: 'salvador.carrillo@alter-5.com',
+        asunto: subject ? `[TEST] ${subject}` : '[TEST] Bridge Debt Energy',
+        cuerpoHtml: `<p>Email de prueba del wizard Bridge Explorer.</p><p>Asunto: ${subject || '(sin asunto)'}</p><p>Destinatarios: ${wizardRecipients.length}</p>`,
+      }]);
       setTestEmailSent(true);
+      showToast('Prueba enviada a salvador.carrillo@alter-5.com');
     } catch (err) {
       setWizardError(`Error al enviar prueba: ${err.message}`);
     } finally {
@@ -628,8 +630,8 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
   }
 
   async function handlePrepare() {
-    if (!bridgeCampaignId) {
-      setWizardError('No se encontró la campaña Bridge. Por favor actualiza desde el dashboard.');
+    if (!bridgeReady) {
+      setWizardError('Bridge GAS no configurado. Verifica VITE_BRIDGE_WEB_APP_URL.');
       return;
     }
     if (wizardRecipients.length === 0) {
@@ -639,17 +641,19 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     setPreparingLoading(true);
     setWizardError('');
     try {
-      // Add recipients to the Bridge campaign
-      const recipientsPayload = wizardRecipients.map(r => ({
+      const subject = getSubjectForWizard();
+      const emailPayload = wizardRecipients.map(r => ({
         email: r.email,
-        name: r.name,
-        lastName: r.lastName || '',
-        organization: r.organization,
-        role: r.role || '',
+        asunto: subject,
+        nombre: r.name || '',
+        apellido: r.lastName || '',
+        organizacion: r.organization || '',
+        cargo: r.role || '',
       }));
-      await addRecipients(bridgeCampaignId, recipientsPayload);
 
-      // Mark all selected companies as 'sent' in Airtable
+      const result = await bridgeGasSend(emailPayload);
+
+      // Mark all selected companies as 'sent' in CampaignTargets
       const markPromises = [...selectedForSend].map(async domain => {
         const company = allCompanies.find(c => c.domain?.toLowerCase() === domain);
         if (!company) return;
@@ -678,27 +682,15 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
         return next;
       });
 
+      const sent = result.totalEnviados || wizardRecipients.length;
+      const errors = result.totalErrores || 0;
       setPreparedOk(true);
-      showToast(`✅ ${wizardRecipients.length} emails preparados.`);
+      setLaunchResult({ sent, errors: errors > 0 ? Array(errors).fill({ email: '?', error: 'error' }) : [] });
+      showToast(`✅ ${sent} emails enviados${errors > 0 ? `, ${errors} errores` : ''}`);
     } catch (err) {
-      setWizardError(`Error al preparar: ${err.message}`);
+      setWizardError(`Error al enviar: ${err.message}`);
     } finally {
       setPreparingLoading(false);
-    }
-  }
-
-  async function handleLaunch() {
-    if (!bridgeCampaignId) return;
-    setLaunchLoading(true);
-    setWizardError('');
-    try {
-      const result = await startCampaign(bridgeCampaignId);
-      setLaunchResult(result);
-      setConfirmLaunch(false);
-    } catch (err) {
-      setWizardError(`Error al lanzar: ${err.message}`);
-    } finally {
-      setLaunchLoading(false);
     }
   }
 
@@ -1055,55 +1047,22 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
             {wizardStep === 2 && (
               <div>
                 <div style={{ fontFamily: T.sans, fontWeight: 600, fontSize: 14, color: T.title, marginBottom: 16 }}>
-                  ¿Qué asunto vas a usar?
+                  Asunto del email
                 </div>
-                {bridgeCampaign && (
-                  <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 16, cursor: 'pointer' }}>
-                    <input
-                      type="radio" checked={subjectMode === 'existing'}
-                      onChange={() => setSubjectMode('existing')}
-                      style={{ marginTop: 2, accentColor: T.primary }}
-                    />
-                    <div>
-                      <div style={{ fontFamily: T.sans, fontWeight: 600, fontSize: 13, color: T.title, marginBottom: 4 }}>
-                        Usar el asunto de la campaña Bridge
-                      </div>
-                      <div style={{
-                        padding: '8px 12px', background: T.sidebar, borderRadius: 6,
-                        fontSize: 12, color: T.text, fontFamily: T.sans,
-                      }}>
-                        {bridgeCampaign.subjectA || '(sin asunto)'}
-                        {bridgeCampaign.abWinner === 'B' && bridgeCampaign.subjectB && (
-                          <span style={{ marginLeft: 8, color: T.emerald, fontWeight: 600 }}>[Variante B ganadora]</span>
-                        )}
-                      </div>
-                    </div>
-                  </label>
-                )}
-                <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
-                  <input
-                    type="radio" checked={subjectMode === 'new'}
-                    onChange={() => setSubjectMode('new')}
-                    style={{ marginTop: 2, accentColor: T.primary }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: T.sans, fontWeight: 600, fontSize: 13, color: T.title, marginBottom: 6 }}>
-                      Escribir un asunto nuevo
-                    </div>
-                    <input
-                      type="text"
-                      value={customSubject}
-                      onChange={e => setCustomSubject(e.target.value)}
-                      onFocus={() => setSubjectMode('new')}
-                      placeholder="Asunto del email..."
-                      style={{
-                        width: '100%', padding: '8px 12px', borderRadius: 7,
-                        border: `1px solid ${T.border}`, fontFamily: T.sans, fontSize: 13,
-                        color: T.text, outline: 'none', boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-                </label>
+                <input
+                  type="text"
+                  value={customSubject}
+                  onChange={e => setCustomSubject(e.target.value)}
+                  placeholder="Ej: Bridge Debt Energy — Financiación puente para renovables"
+                  style={{
+                    width: '100%', padding: '10px 12px', borderRadius: 7,
+                    border: `1px solid ${T.border}`, fontFamily: T.sans, fontSize: 13,
+                    color: T.text, outline: 'none', boxSizing: 'border-box',
+                  }}
+                />
+                <div style={{ fontSize: 11, color: T.muted, marginTop: 8 }}>
+                  El Bridge GAS usará la plantilla de la campaña. El asunto personaliza el subject del email.
+                </div>
               </div>
             )}
 
@@ -1148,7 +1107,9 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                   <div>· {wizardRecipients.length} contactos en {selectedForSend.size} empresa{selectedForSend.size !== 1 ? 's' : ''}</div>
                   {subject && <div>· Asunto: <em>{subject}</em></div>}
                   <div>· Remitente: {sender.name}</div>
-                  {bridgeCampaignId && <div style={{ color: T.muted, fontSize: 11, marginTop: 4 }}>Campaña: {bridgeCampaignId}</div>}
+                  <div style={{ color: T.muted, fontSize: 11, marginTop: 4 }}>
+                    Envío directo via Bridge GAS · {BRIDGE_API_URL ? 'Conectado' : '⚠ No configurado'}
+                  </div>
                 </div>
 
                 {/* Error banner */}
@@ -1163,7 +1124,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {/* Test email */}
                   <button
-                    disabled={testEmailLoading || !bridgeCampaignId}
+                    disabled={testEmailLoading || !bridgeReady}
                     onClick={handleTestEmail}
                     style={{
                       padding: '10px 16px', borderRadius: 8, border: `1px solid ${T.border}`,
@@ -1171,7 +1132,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                       color: testEmailSent ? T.emerald : T.text,
                       fontSize: 13, fontWeight: 600, cursor: testEmailLoading ? 'not-allowed' : 'pointer',
                       fontFamily: T.sans, display: 'flex', alignItems: 'center', gap: 8,
-                      opacity: !bridgeCampaignId ? 0.5 : 1,
+                      opacity: !bridgeReady ? 0.5 : 1,
                     }}
                   >
                     {testEmailLoading ? '⏳ Enviando prueba...' : testEmailSent ? '✅ Prueba enviada' : '📧 Enviar email de prueba'}
@@ -1180,98 +1141,66 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                     )}
                   </button>
 
-                  {/* Prepare */}
+                  {/* Send (combines prepare + launch) */}
                   {!preparedOk ? (
-                    <button
-                      disabled={preparingLoading || !bridgeCampaignId || wizardRecipients.length === 0}
-                      onClick={handlePrepare}
-                      style={{
-                        padding: '10px 16px', borderRadius: 8, border: 'none',
-                        background: T.primary, color: T.white,
-                        fontSize: 13, fontWeight: 600,
-                        cursor: preparingLoading ? 'not-allowed' : 'pointer',
-                        fontFamily: T.sans, opacity: (!bridgeCampaignId || wizardRecipients.length === 0) ? 0.5 : 1,
-                      }}
-                    >
-                      {preparingLoading ? '⏳ Preparando...' : `✓ Preparar envío (${wizardRecipients.length} emails)`}
-                    </button>
+                    !confirmLaunch ? (
+                      <button
+                        disabled={preparingLoading || !bridgeReady || wizardRecipients.length === 0}
+                        onClick={() => setConfirmLaunch(true)}
+                        style={{
+                          padding: '10px 16px', borderRadius: 8, border: 'none',
+                          background: T.emerald, color: T.white,
+                          fontSize: 13, fontWeight: 600,
+                          cursor: (preparingLoading || !bridgeReady || wizardRecipients.length === 0) ? 'not-allowed' : 'pointer',
+                          fontFamily: T.sans, opacity: (!bridgeReady || wizardRecipients.length === 0) ? 0.5 : 1,
+                        }}
+                      >
+                        🚀 Enviar a {wizardRecipients.length} contacto{wizardRecipients.length !== 1 ? 's' : ''}
+                      </button>
+                    ) : (
+                      <div style={{
+                        padding: '14px', borderRadius: 8, border: `1.5px solid ${T.red}`,
+                        background: T.redBg,
+                      }}>
+                        <div style={{ fontFamily: T.sans, fontSize: 13, color: T.red, fontWeight: 600, marginBottom: 10 }}>
+                          ¿Estás seguro? Se enviarán {wizardRecipients.length} emails desde {sender.email} via Bridge GAS.
+                          Esta acción no se puede deshacer.
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            disabled={preparingLoading}
+                            onClick={handlePrepare}
+                            style={{
+                              padding: '8px 16px', borderRadius: 7, border: 'none',
+                              background: T.red, color: T.white, fontSize: 13, fontWeight: 600,
+                              cursor: preparingLoading ? 'not-allowed' : 'pointer', fontFamily: T.sans,
+                            }}
+                          >{preparingLoading ? '⏳ Enviando...' : '🚀 Confirmar envío'}</button>
+                          <button
+                            onClick={() => setConfirmLaunch(false)}
+                            style={{
+                              padding: '8px 16px', borderRadius: 7, border: `1px solid ${T.border}`,
+                              background: T.white, color: T.muted, fontSize: 13,
+                              cursor: 'pointer', fontFamily: T.sans,
+                            }}
+                          >Cancelar</button>
+                        </div>
+                      </div>
+                    )
                   ) : (
                     <div style={{
-                      padding: '10px 16px', borderRadius: 8, background: T.emeraldBg,
-                      color: T.emerald, fontSize: 13, fontWeight: 600, fontFamily: T.sans,
-                    }}>
-                      ✅ Listo. {wizardRecipients.length} emails preparados.
-                    </div>
-                  )}
-
-                  {/* Launch */}
-                  {preparedOk && !launchResult && (
-                    <>
-                      {!confirmLaunch ? (
-                        <button
-                          onClick={() => setConfirmLaunch(true)}
-                          style={{
-                            padding: '10px 16px', borderRadius: 8, border: 'none',
-                            background: T.emerald, color: T.white,
-                            fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                            fontFamily: T.sans,
-                          }}
-                        >🚀 Lanzar envío ahora</button>
-                      ) : (
-                        <div style={{
-                          padding: '14px', borderRadius: 8, border: `1.5px solid ${T.red}`,
-                          background: T.redBg,
-                        }}>
-                          <div style={{ fontFamily: T.sans, fontSize: 13, color: T.red, fontWeight: 600, marginBottom: 10 }}>
-                            ¿Estás seguro? Se enviarán {wizardRecipients.length} emails desde {sender.email}.
-                            Esta acción no se puede deshacer.
-                          </div>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button
-                              disabled={launchLoading}
-                              onClick={handleLaunch}
-                              style={{
-                                padding: '8px 16px', borderRadius: 7, border: 'none',
-                                background: T.red, color: T.white, fontSize: 13, fontWeight: 600,
-                                cursor: launchLoading ? 'not-allowed' : 'pointer', fontFamily: T.sans,
-                              }}
-                            >{launchLoading ? '⏳ Lanzando...' : '🚀 Confirmar lanzamiento'}</button>
-                            <button
-                              onClick={() => setConfirmLaunch(false)}
-                              style={{
-                                padding: '8px 16px', borderRadius: 7, border: `1px solid ${T.border}`,
-                                background: T.white, color: T.muted, fontSize: 13,
-                                cursor: 'pointer', fontFamily: T.sans,
-                              }}
-                            >Cancelar</button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {/* Launch result */}
-                  {launchResult && (
-                    <div style={{
                       padding: '12px 14px', borderRadius: 8,
-                      background: launchResult.errors?.length ? T.amberBg : T.emeraldBg,
-                      border: `1px solid ${launchResult.errors?.length ? T.amber : T.emerald}`,
+                      background: launchResult?.errors?.length ? T.amberBg : T.emeraldBg,
+                      border: `1px solid ${launchResult?.errors?.length ? T.amber : T.emerald}`,
                     }}>
                       <div style={{
                         fontFamily: T.sans, fontSize: 13, fontWeight: 600,
-                        color: launchResult.errors?.length ? T.amber : T.emerald,
+                        color: launchResult?.errors?.length ? T.amber : T.emerald,
                       }}>
-                        {launchResult.errors?.length
+                        {launchResult?.errors?.length
                           ? `⚠ ${launchResult.sent || 0} enviados, ${launchResult.errors.length} errores`
-                          : `✅ ${launchResult.sent || 0} emails enviados correctamente`}
+                          : `✅ ${launchResult?.sent || wizardRecipients.length} emails enviados correctamente`}
                       </div>
-                      {launchResult.errors?.length > 0 && (
-                        <div style={{ marginTop: 8, fontSize: 12, color: T.text }}>
-                          {launchResult.errors.map((e, i) => (
-                            <div key={i}>{e.email}: {e.error}</div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -1293,13 +1222,13 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
             >{wizardStep > 1 ? '← Volver' : 'Cancelar'}</button>
             {wizardStep < 3 && (
               <button
-                disabled={wizardStep === 2 && subjectMode === 'new' && !customSubject.trim()}
+                disabled={wizardStep === 2 && !customSubject.trim()}
                 onClick={() => setWizardStep(wizardStep + 1)}
                 style={{
                   padding: '8px 20px', borderRadius: 7, border: 'none',
                   background: T.primary, color: T.white, fontSize: 13, fontWeight: 600,
                   cursor: 'pointer', fontFamily: T.sans,
-                  opacity: (wizardStep === 2 && subjectMode === 'new' && !customSubject.trim()) ? 0.5 : 1,
+                  opacity: (wizardStep === 2 && !customSubject.trim()) ? 0.5 : 1,
                 }}
               >Siguiente →</button>
             )}

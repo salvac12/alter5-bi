@@ -1,22 +1,264 @@
-import { StatusBadge } from './UI';
+import { useState } from 'react';
 import { getBestProductMatch } from '../utils/data';
-import { MARKET_ROLES, COMPANY_ROLES } from '../utils/constants';
+import { MARKET_ROLES, COMPANY_ROLES, PER_PAGE } from '../utils/constants';
 import { SUSPECT_LABELS } from './CleanupToolbar';
 
-const ROLE_COLOR_MAP = Object.fromEntries(COMPANY_ROLES.map(g => [g.id, g.color]));
+/* ── Helpers ── */
+
+const scoreGradient = (s: number) =>
+  s >= 80 ? "linear-gradient(135deg,#10B981,#059669)" :
+  s >= 65 ? "linear-gradient(135deg,#3B82F6,#6366F1)" :
+  s >= 50 ? "linear-gradient(135deg,#F59E0B,#D97706)" : "";
+
+const qualityDot = (s: number) =>
+  s >= 65 ? "#10B981" : s >= 45 ? "#F59E0B" : "#EF4444";
+
+const ROLE_COLOR_MAP: Record<string, string> = Object.fromEntries(
+  COMPANY_ROLES.map(g => [g.id, g.color])
+);
+
+const MARKET_ROLE_MAP: Record<string, { color: string }> = Object.fromEntries(
+  MARKET_ROLES.map(mr => [mr.id, mr])
+);
+
+/* ── Column definitions ── */
 
 const COLUMNS = [
-  { key: "score", label: "Score", w: 58, sortable: true },
-  { key: "name", label: "Empresa", w: 180, sortable: true },
-  { key: null, label: "Role", w: 100, sortable: false },
-  { key: null, label: "Seg / Tipo", w: 130, sortable: false },
-  { key: null, label: "Market Role", w: 120, sortable: false },
-  { key: "productScore", label: "Producto", w: 110, sortable: true },
-  { key: null, label: "Estado", w: 76, sortable: false },
-  { key: "interactions", label: "Emails", w: 72, sortable: true },
-  { key: "nContacts", label: "Cont.", w: 55, sortable: true },
-  { key: "monthsAgo", label: "Último", w: 70, sortable: true },
+  { key: "name",         label: "Empresa",     sortable: true },
+  { key: null,           label: "Rol",         sortable: false },
+  { key: null,           label: "Seg / Tipo",  sortable: false },
+  { key: null,           label: "Market Role",  sortable: false },
+  { key: "productScore", label: "Producto",    sortable: true },
+  { key: null,           label: "Estado",      sortable: false },
+  { key: "interactions", label: "Emails",      sortable: true },
+  { key: "nContacts",    label: "Cont.",       sortable: true },
+  { key: "monthsAgo",   label: "Ultimo",       sortable: true },
+  { key: "score",        label: "Score",       sortable: true },
 ];
+
+/* ── Sub-components ── */
+
+function ScoreChip({ score }: { score: number }) {
+  const grad = scoreGradient(score);
+  return (
+    <div style={{
+      width: 34, height: 34, borderRadius: 8, display: "flex",
+      alignItems: "center", justifyContent: "center",
+      background: grad || "#F1F5F9",
+      fontSize: 12, fontWeight: 700, color: grad ? "#FFFFFF" : "#64748B",
+      letterSpacing: "-0.02em", flexShrink: 0,
+      boxShadow: grad ? "0 2px 8px rgba(59,130,246,0.25)" : "none",
+    }}>
+      {score}
+    </div>
+  );
+}
+
+function RoleBadge({ role }: { role: string }) {
+  const cfg: Record<string, { bg: string; color: string }> = {
+    "Originacion":  { bg: "rgba(245,158,11,0.1)",  color: "#B45309" },
+    "Originaci\u00f3n": { bg: "rgba(245,158,11,0.1)",  color: "#B45309" },
+    "Inversion":    { bg: "rgba(59,130,246,0.1)",  color: "#1D4ED8" },
+    "Inversi\u00f3n":   { bg: "rgba(59,130,246,0.1)",  color: "#1D4ED8" },
+    "Ecosistema":   { bg: "rgba(100,116,139,0.1)", color: "#475569" },
+    "No relevante": { bg: "rgba(239,68,68,0.08)",  color: "#DC2626" },
+  };
+  const c = cfg[role] ?? cfg["Ecosistema"];
+  return (
+    <span style={{
+      background: c.bg, color: c.color, fontSize: 10, fontWeight: 600,
+      padding: "2px 8px", borderRadius: 5, whiteSpace: "nowrap",
+    }}>
+      {role}
+    </span>
+  );
+}
+
+function StatusDot({ status }: { status: string }) {
+  const cfg: Record<string, { color: string; label: string; bg: string }> = {
+    active:  { color: "#10B981", label: "Active",  bg: "rgba(16,185,129,0.08)" },
+    dormant: { color: "#F59E0B", label: "Dormant", bg: "rgba(245,158,11,0.08)" },
+    lost:    { color: "#EF4444", label: "Lost",    bg: "rgba(239,68,68,0.08)" },
+  };
+  const c = cfg[status] ?? cfg["active"];
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      background: c.bg, color: c.color, fontSize: 10, fontWeight: 600,
+      padding: "2px 8px", borderRadius: 5, whiteSpace: "nowrap",
+    }}>
+      <span style={{
+        width: 5, height: 5, borderRadius: "50%", background: c.color,
+        display: "inline-block",
+      }} />
+      {c.label}
+    </span>
+  );
+}
+
+function SegmentTypeCell({ segment, companyType }: { segment: string; companyType: string }) {
+  if (!segment && !companyType) {
+    return <span style={{ fontSize: 11, color: "#CBD5E1" }}>&mdash;</span>;
+  }
+  return (
+    <div>
+      {segment && <div style={{ fontSize: 12, color: "#475569" }}>{segment}</div>}
+      {companyType && <div style={{ fontSize: 11, color: "#94A3B8" }}>{companyType}</div>}
+    </div>
+  );
+}
+
+function MarketRoleCell({ roles }: { roles: string[] }) {
+  if (!roles || roles.length === 0) {
+    return <span style={{ fontSize: 11, color: "#CBD5E1" }}>&mdash;</span>;
+  }
+  return (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxWidth: 150 }}>
+      {roles.slice(0, 2).map((r, i) => (
+        <span key={i} style={{
+          fontSize: 10, color: "#64748B", background: "#F1F5F9",
+          padding: "2px 6px", borderRadius: 4, whiteSpace: "nowrap",
+        }}>
+          {r.length > 14 ? r.slice(0, 12) + "\u2026" : r}
+        </span>
+      ))}
+      {roles.length > 2 && (
+        <span style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>+{roles.length - 2}</span>
+      )}
+    </div>
+  );
+}
+
+function ProductMatchCell({ companyIdx, productMatches }: { companyIdx: number; productMatches: any }) {
+  const best = getBestProductMatch(productMatches, companyIdx);
+  if (!best || best.score < 15) {
+    return <span style={{ fontSize: 11, color: "#CBD5E1" }}>&mdash;</span>;
+  }
+
+  // Map to display category
+  const name: string = best.name || best.short || "";
+  let displayName = name;
+  let pColor = "#8B5CF6";
+
+  if (/debt/i.test(name)) {
+    displayName = "Debt";
+    pColor = "#3B82F6";
+  } else if (/equity|investment|co-development/i.test(name)) {
+    displayName = "Equity";
+    pColor = "#10B981";
+  } else if (/m&a/i.test(name)) {
+    displayName = "M&A";
+    pColor = "#8B5CF6";
+  }
+
+  return (
+    <span style={{
+      fontSize: 10, color: pColor, background: `${pColor}12`,
+      padding: "2px 7px", borderRadius: 4, fontWeight: 600,
+      whiteSpace: "nowrap",
+    }}>
+      {displayName}
+    </span>
+  );
+}
+
+function VerifiedIcon({ status }: { status?: string }) {
+  if (!status) return null;
+  const color =
+    status === "Verified" ? "#10B981" :
+    status === "Edited" ? "#8B5CF6" :
+    status === "Pending Review" ? "#F59E0B" : "#6B7F94";
+  return (
+    <span title={`Verificado: ${status}`} style={{
+      width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+      background: color, display: "inline-block",
+    }} />
+  );
+}
+
+/* ── Sort header ── */
+
+function SortTh({
+  label, sortKey, sortBy, sortDir, onSort, isSortable,
+}: {
+  label: string;
+  sortKey: string | null;
+  sortBy: string;
+  sortDir: string;
+  onSort: (key: string) => void;
+  isSortable: boolean;
+}) {
+  const isActive = isSortable && sortBy === sortKey;
+
+  return (
+    <th
+      onClick={isSortable && sortKey ? () => onSort(sortKey) : undefined}
+      style={{
+        padding: "10px 12px",
+        textAlign: "left",
+        fontSize: 10,
+        fontWeight: 700,
+        color: isActive ? "#0F172A" : "#94A3B8",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+        userSelect: "none",
+        cursor: isSortable ? "pointer" : "default",
+        borderBottom: "1px solid #F1F5F9",
+        background: "#FAFAFA",
+        transition: "color 0.15s ease",
+      }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+        {label}
+        {isSortable && (
+          <span style={{
+            display: "inline-flex", flexDirection: "column", fontSize: 8,
+            lineHeight: 1, color: isActive ? "#0F172A" : "#CBD5E1",
+          }}>
+            <span style={{
+              opacity: isActive && sortDir === "asc" ? 1 : 0.35,
+              lineHeight: "8px",
+            }}>{"\u25B2"}</span>
+            <span style={{
+              opacity: isActive && sortDir === "desc" ? 1 : 0.35,
+              lineHeight: "8px",
+            }}>{"\u25BC"}</span>
+          </span>
+        )}
+      </span>
+    </th>
+  );
+}
+
+/* ── Page button ── */
+
+function PageBtn({ children, onClick, disabled, active }: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      width: 30, height: 30, borderRadius: 6,
+      border: active ? "none" : "1px solid #E2E8F0",
+      background: active ? "#1E293B" : "#FFFFFF",
+      color: disabled ? "#CBD5E1" : active ? "#FFFFFF" : "#64748B",
+      fontSize: 12, fontWeight: active ? 700 : 500,
+      cursor: disabled ? "default" : "pointer",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      fontFamily: "inherit",
+      transition: "all 0.15s ease",
+    }}>
+      {children}
+    </button>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CompanyTable — Figma Make EmpresasView Table
+   ═══════════════════════════════════════════════════════════════ */
 
 export default function CompanyTable({
   companies, sortBy, sortDir, onSort, onSelect, selected,
@@ -24,260 +266,293 @@ export default function CompanyTable({
   cleanupMode, cleanupSelection, onToggleCleanup, suspiciousMap,
   verifiedCompanies,
   bulkSelection, onToggleBulkSelect, onSelectAllPage, onBulkHide, onClearBulkSelection,
-}) {
+}: any) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
   const hasBulkSelection = bulkSelection && bulkSelection.size > 0;
-  const allPageSelected = companies.length > 0 && companies.every(c => bulkSelection?.has(c.domain));
-  const somePageSelected = companies.some(c => bulkSelection?.has(c.domain));
-  const SortIcon = ({ col }) => {
-    if (sortBy !== col) {
-      return <span style={{ color: "#CBD5E1", fontSize: 12, opacity: 0.6, marginLeft: 4 }}>↕</span>;
-    }
-    return (
-      <span style={{
-        color: "#3B82F6",
-        fontSize: 14,
-        marginLeft: 4,
-        display: "inline-block",
-        transition: "transform 0.2s ease"
-      }}>
-        {sortDir === "desc" ? "↓" : "↑"}
-      </span>
-    );
-  };
+  const allPageSelected = companies.length > 0 && companies.every((c: any) => bulkSelection?.has(c.domain));
+  const somePageSelected = companies.some((c: any) => bulkSelection?.has(c.domain));
+
+  const totalCompanies = totalPages * PER_PAGE;
+  const showFrom = page * PER_PAGE + 1;
+  const showTo = Math.min((page + 1) * PER_PAGE, totalCompanies);
 
   return (
-    <div style={{ padding: "0 20px 20px", overflow: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr>
-            {/* Bulk select checkbox header */}
-            <th style={{
-              padding: "16px 6px", width: 36, borderBottom: "2px solid #E2E8F0",
-              textAlign: "center", verticalAlign: "middle",
-            }}>
-              <input
-                type="checkbox"
-                checked={allPageSelected}
-                ref={el => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
-                onChange={onSelectAllPage}
-                title={allPageSelected ? "Deseleccionar pagina" : "Seleccionar toda la pagina"}
-                style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#3B82F6" }}
-              />
-            </th>
-            {cleanupMode && (
-              <th style={{ padding: "16px 8px", width: 36, borderBottom: "2px solid #E2E8F0" }} />
-            )}
-            {COLUMNS.map((col, i) => {
-              const isActive = sortBy === col.key;
-              const isSortable = col.sortable;
-
-              return (
-                <th key={i}
-                  onClick={isSortable ? () => onSort(col.key) : undefined}
-                  style={{
-                    padding: "16px 12px",
-                    textAlign: "left",
-                    fontSize: 13,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    color: isActive ? "#3B82F6" : "#64748B",
-                    fontWeight: isActive ? 700 : 600,
-                    cursor: isSortable ? "pointer" : "default",
-                    width: col.w,
-                    whiteSpace: "nowrap",
-                    userSelect: "none",
-                    background: isActive
-                      ? "linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%)"
-                      : "transparent",
-                    borderBottom: isActive ? "3px solid #3B82F6" : "2px solid #E2E8F0",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isSortable && !isActive) {
-                      e.currentTarget.style.background = "#F8FAFC";
-                      e.currentTarget.style.color = "#475569";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (isSortable && !isActive) {
-                      e.currentTarget.style.background = "transparent";
-                      e.currentTarget.style.color = "#64748B";
-                    }
-                  }}
-                >
-                  {col.label} {isSortable && <SortIcon col={col.key} />}
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {companies.map((c, i) => {
-            const isSelected = selected?.idx === c.idx;
-            const isBulkChecked = bulkSelection?.has(c.domain);
-            const isChecked = cleanupMode && cleanupSelection?.has(c.domain);
-            const suspectReason = cleanupMode && suspiciousMap?.get(c.domain);
-            const verifiedStatus = verifiedCompanies?.get?.(c.domain)?.status;
-
-            return (
-              <tr key={c.idx}
-                onClick={() => cleanupMode ? onToggleCleanup(c.domain) : onSelect(c)}
-                className="row-hover fade-in"
-                style={{
-                  cursor: "pointer",
-                  background: isBulkChecked
-                    ? "rgba(59, 130, 246, 0.06)"
-                    : isChecked
-                      ? "rgba(239, 68, 68, 0.06)"
-                      : isSelected
-                        ? "linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.03) 100%)"
-                        : "#FFFFFF",
-                  animationDelay: `${i * 12}ms`,
-                  borderBottom: "1px solid #F1F5F9",
-                  borderLeft: isBulkChecked
-                    ? "4px solid #3B82F6"
-                    : isChecked
-                      ? "4px solid #EF4444"
-                      : suspectReason
-                        ? "4px solid #F59E0B"
-                        : isSelected ? "4px solid #3B82F6" : "4px solid transparent",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.background = "linear-gradient(90deg, #F8FAFC 0%, #F1F5F9 100%)";
-                    e.currentTarget.style.borderLeft = "3px solid #3B82F6";
-                    e.currentTarget.style.transform = "translateX(2px)";
-                    e.currentTarget.style.boxShadow = "0 2px 4px rgba(0,0,0,0.04)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.background = "#FFFFFF";
-                    e.currentTarget.style.borderLeft = "4px solid transparent";
-                    e.currentTarget.style.transform = "translateX(0)";
-                    e.currentTarget.style.boxShadow = "none";
-                  }
-                }}
-              >
-              {/* Bulk select checkbox */}
-              <td style={{ padding: "10px 6px", width: 36, textAlign: "center" }}>
+    <div style={{ padding: "0 28px 28px", overflow: "auto" }}>
+      {/* White card wrapper */}
+      <div style={{
+        background: "#FFFFFF",
+        borderRadius: 14,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+        overflow: "hidden",
+      }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "auto" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #F1F5F9", background: "#FAFAFA" }}>
+              {/* Checkbox header */}
+              <th style={{
+                width: 44, padding: "10px 12px",
+                borderBottom: "1px solid #F1F5F9",
+                background: "#FAFAFA",
+              }}>
                 <input
                   type="checkbox"
-                  checked={isBulkChecked || false}
-                  onChange={() => onToggleBulkSelect(c.domain)}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ width: 15, height: 15, cursor: "pointer", accentColor: "#3B82F6" }}
+                  checked={allPageSelected}
+                  ref={(el: HTMLInputElement | null) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                  onChange={onSelectAllPage}
+                  title={allPageSelected ? "Deseleccionar pagina" : "Seleccionar toda la pagina"}
+                  style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#3B82F6" }}
                 />
-              </td>
+              </th>
 
-              {/* Cleanup checkbox */}
+              {/* Cleanup mode header */}
               {cleanupMode && (
-                <td style={{ padding: "10px 8px", width: 36, textAlign: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={isChecked || false}
-                    onChange={() => onToggleCleanup(c.domain)}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ width: 16, height: 16, cursor: "pointer", accentColor: "#EF4444" }}
-                  />
-                </td>
+                <th style={{
+                  width: 36, padding: "10px 8px",
+                  borderBottom: "1px solid #F1F5F9",
+                  background: "#FAFAFA",
+                }} />
               )}
 
-              {/* Score + Quality */}
-              <td style={{ padding: "10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <ScoreChip score={c.score} />
-                  <QualityDot quality={c.qualityLabel} score={c.qualityScore} />
-                </div>
-              </td>
-
-              {/* Company */}
-              <td style={{ padding: "10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ fontWeight: 600, color: "#1A2B3D", fontSize: 13, lineHeight: 1.3 }}>{c.name}</div>
-                  {verifiedStatus && (
-                    <span title={`Verificado: ${verifiedStatus}`} style={{
-                      width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                      background: verifiedStatus === "Verified" ? "#10B981"
-                        : verifiedStatus === "Edited" ? "#8B5CF6"
-                        : verifiedStatus === "Pending Review" ? "#F59E0B"
-                        : "#6B7F94",
-                    }} />
-                  )}
-                  {cleanupMode && suspectReason && (
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4,
-                      background: SUSPECT_LABELS[suspectReason].color + "18",
-                      color: SUSPECT_LABELS[suspectReason].color,
-                      whiteSpace: "nowrap",
-                    }}>
-                      {SUSPECT_LABELS[suspectReason].text}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 11, color: "#6B7F94", fontWeight: 400 }}>{c.domain}</div>
-              </td>
-
-              {/* Role */}
-              <td style={{ padding: "10px" }}>
-                <RoleBadge role={c.role} />
-              </td>
-
-              {/* Segment / Type */}
-              <td style={{ padding: "10px" }}>
-                <SegmentTypeCell segment={c.segment} companyType={c.companyType} />
-              </td>
-
-              {/* Market Role */}
-              <td style={{ padding: "10px" }}>
-                <MarketRoleCell roles={c.marketRoles} />
-              </td>
-
-              {/* Product Match */}
-              <td style={{ padding: "10px" }}>
-                <ProductMatchCell companyIdx={c.idx} productMatches={productMatches} />
-              </td>
-
-              {/* Status */}
-              <td style={{ padding: "10px" }}><StatusBadge status={c.status} /></td>
-
-              {/* Interactions */}
-              <td style={{ padding: "10px", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: "#1A2B3D" }}>
-                {c.interactions.toLocaleString()}
-              </td>
-
-              {/* Contacts */}
-              <td style={{ padding: "10px", fontVariantNumeric: "tabular-nums", color: "#6B7F94" }}>
-                {c.nContacts}
-              </td>
-
-              {/* Last date */}
-              <td style={{ padding: "10px", fontSize: 12, color: "#6B7F94", fontVariantNumeric: "tabular-nums" }}>
-                {c.lastDate}
-              </td>
+              {/* Data columns */}
+              {COLUMNS.map((col, i) => (
+                <SortTh
+                  key={i}
+                  label={col.label}
+                  sortKey={col.key}
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onSort={onSort}
+                  isSortable={col.sortable}
+                />
+              ))}
             </tr>
-          );
-          })}
-        </tbody>
-      </table>
+          </thead>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 16 }}>
-          <PageBtn onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}>
-            ← Anterior
-          </PageBtn>
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            const p = Math.max(0, Math.min(totalPages - 5, page - 2)) + i;
-            if (p >= totalPages) return null;
-            return <PageBtn key={p} onClick={() => setPage(p)} active={p === page}>{p + 1}</PageBtn>;
-          })}
-          <PageBtn onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}>
-            Siguiente →
-          </PageBtn>
-        </div>
-      )}
+          <tbody>
+            {companies.map((c: any, i: number) => {
+              const isSelected = selected?.idx === c.idx;
+              const isBulkChecked = bulkSelection?.has(c.domain);
+              const isCleanupChecked = cleanupMode && cleanupSelection?.has(c.domain);
+              const suspectReason = cleanupMode && suspiciousMap?.get(c.domain);
+              const verifiedStatus = verifiedCompanies?.get?.(c.domain)?.status;
+              const isHovered = hoveredIdx === c.idx;
+
+              const qScore = c.qualityScore ?? 0;
+
+              // Row background
+              const rowBg =
+                isBulkChecked ? "rgba(59,130,246,0.06)" :
+                isCleanupChecked ? "rgba(239,68,68,0.06)" :
+                isSelected ? "rgba(59,130,246,0.06)" :
+                isHovered ? "linear-gradient(90deg,#F8FAFC,#F1F5F9)" :
+                "transparent";
+
+              // Left border
+              const rowBorderLeft =
+                isBulkChecked ? "3px solid #3B82F6" :
+                isCleanupChecked ? "3px solid #EF4444" :
+                suspectReason ? "3px solid #F59E0B" :
+                isSelected ? "3px solid #3B82F6" :
+                isHovered ? "3px solid #E2E8F0" :
+                "3px solid transparent";
+
+              return (
+                <tr
+                  key={c.idx}
+                  onClick={() => cleanupMode ? onToggleCleanup(c.domain) : onSelect(c)}
+                  onMouseEnter={() => setHoveredIdx(c.idx)}
+                  onMouseLeave={() => setHoveredIdx(null)}
+                  style={{
+                    borderBottom: "1px solid #F8FAFC",
+                    cursor: "pointer",
+                    background: rowBg,
+                    borderLeft: rowBorderLeft,
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {/* Checkbox + quality dot */}
+                  <td style={{ padding: "10px 12px", width: 44 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div
+                        onClick={(e) => { e.stopPropagation(); onToggleBulkSelect(c.domain); }}
+                        style={{
+                          width: 14, height: 14, borderRadius: 4,
+                          border: `1.5px solid ${isBulkChecked ? "#3B82F6" : "#CBD5E1"}`,
+                          background: isBulkChecked ? "#3B82F6" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          cursor: "pointer", flexShrink: 0,
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {isBulkChecked && (
+                          <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                            <path d="M2 5L4.5 7.5L8 2.5" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </div>
+                      <div
+                        title={`Quality: ${qScore}/100`}
+                        style={{
+                          width: 7, height: 7, borderRadius: "50%",
+                          background: qualityDot(qScore), flexShrink: 0,
+                        }}
+                      />
+                    </div>
+                  </td>
+
+                  {/* Cleanup checkbox */}
+                  {cleanupMode && (
+                    <td style={{ padding: "10px 8px", width: 36, textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={isCleanupChecked || false}
+                        onChange={() => onToggleCleanup(c.domain)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ width: 14, height: 14, cursor: "pointer", accentColor: "#EF4444" }}
+                      />
+                    </td>
+                  )}
+
+                  {/* Empresa: avatar + name + domain + verified */}
+                  <td style={{ padding: "10px 12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: 7,
+                        background: `${qualityDot(qScore)}18`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, fontWeight: 700, color: qualityDot(qScore),
+                        flexShrink: 0,
+                      }}>
+                        {String(c.name).slice(0, 2).toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: 5,
+                        }}>
+                          <span style={{
+                            fontSize: 13, fontWeight: 600, color: "#0F172A",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          }}>
+                            {c.name}
+                          </span>
+                          <VerifiedIcon status={verifiedStatus} />
+                          {cleanupMode && suspectReason && (
+                            <span style={{
+                              fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4,
+                              background: (SUSPECT_LABELS as any)[suspectReason].color + "18",
+                              color: (SUSPECT_LABELS as any)[suspectReason].color,
+                              whiteSpace: "nowrap", flexShrink: 0,
+                            }}>
+                              {(SUSPECT_LABELS as any)[suspectReason].text}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94A3B8" }}>{c.domain}</div>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Role */}
+                  <td style={{ padding: "10px 12px" }}>
+                    <RoleBadge role={c.role} />
+                  </td>
+
+                  {/* Seg / Tipo */}
+                  <td style={{ padding: "10px 12px" }}>
+                    <SegmentTypeCell segment={c.segment} companyType={c.companyType} />
+                  </td>
+
+                  {/* Market Role */}
+                  <td style={{ padding: "10px 12px" }}>
+                    <MarketRoleCell roles={c.marketRoles} />
+                  </td>
+
+                  {/* Producto */}
+                  <td style={{ padding: "10px 12px" }}>
+                    <ProductMatchCell companyIdx={c.idx} productMatches={productMatches} />
+                  </td>
+
+                  {/* Estado */}
+                  <td style={{ padding: "10px 12px" }}>
+                    <StatusDot status={c.status} />
+                  </td>
+
+                  {/* Emails */}
+                  <td style={{
+                    padding: "10px 12px", fontWeight: 600, fontSize: 13,
+                    fontVariantNumeric: "tabular-nums", color: "#0F172A",
+                  }}>
+                    {c.interactions.toLocaleString()}
+                  </td>
+
+                  {/* Contacts */}
+                  <td style={{
+                    padding: "10px 12px", fontSize: 13,
+                    fontVariantNumeric: "tabular-nums", color: "#64748B",
+                  }}>
+                    {c.nContacts}
+                  </td>
+
+                  {/* Last date */}
+                  <td style={{
+                    padding: "10px 12px", fontSize: 12, color: "#94A3B8",
+                    fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+                  }}>
+                    {c.lastDate}
+                  </td>
+
+                  {/* Score */}
+                  <td style={{ padding: "10px 12px" }}>
+                    <ScoreChip score={qScore} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{
+            padding: "14px 20px",
+            borderTop: "1px solid #F1F5F9",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <span style={{ fontSize: 12, color: "#94A3B8" }}>
+              Mostrando {showFrom}-{showTo} de {totalCompanies} &middot; {PER_PAGE} por pagina
+            </span>
+            <div style={{ display: "flex", gap: 6 }}>
+              {/* Previous */}
+              <PageBtn
+                onClick={() => setPage(Math.max(0, page - 1))}
+                disabled={page === 0}
+              >
+                {"\u2039"}
+              </PageBtn>
+
+              {/* Page numbers */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const p = Math.max(0, Math.min(totalPages - 5, page - 2)) + i;
+                if (p >= totalPages) return null;
+                return (
+                  <PageBtn key={p} onClick={() => setPage(p)} active={p === page}>
+                    {p + 1}
+                  </PageBtn>
+                );
+              })}
+
+              {/* Next */}
+              <PageBtn
+                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                disabled={page >= totalPages - 1}
+              >
+                {"\u203A"}
+              </PageBtn>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Floating bulk action bar */}
       {hasBulkSelection && (
@@ -291,7 +566,8 @@ export default function CompanyTable({
           animation: "fadeIn 0.2s ease both",
         }}>
           <span style={{ fontSize: 13, color: "#94A3B8", fontWeight: 500 }}>
-            <strong style={{ color: "#FFFFFF" }}>{bulkSelection.size}</strong> empresa{bulkSelection.size !== 1 ? "s" : ""} seleccionada{bulkSelection.size !== 1 ? "s" : ""}
+            <strong style={{ color: "#FFFFFF" }}>{bulkSelection.size}</strong>
+            {" "}empresa{bulkSelection.size !== 1 ? "s" : ""} seleccionada{bulkSelection.size !== 1 ? "s" : ""}
           </span>
           <button
             onClick={onClearBulkSelection}
@@ -301,8 +577,14 @@ export default function CompanyTable({
               fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
               transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#1B3A5C"; e.currentTarget.style.color = "#FFFFFF"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#132238"; e.currentTarget.style.color = "#94A3B8"; }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#1B3A5C";
+              (e.currentTarget as HTMLButtonElement).style.color = "#FFFFFF";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#132238";
+              (e.currentTarget as HTMLButtonElement).style.color = "#94A3B8";
+            }}
           >
             Deseleccionar
           </button>
@@ -314,172 +596,19 @@ export default function CompanyTable({
               fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
               transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#DC2626"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "#EF4444"; e.currentTarget.style.transform = "translateY(0)"; }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#DC2626";
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#EF4444";
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+            }}
           >
             Ocultar seleccionadas
           </button>
         </div>
       )}
     </div>
-  );
-}
-
-/* ── Score chip with gradient ── */
-function ScoreChip({ score }) {
-  const isHigh = score > 65;
-  const isMid = score > 35;
-  return (
-    <div style={{
-      width: 34, height: 34, borderRadius: 8, display: "flex",
-      alignItems: "center", justifyContent: "center",
-      fontWeight: 800, fontSize: 12, letterSpacing: "-0.5px",
-      color: isHigh ? "#FFFFFF" : isMid ? "#FFFFFF" : "#6B7F94",
-      background: isHigh
-        ? "linear-gradient(135deg, #3B82F6, #10B981)"
-        : isMid
-          ? "#3B82F6"
-          : "#F1F5F9",
-    }}>
-      {score}
-    </div>
-  );
-}
-
-/* ── Data quality indicator dot ── */
-function QualityDot({ quality, score }) {
-  const colors = { alta: "#10B981", media: "#F59E0B", baja: "#EF4444" };
-  const labels = { alta: "Datos fiables", media: "Datos parciales", baja: "Datos incompletos" };
-  const color = colors[quality] || colors.baja;
-  return (
-    <div title={`${labels[quality] || "Sin datos"} (${score}/100)`} style={{
-      width: 8, height: 8, borderRadius: "50%",
-      background: color, flexShrink: 0,
-      boxShadow: `0 0 0 2px ${color}33`,
-    }} />
-  );
-}
-
-/* ── Role badge for table rows ── */
-function RoleBadge({ role }) {
-  const color = ROLE_COLOR_MAP[role] || "#94A3B8";
-  return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5,
-      padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-      background: color + "15", color: color, border: `1px solid ${color}25`,
-      whiteSpace: "nowrap",
-    }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      {role}
-    </span>
-  );
-}
-
-/* ── Segment / Type cell for table rows ── */
-function SegmentTypeCell({ segment, companyType }) {
-  const label = segment || companyType;
-  if (!label) return <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>;
-  const secondary = segment && companyType ? companyType : null;
-  return (
-    <div>
-      <span style={{
-        display: "inline-block",
-        padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-        background: "#8B5CF615", color: "#7C3AED", border: "1px solid #8B5CF625",
-        whiteSpace: "nowrap", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis",
-      }}>
-        {label}
-      </span>
-      {secondary && (
-        <div style={{ fontSize: 10, color: "#94A3B8", fontWeight: 500, marginTop: 2 }}>
-          {secondary}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Product match badge for table rows ── */
-function ProductMatchCell({ companyIdx, productMatches }) {
-  const best = getBestProductMatch(productMatches, companyIdx);
-  if (!best || best.score < 15) {
-    return <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>;
-  }
-
-  const opacity = best.score >= 50 ? 1 : best.score >= 30 ? 0.8 : 0.6;
-
-  return (
-    <div style={{
-      display: "inline-flex", alignItems: "center", gap: 5,
-      padding: "4px 8px", borderRadius: 6,
-      background: best.color + "15",
-      border: `1px solid ${best.color}30`,
-      opacity,
-    }}>
-      <span style={{
-        width: 6, height: 6, borderRadius: "50%",
-        background: best.color, flexShrink: 0,
-      }} />
-      <span style={{
-        fontSize: 11, fontWeight: 600, color: best.color,
-        whiteSpace: "nowrap",
-      }}>
-        {best.short}
-      </span>
-      <span style={{
-        fontSize: 10, fontWeight: 700, color: best.color,
-        opacity: 0.7,
-      }}>
-        {best.score}
-      </span>
-    </div>
-  );
-}
-
-/* ── Market role badges for table rows ── */
-const MARKET_ROLE_MAP = Object.fromEntries(MARKET_ROLES.map(mr => [mr.id, mr]));
-
-function MarketRoleCell({ roles }) {
-  if (!roles || roles.length === 0) {
-    return <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>;
-  }
-  return (
-    <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-      {roles.slice(0, 2).map((r, i) => {
-        const mr = MARKET_ROLE_MAP[r];
-        const color = mr?.color || "#94A3B8";
-        return (
-          <span key={i} style={{
-            display: "inline-flex", alignItems: "center", gap: 4,
-            padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 600,
-            background: color + "15", color: color, border: `1px solid ${color}25`,
-            whiteSpace: "nowrap",
-          }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: color, flexShrink: 0 }} />
-            {r.length > 14 ? r.slice(0, 12) + "…" : r}
-          </span>
-        );
-      })}
-      {roles.length > 2 && (
-        <span style={{ fontSize: 10, color: "#94A3B8", fontWeight: 600 }}>+{roles.length - 2}</span>
-      )}
-    </div>
-  );
-}
-
-/* ── Page button ── */
-function PageBtn({ children, onClick, disabled, active }) {
-  return (
-    <button onClick={onClick} disabled={disabled} style={{
-      padding: "6px 12px", borderRadius: 6, fontSize: 12, fontFamily: "inherit",
-      cursor: disabled ? "default" : "pointer", minWidth: 32,
-      fontWeight: active ? 700 : 500,
-      border: "1px solid " + (active ? "#3B82F6" : "#E2E8F0"),
-      background: active ? "#EFF6FF" : "#FFFFFF",
-      color: disabled ? "#E2E8F0" : active ? "#3B82F6" : "#6B7F94",
-    }}>
-      {children}
-    </button>
   );
 }

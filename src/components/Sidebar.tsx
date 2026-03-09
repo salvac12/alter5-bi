@@ -1,6 +1,95 @@
-import { COMPANY_ROLES, ORIGINACION_SEGMENTS, COMPANY_TYPES_V2, CORPORATE_ACTIVITIES, TECHNOLOGIES, COMPANY_TYPES, ALL_COMPANY_TYPES, STATUS_LABELS, COMPANY_SIZES, COUNTRIES, PRODUCTS, MARKET_ROLES } from '../utils/constants';
+import { Search } from 'lucide-react';
+import { COMPANY_ROLES, ORIGINACION_SEGMENTS, COMPANY_TYPES_V2, CORPORATE_ACTIVITIES, TECHNOLOGIES, COMPANY_TYPES, ALL_COMPANY_TYPES, STATUS_LABELS, STATUS_COLORS, PRODUCTS, MARKET_ROLES } from '../utils/constants';
 import { getOpportunityStages, getOpportunityCounts } from '../utils/data';
-import { FilterChip, ComingSoonBadge, Tooltip } from './UI';
+import { font } from '../theme/tokens';
+
+/* ── Role pill color map (active state) ── */
+const ROLE_ACTIVE_COLORS: Record<string, string> = {
+  "Originacion": "#B45309",
+  "Originación": "#B45309",
+  "Inversion": "#1D4ED8",
+  "Inversión": "#1D4ED8",
+  "Ecosistema": "#64748B",
+  "No relevante": "#DC2626",
+};
+
+/* ── Status dot colors ── */
+const STATUS_DOT_COLORS: Record<string, string> = {
+  active: "#10B981",
+  dormant: "#F59E0B",
+  lost: "#EF4444",
+};
+
+/* ── Shared pill styles ── */
+const pillBase: React.CSSProperties = {
+  fontSize: 11,
+  padding: "4px 9px",
+  borderRadius: 6,
+  cursor: "pointer",
+  fontFamily: font.family,
+  transition: "all 0.12s ease",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  lineHeight: 1.4,
+  whiteSpace: "nowrap",
+};
+
+const pillInactive: React.CSSProperties = {
+  ...pillBase,
+  fontWeight: 400,
+  border: "1px solid #E2E8F0",
+  background: "#FFFFFF",
+  color: "#64748B",
+};
+
+const pillActive: React.CSSProperties = {
+  ...pillBase,
+  fontWeight: 600,
+  border: "none",
+  background: "#1E293B",
+  color: "#FFFFFF",
+};
+
+function pillActiveColored(bg: string): React.CSSProperties {
+  return {
+    ...pillBase,
+    fontWeight: 600,
+    border: "none",
+    background: bg,
+    color: "#FFFFFF",
+  };
+}
+
+/* ── Section header ── */
+const sectionHeaderStyle: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  color: "#94A3B8",
+  letterSpacing: "0.1em",
+  textTransform: "uppercase",
+  marginBottom: 8,
+  display: "flex",
+  alignItems: "center",
+};
+
+/* ── Count badge inside pill ── */
+function Count({ n, active }: { n: number; active?: boolean }) {
+  return (
+    <span style={{
+      fontSize: 9,
+      fontWeight: 600,
+      color: active ? "rgba(255,255,255,0.7)" : "#94A3B8",
+      marginLeft: 2,
+    }}>
+      {n}
+    </span>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Sidebar — Figma Make FilterSidebar design
+   ═══════════════════════════════════════════════════════════════ */
 
 export default function Sidebar({
   companies, employees,
@@ -16,51 +105,75 @@ export default function Sidebar({
   selPipeline, setSelPipeline,
   productMatches,
   setPage,
+  search,
+  onSearchChange,
+}: {
+  companies: any[];
+  employees: any[];
+  selEmployees: string[];
+  setSelEmployees: (v: any) => void;
+  selGroups: string[];
+  setSelGroups: (v: any) => void;
+  selTypes: string[];
+  setSelTypes: (v: any) => void;
+  selSegments: string[];
+  setSelSegments: (v: any) => void;
+  selActivities: string[];
+  setSelActivities: (v: any) => void;
+  selTech: string[];
+  setSelTech: (v: any) => void;
+  selStatus: string[];
+  setSelStatus: (v: any) => void;
+  selProduct: string;
+  setSelProduct: (v: any) => void;
+  selMarketRoles: string[];
+  setSelMarketRoles: (v: any) => void;
+  selPipeline: string;
+  setSelPipeline: (v: any) => void;
+  productMatches: Map<number, any[]>;
+  setPage: (v: number) => void;
+  search?: string;
+  onSearchChange?: (v: string) => void;
 }) {
-  const toggle = (arr, setArr, val) => {
-    setArr(prev => prev.includes(val) ? prev.filter(x => x !== val) : [...prev, val]);
+  const toggle = (arr: string[], setArr: (v: any) => void, val: string) => {
+    setArr((prev: string[]) => prev.includes(val) ? prev.filter((x: string) => x !== val) : [...prev, val]);
     setPage(0);
   };
 
   const hasFilters = selGroups.length > 0 || selTypes.length > 0 || selSegments.length > 0 || selActivities.length > 0 || selTech.length > 0 || selStatus.length > 0 || selEmployees.length > 0 || selMarketRoles.length > 0 || !!selProduct || !!selPipeline;
 
+  // ── Counts ──
   const statusCounts = {
     active: companies.filter(c => c.status === "active").length,
     dormant: companies.filter(c => c.status === "dormant").length,
     lost: companies.filter(c => c.status === "lost").length,
   };
 
-  const totalActiveFilters = selEmployees.length + selGroups.length + selSegments.length + selTypes.length + selActivities.length + selTech.length + selStatus.length + selMarketRoles.length + (selProduct ? 1 : 0) + (selPipeline ? 1 : 0);
-
-  // Role counts
-  const roleCounts = {};
+  const roleCounts: Record<string, number> = {};
   for (const r of COMPANY_ROLES) {
     roleCounts[r.id] = companies.filter(c => c.role === r.id).length;
   }
 
-  // Segment counts (only when Originación is selected)
-  const segmentCounts = {};
+  const segmentCounts: Record<string, number> = {};
   for (const s of ORIGINACION_SEGMENTS) {
     segmentCounts[s.id] = companies.filter(c => c.role === "Originación" && c.segment === s.id).length;
   }
 
-  // Show segment filter only when Originación is among selected roles (or no role filter)
   const showSegments = selGroups.length === 0 || selGroups.includes("Originación");
   const originacionSelected = selGroups.includes("Originación");
 
-  // Determine which types to show based on selected roles + segments
-  let availableTypes = [];
+  // Determine available types
+  let availableTypes: string[] = [];
   if (selGroups.length > 0) {
     for (const role of selGroups) {
       if (role === "Originación") {
         if (selSegments.length > 0) {
           for (const seg of selSegments) {
             const key = `Originación > ${seg}`;
-            availableTypes.push(...(COMPANY_TYPES_V2[key] || []));
+            availableTypes.push(...((COMPANY_TYPES_V2 as Record<string, string[]>)[key] || []));
           }
         } else {
           availableTypes.push(...(COMPANY_TYPES_V2["Originación > Project Finance"] || []));
-          // Corporate Finance has no fixed types
         }
       } else if (role === "Inversión") {
         availableTypes.push(...(COMPANY_TYPES_V2["Inversión > Deuda"] || []));
@@ -68,389 +181,301 @@ export default function Sidebar({
       } else if (role === "Ecosistema") {
         availableTypes.push(...(COMPANY_TYPES_V2["Ecosistema"] || []));
       }
-      // Also include legacy types for this role via COMPANY_TYPES
-      availableTypes.push(...(COMPANY_TYPES[role] || []));
+      availableTypes.push(...((COMPANY_TYPES as Record<string, string[]>)[role] || []));
     }
-    // Deduplicate
     availableTypes = [...new Set(availableTypes)];
   } else {
     availableTypes = ALL_COMPANY_TYPES;
   }
 
-  // Type counts
-  const typeCounts = {};
+  const typeCounts: Record<string, number> = {};
   for (const t of availableTypes) {
     typeCounts[t] = companies.filter(c => c.companyType === t).length;
   }
 
-  // Show activities filter when Corporate Finance is selected
   const showActivities = originacionSelected && (selSegments.length === 0 || selSegments.includes("Corporate Finance"));
 
-  // Activity counts
-  const activityCounts = {};
+  const activityCounts: Record<string, number> = {};
   if (showActivities) {
     for (const act of CORPORATE_ACTIVITIES) {
       activityCounts[act] = companies.filter(c => c.activities?.includes(act)).length;
     }
   }
 
-  // Technology counts
-  const techCounts = {};
+  const techCounts: Record<string, number> = {};
   for (const t of TECHNOLOGIES) {
     techCounts[t.id] = companies.filter(c => c.technologies?.includes(t.id)).length;
   }
 
-  const marketRoleCounts = {};
+  const marketRoleCounts: Record<string, number> = {};
   for (const mr of MARKET_ROLES) {
     marketRoleCounts[mr.id] = companies.filter(c => c.marketRoles?.includes(mr.id)).length;
   }
 
-  const productCounts = {};
+  const productCounts: Record<string, number> = {};
   for (const product of PRODUCTS) {
     let count = 0;
     for (const c of companies) {
       const matches = productMatches?.get(c.idx) || [];
-      if (matches.some(m => m.id === product.id && m.score >= 15)) count++;
+      if (matches.some((m: any) => m.id === product.id && m.score >= 15)) count++;
     }
     productCounts[product.id] = count;
   }
 
+  // Employee names for pills
+  const employeeNames = ["Todos", ...employees.map((e: any) => e.name?.split(" ")[0] || e.name)];
+
   return (
     <div style={{
-      width: 280, minWidth: 280, borderRight: "1px solid #E2E8F0",
-      padding: "20px", overflow: "auto", maxHeight: "calc(100vh - 57px)",
+      width: 270,
+      flexShrink: 0,
       background: "#FFFFFF",
+      borderRight: "1px solid #E2E8F0",
+      overflowY: "auto",
+      display: "flex",
+      flexDirection: "column",
+      fontFamily: font.family,
+      maxHeight: "calc(100vh - 60px)",
     }}>
-      {/* Header con badge contador */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 20,
-      }}>
-        <div style={{
-          fontSize: 14,
-          textTransform: "uppercase",
-          color: "#1E293B",
-          fontWeight: 700,
-          letterSpacing: "0.5px",
-        }}>
-          FILTROS
+      {/* ── Search ── */}
+      <div style={{ padding: "18px 16px 0" }}>
+        <div style={{ position: "relative" }}>
+          <Search size={13} color="#94A3B8" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+          <input
+            placeholder="Buscar empresa..."
+            value={search ?? ""}
+            onChange={e => onSearchChange?.(e.target.value)}
+            style={{
+              width: "100%",
+              background: "#F8FAFC",
+              border: "1px solid #E2E8F0",
+              borderRadius: 8,
+              padding: "8px 10px 8px 30px",
+              fontSize: 13,
+              color: "#0F172A",
+              outline: "none",
+              boxSizing: "border-box" as const,
+              fontFamily: font.family,
+            }}
+          />
         </div>
-        {totalActiveFilters > 0 && (
-          <div style={{
-            background: "linear-gradient(135deg, #3B82F6, #10B981)",
-            color: "white",
-            borderRadius: 12,
-            padding: "4px 8px",
-            fontSize: 12,
-            fontWeight: 600,
-            minWidth: 24,
-            textAlign: "center",
-          }}>
-            {totalActiveFilters}
-          </div>
-        )}
       </div>
 
-      {/* Role (replaces Company Group) */}
-      <FilterSection title="Role">
-        {COMPANY_ROLES.map(g => (
-          <FilterChip key={g.id}
-            label={
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: g.color, display: "inline-block", flexShrink: 0,
-                }} />
-                {g.label}
-                <span style={{
-                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                }}>
-                  {roleCounts[g.id]}
-                </span>
-              </span>
-            }
-            active={selGroups.includes(g.id)}
-            onClick={() => toggle(selGroups, setSelGroups, g.id)}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Segment (conditional, only when Originación selected) */}
-      {showSegments && originacionSelected && (
-        <FilterSection title="Segmento">
-          {ORIGINACION_SEGMENTS.map(s => (
-            <FilterChip key={s.id}
-              label={
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {s.label}
-                  <span style={{
-                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                  }}>
-                    {segmentCounts[s.id]}
-                  </span>
-                </span>
-              }
-              active={selSegments.includes(s.id)}
-              onClick={() => toggle(selSegments, setSelSegments, s.id)}
-            />
-          ))}
-        </FilterSection>
-      )}
-
-      {/* Type (dynamic based on role + segment) */}
-      {availableTypes.length > 0 && (
-        <FilterSection title="Tipo">
-          {availableTypes.filter(t => typeCounts[t] > 0).map(t => (
-            <FilterChip key={t}
-              label={
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {t}
-                  <span style={{
-                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                  }}>
-                    {typeCounts[t]}
-                  </span>
-                </span>
-              }
-              active={selTypes.includes(t)}
-              onClick={() => toggle(selTypes, setSelTypes, t)}
-            />
-          ))}
-        </FilterSection>
-      )}
-
-      {/* Corporate Finance Activities (conditional multi-select) */}
-      {showActivities && (
-        <FilterSection title="Actividad Corp. Finance">
-          {CORPORATE_ACTIVITIES.filter(act => activityCounts[act] > 0).map(act => (
-            <FilterChip key={act}
-              label={
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 11 }}>{act}</span>
-                  <span style={{
-                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                  }}>
-                    {activityCounts[act]}
-                  </span>
-                </span>
-              }
-              active={selActivities.includes(act)}
-              onClick={() => toggle(selActivities, setSelActivities, act)}
-            />
-          ))}
-        </FilterSection>
-      )}
-
-      {/* Technology */}
-      <FilterSection title="Tecnología">
-        {TECHNOLOGIES.map(t => (
-          <FilterChip key={t.id}
-            label={
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 12 }}>{t.icon}</span>
-                {t.label}
-                <span style={{
-                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                }}>
-                  {techCounts[t.id]}
-                </span>
-              </span>
-            }
-            active={selTech.includes(t.id)}
-            onClick={() => toggle(selTech, setSelTech, t.id)}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Market Role */}
-      <FilterSection title="Market Role">
-        {MARKET_ROLES.map(mr => (
-          <FilterChip key={mr.id}
-            label={
-              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: mr.color, display: "inline-block", flexShrink: 0,
-                }} />
-                {mr.label}
-                <span style={{
-                  fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                }}>
-                  {marketRoleCounts[mr.id]}
-                </span>
-              </span>
-            }
-            active={selMarketRoles.includes(mr.id)}
-            onClick={() => toggle(selMarketRoles, setSelMarketRoles, mr.id)}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Status */}
-      <FilterSection title="Estado de Empresa">
-        {["active", "dormant", "lost"].map(s => (
-          <FilterChip key={s}
-            label={`${STATUS_LABELS[s]} (${statusCounts[s]})`}
-            active={selStatus.includes(s)}
-            onClick={() => toggle(selStatus, setSelStatus, s)}
-          />
-        ))}
-      </FilterSection>
-
-      {/* Pipeline Airtable */}
-      {(() => {
-        const stages = getOpportunityStages();
-        const oppCounts = getOpportunityCounts(companies);
-        if (oppCounts._any === 0 && stages.length === 0) return null;
-        return (
-          <FilterSection title={
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              Pipeline
-              <span style={{
-                fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
-                background: "#8B5CF620", color: "#A78BFA", textTransform: "uppercase",
-                letterSpacing: "0.5px",
-              }}>Airtable</span>
-            </span>
-          }>
-            <FilterChip
-              label={
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{
-                    width: 8, height: 8, borderRadius: "50%",
-                    background: "#8B5CF6", display: "inline-block", flexShrink: 0,
-                  }} />
-                  Todas las oportunidades
-                  <span style={{
-                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                  }}>{oppCounts._any || 0}</span>
-                </span>
-              }
-              active={selPipeline === "_any"}
-              onClick={() => {
-                setSelPipeline(prev => prev === "_any" ? "" : "_any");
-                setPage(0);
-              }}
-            />
-            {stages.map(stage => (
-              <FilterChip key={stage}
-                label={
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 14 }}>
-                    {stage}
-                    <span style={{
-                      fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                    }}>{oppCounts[stage] || 0}</span>
-                  </span>
-                }
-                active={selPipeline === stage}
+      {/* ── Empleado ── */}
+      <FilterSection title="Empleado">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          {employeeNames.map(name => {
+            const isTodos = name === "Todos";
+            const isActive = isTodos ? selEmployees.length === 0 : selEmployees.includes(name);
+            return (
+              <button
+                key={name}
                 onClick={() => {
-                  setSelPipeline(prev => prev === stage ? "" : stage);
+                  if (isTodos) {
+                    setSelEmployees([]);
+                  } else {
+                    toggle(selEmployees, setSelEmployees, name);
+                  }
                   setPage(0);
                 }}
-              />
-            ))}
-          </FilterSection>
-        );
-      })()}
-
-      {/* Producto Alter5 */}
-      <FilterSection title="Producto Alter5">
-        {PRODUCTS.map(p => (
-          <div key={p.id}>
-            <FilterChip
-              label={
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{
-                    width: 8, height: 8, borderRadius: "50%",
-                    background: p.color, display: "inline-block", flexShrink: 0,
-                  }} />
-                  {p.name}
-                  <span style={{
-                    fontSize: 10, color: "#94A3B8", fontWeight: 600, marginLeft: "auto",
-                  }}>
-                    {productCounts[p.id]}
-                  </span>
-                </span>
-              }
-              active={selProduct === p.id}
-              onClick={() => {
-                setSelProduct(prev => prev === p.id ? "" : p.id);
-                setPage(0);
-              }}
-            />
-            {p.subcategories && (
-              <div style={{ marginLeft: 20, marginTop: 2, marginBottom: 6 }}>
-                {p.subcategories.map(sub => (
-                  <div key={sub.id} style={{
-                    fontSize: 10, color: "#6B7F94", fontWeight: 600,
-                    padding: "2px 0", display: "flex", alignItems: "center", gap: 4,
-                  }}>
-                    <span style={{ color: p.color, fontSize: 8 }}>├</span>
-                    {sub.name}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                style={isActive ? pillActive : pillInactive}
+              >
+                {name}
+              </button>
+            );
+          })}
+        </div>
       </FilterSection>
 
-      {/* Clear */}
-      {hasFilters && (
+      {/* ── Rol ── */}
+      <FilterSection title="Rol">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          {COMPANY_ROLES.map(g => {
+            const active = selGroups.includes(g.id);
+            const activeColor = ROLE_ACTIVE_COLORS[g.id] || "#1E293B";
+            return (
+              <button
+                key={g.id}
+                onClick={() => toggle(selGroups, setSelGroups, g.id)}
+                style={active ? pillActiveColored(activeColor) : pillInactive}
+              >
+                {g.label}
+                <Count n={roleCounts[g.id]} active={active} />
+              </button>
+            );
+          })}
+        </div>
+      </FilterSection>
+
+      {/* ── Tecnologia ── */}
+      <FilterSection title="Tecnologia">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          {TECHNOLOGIES.map(t => {
+            const active = selTech.includes(t.id);
+            return (
+              <button
+                key={t.id}
+                onClick={() => toggle(selTech, setSelTech, t.id)}
+                style={active ? pillActiveColored("#0EA5E9") : pillInactive}
+              >
+                <span style={{ fontSize: 11 }}>{t.icon}</span>
+                {t.label}
+                <Count n={techCounts[t.id]} active={active} />
+              </button>
+            );
+          })}
+        </div>
+      </FilterSection>
+
+      {/* ── Estado de Empresa (radio dots) ── */}
+      <FilterSection title="Estado">
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {(["active", "dormant", "lost"] as const).map(s => {
+            const active = selStatus.includes(s);
+            const dotColor = STATUS_DOT_COLORS[s];
+            return (
+              <button
+                key={s}
+                onClick={() => toggle(selStatus, setSelStatus, s)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "4px 0",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: font.family,
+                }}
+              >
+                {/* Radio circle */}
+                <span style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  border: `2px solid ${active ? dotColor : "#CBD5E1"}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: "all 0.12s ease",
+                }}>
+                  {active && (
+                    <span style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: dotColor,
+                    }} />
+                  )}
+                </span>
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? "#0F172A" : "#64748B",
+                }}>
+                  {(STATUS_LABELS as any)[s]}
+                </span>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "#94A3B8",
+                  marginLeft: "auto",
+                }}>
+                  {statusCounts[s]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </FilterSection>
+
+      {/* ── Product Match ── */}
+      <FilterSection title="Product Match">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+          {PRODUCTS.map(p => {
+            const active = selProduct === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => {
+                  setSelProduct((prev: string) => prev === p.id ? "" : p.id);
+                  setPage(0);
+                }}
+                style={active ? pillActiveColored(p.color) : pillInactive}
+              >
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: active ? "#FFFFFF" : p.color,
+                  display: "inline-block", flexShrink: 0,
+                }} />
+                {p.name}
+                <Count n={productCounts[p.id]} active={active} />
+              </button>
+            );
+          })}
+        </div>
+      </FilterSection>
+
+      {/* ── Spacer to push clear button to bottom ── */}
+      <div style={{ flex: 1 }} />
+
+      {/* ── Limpiar filtros ── */}
+      <div style={{ padding: "18px 16px 24px" }}>
         <button
           onClick={() => {
-            setSelEmployees([]); setSelGroups([]); setSelSegments([]); setSelTypes([]); setSelActivities([]); setSelTech([]); setSelStatus([]); setSelMarketRoles([]); setSelPipeline(""); setSelProduct(""); setPage(0);
+            setSelEmployees([]);
+            setSelGroups([]);
+            setSelSegments([]);
+            setSelTypes([]);
+            setSelActivities([]);
+            setSelTech([]);
+            setSelStatus([]);
+            setSelMarketRoles([]);
+            setSelPipeline("");
+            setSelProduct("");
+            if (onSearchChange) onSearchChange("");
+            setPage(0);
           }}
           style={{
-            marginTop: 20,
             width: "100%",
-            padding: "10px 16px",
+            background: hasFilters ? "#F8FAFC" : "#FAFAFA",
+            border: "1px solid #E2E8F0",
             borderRadius: 8,
-            border: "1px solid #CBD5E1",
-            cursor: "pointer",
+            padding: "9px",
+            fontSize: 12,
             fontWeight: 500,
-            fontSize: 14,
-            background: "transparent",
-            color: "#64748B",
-            fontFamily: "inherit",
+            color: hasFilters ? "#64748B" : "#CBD5E1",
+            cursor: hasFilters ? "pointer" : "default",
+            fontFamily: font.family,
             transition: "all 0.15s ease",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#F8FAFC";
-            e.currentTarget.style.borderColor = "#94A3B8";
-            e.currentTarget.style.color = "#475569";
+            if (hasFilters) {
+              e.currentTarget.style.background = "#F1F5F9";
+              e.currentTarget.style.borderColor = "#94A3B8";
+              e.currentTarget.style.color = "#475569";
+            }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.borderColor = "#CBD5E1";
-            e.currentTarget.style.color = "#64748B";
+            e.currentTarget.style.background = hasFilters ? "#F8FAFC" : "#FAFAFA";
+            e.currentTarget.style.borderColor = "#E2E8F0";
+            e.currentTarget.style.color = hasFilters ? "#64748B" : "#CBD5E1";
           }}
         >
-          Limpiar todos
+          Limpiar filtros
         </button>
-      )}
+      </div>
     </div>
   );
 }
 
-function FilterSection({ title, children }) {
+/* ── Filter Section wrapper ── */
+function FilterSection({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{
-        fontSize: 12,
-        textTransform: "uppercase",
-        color: "#6B7F94",
-        fontWeight: 700,
-        letterSpacing: "0.5px",
-        marginBottom: 8,
-        display: "flex",
-        alignItems: "center",
-      }}>
-        {title}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{children}</div>
+    <div style={{ padding: "14px 16px 0" }}>
+      <div style={sectionHeaderStyle}>{title}</div>
+      {children}
     </div>
   );
 }
