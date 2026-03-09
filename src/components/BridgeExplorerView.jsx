@@ -193,6 +193,20 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
 
   const showToast = useCallback(msg => setToast(msg), []);
 
+  // ── Detect domains already contacted by Leticia (campaign sender) ──
+  const leticiaDomains = useMemo(() => {
+    const matched = new Set();
+    for (const c of allCompanies) {
+      const domain = c.domain?.toLowerCase();
+      if (!domain) continue;
+      const leticiaSource = (c.detail?.sources || []).find(
+        s => s.employee === 'leticia_menéndez'
+      );
+      if (leticiaSource && leticiaSource.interactions > 0) matched.add(domain);
+    }
+    return matched;
+  }, [allCompanies]);
+
   // ── Load data on mount ─────────────────────────────────────────────
   useEffect(() => {
     loadData();
@@ -240,8 +254,11 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
         const domain = c.domain?.toLowerCase();
         if (!domain) return false;
 
-        // Absolute shield: already contacted
+        // Absolute shield: already contacted via campaign system
         if (trackingDomains.has(domain)) return false;
+
+        // CRM shield: Leticia already emailed this company
+        if (leticiaDomains.has(domain)) return false;
 
         // Exclude companies already approved/sent in previous waves
         const prevStatus = previousTargets[domain]?.status;
@@ -319,7 +336,7 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
         }
         return b.explorerScore - a.explorerScore;
       });
-  }, [allCompanies, trackingDomains, savedTargets, previousTargets, segFilter, typeFilter,
+  }, [allCompanies, trackingDomains, leticiaDomains, savedTargets, previousTargets, segFilter, typeFilter,
       techFilter, geoFilter, targetFilter, statusFilter, searchQuery, minScore, llmOrdering]);
 
   // Unique filter values
@@ -1308,6 +1325,11 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
               {Object.keys(previousTargets).length > 0 && (
                 <span style={{ marginLeft: 6 }}>
                   · {Object.values(previousTargets).filter(t => t.status === 'approved' || t.status === 'sent' || t.status === 'selected').length} excluidas de waves anteriores
+                </span>
+              )}
+              {leticiaDomains.size > 0 && (
+                <span style={{ marginLeft: 6, color: '#7C3AED' }}>
+                  · {leticiaDomains.size} excluidas (ya contactadas por Leticia)
                 </span>
               )}
               {trackingError && (
