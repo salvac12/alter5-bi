@@ -1,9 +1,28 @@
 import { useState } from 'react';
 import { KPI } from './UI';
 
+// ── Design tokens ────────────────────────────────────────────────
+const COLORS = {
+  bg: '#F0F4F8',
+  card: '#FFFFFF',
+  border: '#E2E8F0',
+  surface: '#1E293B',
+  text: '#1A2B3D',
+  textSecondary: '#64748B',
+  textMuted: '#94A3B8',
+  accent: '#3B82F6',
+  green: '#10B981',
+  purple: '#8B5CF6',
+  orange: '#F97316',
+  yellow: '#F59E0B',
+  red: '#EF4444',
+};
+
+const RADIUS = { sm: 6, md: 10, lg: 14 };
+
 // ── Status config ─────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  draft:     { label: 'Borrador',   color: '#6B7F94', bg: '#F1F5F9', dot: '#94A3B8' },
+  draft:     { label: 'Borrador',   color: '#64748B', bg: '#F1F5F9', dot: '#94A3B8' },
   active:    { label: 'Activa',     color: '#059669', bg: '#ECFDF5', dot: '#10B981' },
   paused:    { label: 'Pausada',    color: '#D97706', bg: '#FFFBEB', dot: '#F59E0B' },
   completed: { label: 'Completada', color: '#6B21A8', bg: '#F5F3FF', dot: '#8B5CF6' },
@@ -16,6 +35,13 @@ const TABS = [
   { id: 'completed', label: 'Completadas' },
   { id: 'all', label: 'Todas' },
 ];
+
+// ── KPI icon circles ─────────────────────────────────────────────
+const KPI_ICONS = {
+  active: { icon: '\u26A1', accent: COLORS.green },
+  sent: { icon: '\u2709', accent: COLORS.accent },
+  reply: { icon: '\u21A9', accent: COLORS.yellow },
+};
 
 // ── Main component ────────────────────────────────────────────────
 export default function CampaignsView({
@@ -45,10 +71,10 @@ export default function CampaignsView({
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 36, height: 36, borderRadius: '50%',
-            border: '3px solid #E2E8F0', borderTopColor: '#3B82F6',
+            border: `3px solid ${COLORS.border}`, borderTopColor: COLORS.accent,
             animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
-          <p style={{ fontSize: 13, color: '#6B7F94' }}>Cargando campanas...</p>
+          <p style={{ fontSize: 13, color: COLORS.textMuted }}>Cargando campanas...</p>
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
@@ -59,11 +85,11 @@ export default function CampaignsView({
     return (
       <div style={{
         margin: 24, padding: 20, background: '#FEF2F2', border: '1px solid #FECACA',
-        borderRadius: 10, color: '#DC2626', fontSize: 13,
+        borderRadius: RADIUS.md, color: '#DC2626', fontSize: 13,
       }}>
         Error: {error}
         <button onClick={onRefresh} style={{
-          marginLeft: 12, padding: '4px 12px', borderRadius: 6,
+          marginLeft: 12, padding: '4px 12px', borderRadius: RADIUS.sm,
           border: '1px solid #DC2626', background: 'transparent',
           color: '#DC2626', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
         }}>Reintentar</button>
@@ -73,11 +99,11 @@ export default function CampaignsView({
 
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* ── KPI Row ── */}
+      {/* ── KPI Row with icon circles and colored top borders ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
-        <KPI label="Campanas activas" value={activeCampaigns} accent="#10B981" />
-        <KPI label="Emails enviados" value={totalSent} accent="#3B82F6" />
-        <KPI label="Tasa respuesta" value={replyRate} accent="#F59E0B" />
+        <KpiCard icon={KPI_ICONS.active.icon} accent={KPI_ICONS.active.accent} label="Campanas activas" value={activeCampaigns} />
+        <KpiCard icon={KPI_ICONS.sent.icon} accent={KPI_ICONS.sent.accent} label="Emails enviados" value={totalSent} />
+        <KpiCard icon={KPI_ICONS.reply.icon} accent={KPI_ICONS.reply.accent} label="Tasa respuesta" value={replyRate} />
       </div>
 
       {/* ── Header: tabs + search + create button ── */}
@@ -85,17 +111,17 @@ export default function CampaignsView({
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         marginBottom: 16, flexWrap: 'wrap', gap: 10,
       }}>
-        <div style={{ display: 'flex', gap: 0, background: '#F1F5F9', borderRadius: 8, padding: 3 }}>
+        <div style={{ display: 'flex', gap: 0, background: COLORS.bg, borderRadius: 8, padding: 3 }}>
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               style={{
-                padding: '5px 14px', borderRadius: 6, border: 'none',
+                padding: '5px 14px', borderRadius: RADIUS.sm, border: 'none',
                 fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 fontFamily: 'inherit', transition: 'all 0.15s ease',
-                background: tab === t.id ? '#FFFFFF' : 'transparent',
-                color: tab === t.id ? '#1A2B3D' : '#6B7F94',
+                background: tab === t.id ? COLORS.card : 'transparent',
+                color: tab === t.id ? COLORS.text : COLORS.textSecondary,
                 boxShadow: tab === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
               }}
             >{t.label}</button>
@@ -109,24 +135,24 @@ export default function CampaignsView({
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{
-              padding: '6px 12px', borderRadius: 8, border: '1px solid #E2E8F0',
+              padding: '6px 12px', borderRadius: 8, border: `1px solid ${COLORS.border}`,
               fontSize: 13, fontFamily: 'inherit', width: 200,
               outline: 'none', transition: 'border-color 0.15s',
             }}
-            onFocus={e => e.target.style.borderColor = '#3B82F6'}
-            onBlur={e => e.target.style.borderColor = '#E2E8F0'}
+            onFocus={e => e.target.style.borderColor = COLORS.accent}
+            onBlur={e => e.target.style.borderColor = COLORS.border}
           />
           <button
             onClick={onCreateCampaign}
             style={{
               padding: '7px 16px', borderRadius: 8,
-              border: 'none', background: '#3B82F6', color: '#FFFFFF',
+              border: 'none', background: COLORS.accent, color: '#FFFFFF',
               fontSize: 13, fontWeight: 600, cursor: 'pointer',
               fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
               transition: 'background 0.15s',
             }}
             onMouseEnter={e => e.currentTarget.style.background = '#2563EB'}
-            onMouseLeave={e => e.currentTarget.style.background = '#3B82F6'}
+            onMouseLeave={e => e.currentTarget.style.background = COLORS.accent}
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
             Nueva campana
@@ -137,15 +163,15 @@ export default function CampaignsView({
       {/* ── Campaign list ── */}
       {filtered.length === 0 ? (
         <div style={{
-          padding: 40, textAlign: 'center', color: '#6B7F94',
-          background: '#F7F9FC', borderRadius: 10, border: '1px dashed #E2E8F0',
+          padding: 40, textAlign: 'center', color: COLORS.textSecondary,
+          background: COLORS.bg, borderRadius: RADIUS.md, border: `1px dashed ${COLORS.border}`,
         }}>
           <p style={{ fontSize: 14, marginBottom: 8 }}>
             {search ? 'Sin resultados para esta busqueda' : 'No hay campanas en esta categoria'}
           </p>
           <button onClick={onCreateCampaign} style={{
-            padding: '6px 14px', borderRadius: 6, border: '1px solid #3B82F6',
-            background: 'transparent', color: '#3B82F6', fontSize: 12,
+            padding: '6px 14px', borderRadius: RADIUS.sm, border: `1px solid ${COLORS.accent}`,
+            background: 'transparent', color: COLORS.accent, fontSize: 12,
             cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
           }}>Crear primera campana</button>
         </div>
@@ -167,11 +193,46 @@ export default function CampaignsView({
   );
 }
 
-// ── Campaign Card ─────────────────────────────────────────────────
+// ── KPI Card with icon circle + colored top border ───────────────
+function KpiCard({ icon, accent, label, value }) {
+  return (
+    <div style={{
+      background: COLORS.card,
+      borderRadius: RADIUS.md,
+      border: `1px solid ${COLORS.border}`,
+      borderTop: `3px solid ${accent}`,
+      padding: '16px 18px',
+      display: 'flex', alignItems: 'center', gap: 14,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: '50%',
+        background: `${accent}15`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 18, flexShrink: 0,
+      }}>
+        <span style={{ color: accent }}>{icon}</span>
+      </div>
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.text }}>
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Campaign Card with 4px accent left border ────────────────────
 function CampaignCard({ campaign, isHovered, onMouseEnter, onMouseLeave, onClick }) {
   const st = STATUS_CONFIG[campaign.status] || STATUS_CONFIG.draft;
   const openRate = campaign.totalSent > 0
-    ? ((campaign.totalOpened / campaign.totalSent) * 100).toFixed(0) + '%'
+    ? ((campaign.totalOpened / campaign.totalSent) * 100)
+    : 0;
+  const openRateStr = campaign.totalSent > 0
+    ? openRate.toFixed(0) + '%'
     : '\u2014';
   const replyRate = campaign.totalSent > 0
     ? ((campaign.totalReplied / campaign.totalSent) * 100).toFixed(0) + '%'
@@ -187,15 +248,16 @@ function CampaignCard({ campaign, isHovered, onMouseEnter, onMouseLeave, onClick
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{
-        background: '#FFFFFF',
-        border: '1px solid #E2E8F0',
-        borderRadius: 10,
+        background: COLORS.card,
+        border: `1px solid ${COLORS.border}`,
+        borderLeft: `4px solid ${st.dot}`,
+        borderRadius: RADIUS.md,
         padding: '14px 18px',
         cursor: 'pointer',
         transition: 'all 0.15s ease',
         transform: isHovered ? 'translateY(-1px)' : 'none',
         boxShadow: isHovered
-          ? '0 4px 12px rgba(0,0,0,0.08), 0 0 0 1px rgba(59,130,246,0.15)'
+          ? `0 4px 12px rgba(0,0,0,0.08), 0 0 0 1px ${COLORS.accent}25`
           : '0 1px 3px rgba(0,0,0,0.04)',
       }}
     >
@@ -204,24 +266,24 @@ function CampaignCard({ campaign, isHovered, onMouseEnter, onMouseLeave, onClick
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 5,
-            padding: '2px 8px', borderRadius: 4,
+            padding: '3px 10px', borderRadius: 20,
             fontSize: 10, fontWeight: 600,
             color: st.color, background: st.bg,
           }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: st.dot }} />
             {st.label}
           </span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#1A2B3D' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>
             {campaign.name}
           </span>
         </div>
-        <span style={{ fontSize: 12, color: isHovered ? '#3B82F6' : '#6B7F94', transition: 'color 0.15s' }}>
+        <span style={{ fontSize: 12, color: isHovered ? COLORS.accent : COLORS.textSecondary, transition: 'color 0.15s' }}>
           Ver detalle \u2192
         </span>
       </div>
 
-      {/* Row 2: meta + metrics */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: '#6B7F94', flexWrap: 'wrap' }}>
+      {/* Row 2: meta + metrics + open rate progress bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: COLORS.textSecondary, flexWrap: 'wrap' }}>
         <span>
           {campaign.type === 'mass' ? 'Masiva' : '1-a-1'}
           {campaign.type === 'mass' && campaign.subjectB && ' \u00b7 A/B'}
@@ -230,10 +292,10 @@ function CampaignCard({ campaign, isHovered, onMouseEnter, onMouseLeave, onClick
         {dateStr && <span>\u00b7 {dateStr}</span>}
         {campaign.totalSent > 0 ? (
           <>
-            <span style={{ color: '#334155', fontWeight: 600 }}>
+            <span style={{ color: COLORS.text, fontWeight: 600 }}>
               Enviados: {campaign.totalSent}
             </span>
-            <span>Abiertos: {campaign.totalOpened || 0} ({openRate})</span>
+            <span>Abiertos: {campaign.totalOpened || 0} ({openRateStr})</span>
             <span>Respondidos: {campaign.totalReplied || 0} ({replyRate})</span>
           </>
         ) : campaign.status === 'draft' ? (
@@ -241,13 +303,35 @@ function CampaignCard({ campaign, isHovered, onMouseEnter, onMouseLeave, onClick
         ) : null}
         {(campaign.followUpCount || 0) > 0 && (
           <span style={{
-            padding: '1px 8px', borderRadius: 10,
+            padding: '2px 10px', borderRadius: 20,
             background: '#F5F3FF', color: '#7C3AED', fontWeight: 600,
           }}>
             {campaign.followUpCount} follow-up{campaign.followUpCount !== 1 ? 's' : ''}
           </span>
         )}
       </div>
+
+      {/* Open rate progress bar */}
+      {campaign.totalSent > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: COLORS.textMuted, minWidth: 55 }}>Apertura</span>
+          <div style={{
+            flex: 1, height: 4, background: '#F1F5F9',
+            borderRadius: 2, overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${Math.min(openRate, 100)}%`,
+              height: '100%',
+              background: COLORS.green,
+              borderRadius: 2,
+              transition: 'width 0.4s ease',
+            }} />
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 700, color: COLORS.green, minWidth: 32, textAlign: 'right' }}>
+            {openRateStr}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

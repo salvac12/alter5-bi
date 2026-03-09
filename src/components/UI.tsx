@@ -1,21 +1,27 @@
 import React from 'react';
 import { STATUS_LABELS, STATUS_COLORS, STATUS_BG } from '../utils/constants';
+import { colors, font, layout, spacing } from '../theme/tokens';
 
 /* ── Badge ── */
-export function Badge({ children, color, bg, variant }) {
-  let c = color || "#1B3A5C";
-  let b = bg || "#F1F5F9";
+export function Badge({ children, color, bg, variant }: {
+  children: React.ReactNode;
+  color?: string;
+  bg?: string;
+  variant?: string;
+}) {
+  let c = color || colors.text.secondary;
+  let b = bg || colors.light.hover;
 
   if (variant === "type") {
-    c = "#3B82F6"; b = "#EFF6FF";
+    c = colors.accent.blue; b = "#EFF6FF";
   } else if (variant === "employee") {
-    c = "#1B3A5C"; b = "#F7F9FC";
+    c = colors.text.primary; b = colors.light.hover;
   }
 
   return (
     <span style={{
       display: "inline-block", padding: "2px 8px", borderRadius: 4,
-      fontSize: 9, fontWeight: 500, color: c, background: b,
+      fontSize: 9, fontWeight: font.weight.medium, color: c, background: b,
       whiteSpace: "nowrap", lineHeight: "16px", letterSpacing: "0.02em",
     }}>
       {children}
@@ -24,41 +30,45 @@ export function Badge({ children, color, bg, variant }) {
 }
 
 /* ── Status Badge ── */
-export function StatusBadge({ status }) {
+export function StatusBadge({ status }: { status: string }) {
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       padding: "2px 8px", borderRadius: 4, fontSize: 9, fontWeight: 600,
-      color: STATUS_COLORS[status], background: STATUS_BG[status],
+      color: (STATUS_COLORS as any)[status], background: (STATUS_BG as any)[status],
       whiteSpace: "nowrap", lineHeight: "16px", letterSpacing: "0.02em",
     }}>
       <span style={{
-        width: 5, height: 5, borderRadius: "50%", background: STATUS_COLORS[status],
+        width: 5, height: 5, borderRadius: "50%", background: (STATUS_COLORS as any)[status],
       }} />
-      {STATUS_LABELS[status]}
+      {(STATUS_LABELS as any)[status]}
     </span>
   );
 }
 
 /* ── Score Bar ── */
-export function ScoreBar({ score, max = 100, label }) {
+export function ScoreBar({ score, max = 100, label }: {
+  score: number;
+  max?: number;
+  label?: string;
+}) {
   const pct = (score / max) * 100;
   const gradient = pct > 60
-    ? "linear-gradient(90deg, #3B82F6, #10B981)"
+    ? `linear-gradient(90deg, ${colors.accent.blue}, ${colors.accent.green})`
     : pct > 30
-      ? "linear-gradient(90deg, #3B82F6, #60A5FA)"
-      : "#E2E8F0";
+      ? `linear-gradient(90deg, ${colors.accent.blue}, #60A5FA)`
+      : colors.light.border;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       {label && (
         <span style={{
-          width: 56, fontSize: 10, fontWeight: 700, color: "#6B7F94",
+          width: 56, fontSize: 10, fontWeight: 700, color: colors.text.secondary,
           textTransform: "uppercase", letterSpacing: "0.05em",
         }}>{label}</span>
       )}
       <div style={{
-        flex: 1, height: 4, background: "#F1F5F9", borderRadius: 2, overflow: "hidden",
+        flex: 1, height: 4, background: colors.light.hover, borderRadius: 2, overflow: "hidden",
       }}>
         <div style={{
           height: "100%", width: `${pct}%`, borderRadius: 2,
@@ -66,47 +76,63 @@ export function ScoreBar({ score, max = 100, label }) {
         }} />
       </div>
       <span style={{
-        width: 22, textAlign: "right", fontWeight: 700, color: "#1A2B3D", fontSize: 11,
+        width: 22, textAlign: "right", fontWeight: 700, color: colors.text.primary, fontSize: 11,
       }}>{score}</span>
     </div>
   );
 }
 
-/* ── KPI Card ── */
-export function KPI({ label, value, sub, accent, onClick, active }) {
+/* ── KPI Card (V2: accent border-top) ── */
+export function KPI({ label, value, sub, accent, onClick, active }: {
+  label: string;
+  value: number | string;
+  sub?: string;
+  accent?: string;
+  onClick?: () => void;
+  active?: boolean;
+}) {
   return (
     <div onClick={onClick} style={{
-      background: active ? (accent ? `${accent}10` : "#F0F9FF") : "#FFFFFF",
-      borderRadius: 10, padding: "16px 18px",
-      border: active ? `2px solid ${accent || "#3B82F6"}` : "1px solid #E2E8F0",
+      background: active ? `${accent || colors.accent.blue}08` : '#FFFFFF',
+      borderRadius: layout.borderRadius.lg,
+      padding: '16px 18px',
+      border: active ? `2px solid ${accent || colors.accent.blue}` : `1px solid ${colors.light.border}`,
+      borderTop: accent ? `3px solid ${accent}` : undefined,
       cursor: onClick ? "pointer" : "default",
       transition: "all 0.15s ease",
+      boxShadow: active ? `0 0 0 3px ${accent || colors.accent.blue}15` : 'none',
     }}>
       <div style={{
         fontSize: 10, textTransform: "uppercase", letterSpacing: "2.5px",
-        color: "#6B7F94", marginBottom: 6, fontWeight: 700,
+        color: colors.text.secondary, marginBottom: 6, fontWeight: 700,
       }}>{label}</div>
       <div style={{
-        fontSize: 28, fontWeight: 800, color: accent || "#1A2B3D",
+        fontSize: 28, fontWeight: 800, color: accent || colors.text.primary,
         lineHeight: 1, letterSpacing: "-1.5px",
-      }}>{value}</div>
+      }}>{typeof value === 'number' ? value.toLocaleString('es-ES') : value}</div>
       {sub && (
-        <div style={{ fontSize: 11, color: "#6B7F94", marginTop: 6, fontWeight: 400 }}>{sub}</div>
+        <div style={{ fontSize: 11, color: colors.text.secondary, marginTop: 6, fontWeight: 400 }}>{sub}</div>
       )}
     </div>
   );
 }
 
-/* ── Filter Chip ── */
-export function FilterChip({ label, active, onClick, style = {} }) {
+/* ── Filter Chip (V2: pill style) ── */
+export function FilterChip({ label, active, onClick, style = {} }: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  style?: React.CSSProperties;
+}) {
   return (
     <button onClick={onClick} style={{
-      padding: "4px 10px", borderRadius: 4, fontSize: 12, fontWeight: 500,
+      padding: "4px 12px", borderRadius: layout.borderRadius.full, fontSize: 12, fontWeight: 500,
       cursor: "pointer", textAlign: "left", lineHeight: 1.4,
-      border: active ? "1px solid #10B981" : "1px solid transparent",
-      background: active ? "#ECFDF5" : "transparent",
-      color: active ? "#10B981" : "#6B7F94",
+      border: active ? `1px solid ${colors.accent.blue}` : "1px solid transparent",
+      background: active ? `${colors.accent.blue}12` : "transparent",
+      color: active ? colors.accent.blue : colors.text.secondary,
       transition: "all 0.12s ease",
+      fontFamily: font.family,
       ...style,
     }}>
       {label}
@@ -115,10 +141,10 @@ export function FilterChip({ label, active, onClick, style = {} }) {
 }
 
 /* ── Section Label (uppercase) ── */
-export function SectionLabel({ children }) {
+export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 10, textTransform: "uppercase", color: "#6B7F94",
+      fontSize: 10, textTransform: "uppercase", color: colors.text.secondary,
       fontWeight: 700, letterSpacing: "2.5px", marginBottom: 8,
     }}>
       {children}
@@ -126,7 +152,7 @@ export function SectionLabel({ children }) {
   );
 }
 
-/* ── Badge "Próximamente" ── */
+/* ── Badge "Proximamente" ── */
 export function ComingSoonBadge() {
   return (
     <span style={{
@@ -142,13 +168,13 @@ export function ComingSoonBadge() {
       textTransform: "uppercase",
       marginLeft: 8,
     }}>
-      Próximamente
+      Proximamente
     </span>
   );
 }
 
 /* ── Tooltip ── */
-export function Tooltip({ children, text }) {
+export function Tooltip({ children, text }: { children: React.ReactNode; text: string }) {
   const [show, setShow] = React.useState(false);
 
   return (
@@ -164,10 +190,10 @@ export function Tooltip({ children, text }) {
           top: "50%",
           transform: "translateY(-50%)",
           marginLeft: 8,
-          background: "#1E293B",
+          background: colors.dark.surface,
           color: "white",
           padding: "8px 12px",
-          borderRadius: 6,
+          borderRadius: layout.borderRadius.sm,
           fontSize: 12,
           maxWidth: 200,
           boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
@@ -176,7 +202,6 @@ export function Tooltip({ children, text }) {
           pointerEvents: "none",
         }}>
           {text}
-          {/* Arrow */}
           <div style={{
             position: "absolute",
             right: "100%",
@@ -186,7 +211,7 @@ export function Tooltip({ children, text }) {
             height: 0,
             borderTop: "6px solid transparent",
             borderBottom: "6px solid transparent",
-            borderRight: "6px solid #1E293B",
+            borderRight: `6px solid ${colors.dark.surface}`,
           }} />
         </div>
       )}

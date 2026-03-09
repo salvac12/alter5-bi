@@ -1,23 +1,27 @@
 import employeesData from '../data/employees.json';
+import { colors, font, layout, spacing } from '../theme/tokens';
 
-export default function EmployeeTabs({ activeTab, onTabChange, totalCount }) {
-  // Crear tabs: Todos + empleados individuales
+export default function EmployeeTabs({ activeTab, onTabChange, totalCount }: {
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+  totalCount: number;
+}) {
   const tabs = [
     { id: 'all', name: 'Todos', count: totalCount },
-    ...employeesData.map(emp => ({
+    ...employeesData.map((emp: any) => ({
       id: emp.id,
-      name: emp.name.split(' ')[0], // Solo primer nombre (Salvador, Guillermo, Leticia)
-      count: emp.companiesCount
-    }))
+      name: emp.name.split(' ')[0],
+      count: emp.companiesCount,
+    })),
   ];
 
   return (
     <div style={{
       display: 'flex',
       gap: 0,
-      borderBottom: '1px solid #E2E8F0',
+      borderBottom: `1px solid ${colors.light.border}`,
       background: '#FFFFFF',
-      padding: '0 24px',
+      padding: `0 ${spacing.xl}`,
     }}>
       {tabs.map(tab => {
         const isActive = activeTab === tab.id;
@@ -28,12 +32,12 @@ export default function EmployeeTabs({ activeTab, onTabChange, totalCount }) {
             onClick={() => onTabChange(tab.id)}
             style={{
               position: 'relative',
-              padding: '12px 24px',
+              padding: `${spacing.md} ${spacing['2xl']}`,
               background: isActive
-                ? 'linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%)'
+                ? `linear-gradient(180deg, ${colors.accent.blue}08 0%, ${colors.accent.blue}03 100%)`
                 : 'transparent',
               border: 'none',
-              borderBottom: isActive ? '3px solid #3B82F6' : '1px solid transparent',
+              borderBottom: isActive ? `3px solid ${colors.accent.blue}` : '1px solid transparent',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
               borderRadius: '8px 8px 0 0',
@@ -42,11 +46,12 @@ export default function EmployeeTabs({ activeTab, onTabChange, totalCount }) {
               alignItems: 'center',
               gap: 4,
               outline: 'none',
+              fontFamily: font.family,
             }}
             onMouseEnter={(e) => {
               if (!isActive) {
-                e.currentTarget.style.background = '#F8FAFC';
-                e.currentTarget.style.borderBottom = '2px solid #CBD5E1';
+                e.currentTarget.style.background = colors.light.hover;
+                e.currentTarget.style.borderBottom = `2px solid ${colors.light.border}`;
               }
             }}
             onMouseLeave={(e) => {
@@ -55,30 +60,20 @@ export default function EmployeeTabs({ activeTab, onTabChange, totalCount }) {
                 e.currentTarget.style.borderBottom = '1px solid transparent';
               }
             }}
-            onFocus={(e) => {
-              e.currentTarget.style.outline = '2px solid #3B82F6';
-              e.currentTarget.style.outlineOffset = '2px';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.outline = 'none';
-            }}
           >
-            {/* Nombre del tab */}
             <span style={{
-              fontSize: 14,
-              fontWeight: isActive ? 600 : 500,
-              color: isActive ? '#1E293B' : '#64748B',
+              fontSize: font.size.md,
+              fontWeight: isActive ? font.weight.semibold : font.weight.medium,
+              color: isActive ? colors.text.primary : colors.text.secondary,
               transition: 'color 0.2s ease',
               whiteSpace: 'nowrap',
             }}>
               {tab.name}
             </span>
-
-            {/* Contador */}
             <span style={{
-              fontSize: 18,
-              fontWeight: isActive ? 700 : 500,
-              color: isActive ? '#3B82F6' : '#94A3B8',
+              fontSize: font.size.xl,
+              fontWeight: isActive ? font.weight.bold : font.weight.medium,
+              color: isActive ? colors.accent.blue : colors.text.muted,
               transition: 'color 0.2s ease',
               fontVariantNumeric: 'tabular-nums',
               letterSpacing: '-0.5px',

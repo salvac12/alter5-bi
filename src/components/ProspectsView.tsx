@@ -35,7 +35,7 @@ const INTERNAL_TOOL_DOMAINS = [
 ];
 
 /** Check if a domain belongs to an internal tool (should not be used for matching) */
-function isInternalDomain(domain) {
+function isInternalDomain(domain: string | undefined | null): boolean {
   if (!domain) return true;
   return INTERNAL_TOOL_DOMAINS.some(t => domain === t || domain.endsWith('.' + t));
 }
@@ -43,23 +43,27 @@ function isInternalDomain(domain) {
 /**
  * ProspectsView - Kanban board for Alter5 Prospects funnel
  *
- * 5 columns: Lead → Interesado → Reunion → Doc. Pendiente → Listo para Term-Sheet
+ * 5 columns: Lead -> Interesado -> Reunion -> Doc. Pendiente -> Listo para Term-Sheet
  * Drag & drop to move prospects between stages.
  * Auto-conversion to Opportunity when dropped in "Listo para Term-Sheet".
  */
-export default function ProspectsView({ onSelectProspect, onCreateProspect, companies = [] }) {
-  const [prospects, setProspects] = useState([]);
-  const [filteredProspects, setFilteredProspects] = useState([]);
+export default function ProspectsView({ onSelectProspect, onCreateProspect, companies = [] }: {
+  onSelectProspect?: (prospect: any) => void;
+  onCreateProspect?: (stage: string | null) => void;
+  companies?: any[];
+}) {
+  const [prospects, setProspects] = useState<any[]>([]);
+  const [filteredProspects, setFilteredProspects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [originFilter, setOriginFilter] = useState('All');
-  const [draggedCard, setDraggedCard] = useState(null);
-  const [dragOverColumn, setDragOverColumn] = useState(null);
-  const [converting, setConverting] = useState(null); // prospect being converted
+  const [draggedCard, setDraggedCard] = useState<any>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [converting, setConverting] = useState<string | null>(null); // prospect being converted
   const [showConvertDialog, setShowConvertDialog] = useState(false);
-  const [pendingDrop, setPendingDrop] = useState(null); // { prospect, targetStage }
-  const [toast, setToast] = useState(null);
+  const [pendingDrop, setPendingDrop] = useState<{ prospect: any; targetStage: string } | null>(null);
+  const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
 
   // Fetch data on mount
   useEffect(() => {
@@ -99,8 +103,8 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       const records = await fetchAllProspects();
       const normalized = records.map(normalizeProspect).filter(isValidProspect);
       // Exclude already converted prospects
-      setProspects(normalized.filter(p => !p.converted));
-    } catch (err) {
+      setProspects(normalized.filter((p: any) => !p.converted));
+    } catch (err: any) {
       console.error('Failed to load prospects:', err);
       setError(err.message || 'Error al cargar prospects');
     } finally {
@@ -108,34 +112,34 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
     }
   }
 
-  function showToast(type, message) {
+  function showToast(type: string, message: string) {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3500);
   }
 
   // Drag handlers
-  function handleDragStart(e, prospect) {
+  function handleDragStart(e: React.DragEvent, prospect: any) {
     setDraggedCard(prospect);
     e.dataTransfer.effectAllowed = 'move';
-    e.currentTarget.style.opacity = '0.5';
+    (e.currentTarget as HTMLElement).style.opacity = '0.5';
   }
 
-  function handleDragEnd(e) {
-    e.currentTarget.style.opacity = '1';
+  function handleDragEnd(e: React.DragEvent) {
+    (e.currentTarget as HTMLElement).style.opacity = '1';
     setDraggedCard(null);
     setDragOverColumn(null);
   }
 
-  function handleDragOver(e) {
+  function handleDragOver(e: React.DragEvent) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   }
 
-  function handleDragEnter(stage) {
+  function handleDragEnter(stage: string) {
     setDragOverColumn(stage);
   }
 
-  async function handleDrop(e, targetStage) {
+  async function handleDrop(e: React.DragEvent, targetStage: string) {
     e.preventDefault();
     setDragOverColumn(null);
 
@@ -156,7 +160,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       setProspects(updated);
 
       await updateProspect(draggedCard.id, { "Stage": targetStage });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to update prospect stage:', err);
       setProspects(prospects);
       showToast('error', 'Error al mover prospect: ' + err.message);
@@ -174,7 +178,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       // Remove from prospects list (it's now an Opportunity)
       setProspects(prev => prev.filter(p => p.id !== prospect.id));
       showToast('success', `"${prospect.name}" convertido a Oportunidad (Termsheet)`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Conversion failed:', err);
       showToast('error', 'Error al convertir: ' + err.message);
     } finally {
@@ -200,7 +204,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       );
       setProspects(updated);
       await updateProspect(prospect.id, { "Stage": targetStage });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to move prospect:', err);
       setProspects(prospects);
       showToast('error', 'Error al mover prospect');
@@ -211,20 +215,20 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
   }
 
   // Group by stage
-  const prospectsByStage = PROSPECT_STAGES.reduce((acc, stage) => {
+  const prospectsByStage = PROSPECT_STAGES.reduce((acc: any, stage: string) => {
     acc[stage] = filteredProspects.filter(p => p.stage === stage);
     return acc;
   }, {});
 
   // Pre-compute totals for the funnel strip (uses all prospects, not filtered)
-  const stageTotals = PROSPECT_STAGES.reduce((acc, stage) => {
+  const stageTotals = PROSPECT_STAGES.reduce((acc: any, stage: string) => {
     const ps = prospects.filter(p => p.stage === stage);
-    acc[stage] = { count: ps.length, amount: ps.reduce((s, p) => s + (p.amount || 0), 0) };
+    acc[stage] = { count: ps.length, amount: ps.reduce((s: number, p: any) => s + (p.amount || 0), 0) };
     return acc;
   }, {});
 
   const totalCount = filteredProspects.length;
-  const totalAmount = filteredProspects.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalAmount = filteredProspects.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
 
   // Build company name lookup for matching prospects to CRM data
   // Exclude internal tool domains from the domain index
@@ -239,12 +243,12 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
     return map;
   }, [companies]);
 
-  function findCompanyForProspect(prospect) {
+  function findCompanyForProspect(prospect: any) {
     const name = (prospect.name || '').trim().toLowerCase();
     // Direct name match
     if (companyByName.has(name)) return companyByName.get(name);
     // Domain from contacts (skip internal tool domains like atlassian, jira, slack, etc.)
-    const emails = prospect.contacts?.map(c => c.email) || [];
+    const emails = prospect.contacts?.map((c: any) => c.email) || [];
     if (prospect.contactEmail) emails.push(prospect.contactEmail);
     for (const email of emails) {
       const domain = (email || '').split('@')[1];
@@ -318,10 +322,10 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
             onClick={() => onCreateProspect && onCreateProspect(null)}
             style={styles.createButton}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #7C3AED, #2563EB)';
+              (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #7C3AED, #2563EB)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #8B5CF6, #3B82F6)';
+              (e.currentTarget as HTMLElement).style.background = 'linear-gradient(135deg, #8B5CF6, #3B82F6)';
             }}
           >
             <span style={styles.createIcon}>+</span>
@@ -348,25 +352,25 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       {!loading && prospects.length > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', overflowX: 'auto',
-          padding: '8px 24px', background: '#F8FAFC',
-          borderBottom: '1px solid #E2E8F0', gap: 4, flexShrink: 0,
+          padding: '8px 24px', background: '#0F1D32',
+          borderBottom: '1px solid #1B3A5C', gap: 4, flexShrink: 0,
         }}>
-          {PROSPECT_STAGES.map((stage, i) => {
+          {PROSPECT_STAGES.map((stage: string, i: number) => {
             const { count, amount: stageAmount } = stageTotals[stage] || { count: 0, amount: 0 };
             const colors = PROSPECT_STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
             const shortLabel = PROSPECT_STAGE_SHORT[stage] || stage;
             return (
               <React.Fragment key={stage}>
                 {i > 0 && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5" style={{ flexShrink: 0 }}>
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 )}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 5,
                   padding: '3px 9px', borderRadius: 6, whiteSpace: 'nowrap', flexShrink: 0,
-                  background: count > 0 ? colors.bg : 'transparent',
-                  border: count > 0 ? `1px solid ${colors.border}` : '1px solid transparent',
+                  background: count > 0 ? `${colors.color}15` : 'transparent',
+                  border: count > 0 ? `1px solid ${colors.color}30` : '1px solid transparent',
                 }}>
                   <span style={{ color: colors.color, fontWeight: 700, fontSize: 11 }}>{shortLabel}</span>
                   <span style={{
@@ -374,7 +378,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
                     borderRadius: 999, padding: '0 5px', fontSize: 10, fontWeight: 800, lineHeight: '16px',
                   }}>{count}</span>
                   {stageAmount > 0 && (
-                    <span style={{ color: '#6B7F94', fontSize: 10 }}>
+                    <span style={{ color: '#94A3B8', fontSize: 10 }}>
                       {formatAmount(stageAmount, 'EUR')}
                     </span>
                   )}
@@ -388,7 +392,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       {/* Board */}
       <div style={styles.boardContainer}>
         <div style={styles.board}>
-          {PROSPECT_STAGES.map((stage) => (
+          {PROSPECT_STAGES.map((stage: string) => (
             <ProspectColumn
               key={stage}
               stage={stage}
@@ -398,7 +402,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
               onDragOver={handleDragOver}
               onDragEnter={() => handleDragEnter(stage)}
               onDragLeave={() => {}}
-              onDrop={(e) => handleDrop(e, stage)}
+              onDrop={(e: React.DragEvent) => handleDrop(e, stage)}
               onCardDragStart={handleDragStart}
               onCardDragEnd={handleDragEnd}
               onCardClick={onSelectProspect}
@@ -416,7 +420,8 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
             onClick={handleCancelConvert}
             style={{
               position: 'fixed', inset: 0,
-              background: 'rgba(26, 43, 61, 0.6)',
+              background: 'rgba(10, 22, 40, 0.8)',
+              backdropFilter: 'blur(8px)',
               zIndex: 150,
             }}
           />
@@ -451,7 +456,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
                 {converting ? 'Convirtiendo...' : 'Convertir a Oportunidad'}
               </button>
             </div>
-            <div style={{ marginTop: 8, textAlign: 'right' }}>
+            <div style={{ marginTop: 8, textAlign: 'right' as const }}>
               <button
                 onClick={handleMoveOnly}
                 disabled={!!converting}
@@ -471,7 +476,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
           background: toast.type === 'success' ? '#10B981' : '#EF4444',
           color: '#FFFFFF', padding: '14px 20px', borderRadius: 10,
           fontSize: 14, fontWeight: 600,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.2)', zIndex: 200,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 200,
           display: 'flex', alignItems: 'center', gap: 10, maxWidth: 400,
           animation: 'slideInUp 0.3s ease-out',
         }}>
@@ -507,23 +512,37 @@ function ProspectColumn({
   onDragOver, onDragEnter, onDragLeave, onDrop,
   onCardDragStart, onCardDragEnd, onCardClick, onAddClick,
   findCompany,
+}: {
+  stage: string;
+  prospects: any[];
+  loading: boolean;
+  isDragOver: boolean;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragEnter: () => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent) => void;
+  onCardDragStart: (e: React.DragEvent, prospect: any) => void;
+  onCardDragEnd: (e: React.DragEvent) => void;
+  onCardClick?: (prospect: any) => void;
+  onAddClick: () => void;
+  findCompany: (prospect: any) => any;
 }) {
   const colors = PROSPECT_STAGE_COLORS[stage] || { bg: '#F7F9FC', color: '#6B7F94', border: '#E2E8F0' };
   const shortLabel = PROSPECT_STAGE_SHORT[stage] || stage;
   const isLastStage = stage === "Listo para Term-Sheet";
 
-  const totalAmount = prospects.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalAmount = prospects.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
 
-  const columnStyle = {
+  const columnStyle: React.CSSProperties = {
     ...styles.column,
     background: isDragOver
-      ? `linear-gradient(to bottom, ${colors.bg}, #FFFFFF)`
-      : colors.bg,
-    borderTop: `3px solid ${isDragOver ? colors.color : colors.border}`,
+      ? `linear-gradient(to bottom, ${colors.color}10, #132238)`
+      : '#132238',
+    borderTop: `3px solid ${isDragOver ? colors.color : colors.color + '40'}`,
     boxShadow: isDragOver
-      ? `0 0 0 2px ${colors.color}40, 0 8px 16px rgba(0,0,0,0.08)`
+      ? `0 0 0 2px ${colors.color}40, 0 8px 16px rgba(0,0,0,0.2)`
       : isLastStage
-        ? '0 0 0 1px #05966940, 0 4px 12px rgba(5, 150, 105, 0.08)'
+        ? '0 0 0 1px #10B98140, 0 4px 12px rgba(16, 185, 129, 0.08)'
         : 'none',
   };
 
@@ -557,15 +576,15 @@ function ProspectColumn({
           style={{
             ...styles.columnAddButton,
             color: colors.color,
-            borderColor: colors.border,
+            borderColor: '#1B3A5C',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = colors.bg;
-            e.currentTarget.style.borderColor = colors.color;
+            (e.currentTarget as HTMLElement).style.background = '#243B53';
+            (e.currentTarget as HTMLElement).style.borderColor = colors.color;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.borderColor = colors.border;
+            (e.currentTarget as HTMLElement).style.background = 'transparent';
+            (e.currentTarget as HTMLElement).style.borderColor = '#1B3A5C';
           }}
         >
           +
@@ -597,7 +616,7 @@ function ProspectColumn({
             <div style={styles.emptyText}>Sin prospects</div>
           </div>
         ) : (
-          prospects.map((prospect) => (
+          prospects.map((prospect: any) => (
             <ProspectCard
               key={prospect.id}
               prospect={prospect}
@@ -616,35 +635,43 @@ function ProspectColumn({
 
 // ── Card Component ──────────────────────────────────────────────────
 
-function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick, matchedCompany }) {
+function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick, matchedCompany }: {
+  prospect: any;
+  stageColor: string;
+  onDragStart: (e: React.DragEvent, prospect: any) => void;
+  onDragEnd: (e: React.DragEvent) => void;
+  onClick: () => void;
+  matchedCompany: any;
+}) {
   const [isHovered, setIsHovered] = useState(false);
   const formattedAmount = formatAmount(prospect.amount, prospect.currency);
 
-  const cardStyle = {
+  const cardStyle: React.CSSProperties = {
     ...styles.card,
+    borderTop: `3px solid ${stageColor}`,
     transform: isHovered ? 'translateY(-2px)' : 'translateY(0)',
     boxShadow: isHovered
-      ? '0 8px 16px rgba(0,0,0,0.12), 0 0 0 1px rgba(139, 92, 246, 0.3)'
-      : '0 2px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+      ? '0 8px 16px rgba(0,0,0,0.15), 0 0 0 1px rgba(139, 92, 246, 0.3)'
+      : '0 2px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
   };
 
   // Employee initials for activity dots
-  const employeeColors = {
+  const employeeColors: Record<string, string> = {
     salvador_carrillo: '#3B82F6',
-    leticia_menéndez: '#8B5CF6',
+    'leticia_men\u00e9ndez': '#8B5CF6',
     javier_ruiz: '#F59E0B',
     miguel_solana: '#10B981',
-    carlos_almodóvar: '#EF4444',
+    'carlos_almod\u00f3var': '#EF4444',
     gonzalo_de_gracia: '#06B6D4',
     rafael_nevado: '#F97316',
     guillermo_souto: '#6B7280',
   };
-  const employeeInitials = {
+  const employeeInitials: Record<string, string> = {
     salvador_carrillo: 'SC',
-    leticia_menéndez: 'LM',
+    'leticia_men\u00e9ndez': 'LM',
     javier_ruiz: 'JR',
     miguel_solana: 'MS',
-    carlos_almodóvar: 'CA',
+    'carlos_almod\u00f3var': 'CA',
     gonzalo_de_gracia: 'GG',
     rafael_nevado: 'RN',
     guillermo_souto: 'GS',
@@ -690,6 +717,21 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick, m
           </div>
         )}
 
+        {/* Probability bar */}
+        {prospect.probability != null && prospect.probability > 0 && (
+          <div style={{
+            width: '100%', height: 3, borderRadius: 9999,
+            background: '#E2E8F0', overflow: 'hidden',
+          }}>
+            <div style={{
+              width: `${Math.min(prospect.probability, 100)}%`,
+              height: '100%', borderRadius: 9999,
+              background: stageColor,
+              transition: 'width 0.3s ease',
+            }} />
+          </div>
+        )}
+
         {/* Badges row */}
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {/* Product badge */}
@@ -698,6 +740,7 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick, m
               ...styles.badge,
               background: '#EFF6FF',
               color: '#3B82F6',
+              borderRadius: 9999,
             }}>
               {prospect.product}
             </span>
@@ -709,11 +752,39 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick, m
               ...styles.badge,
               background: `${stageColor}15`,
               color: stageColor,
+              borderRadius: 9999,
             }}>
               {prospect.origin}
             </span>
           )}
         </div>
+
+        {/* Task pills */}
+        {prospect.tasks && prospect.tasks.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {prospect.tasks.slice(0, 3).map((task: any, idx: number) => (
+              <span key={idx} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                padding: '2px 8px', borderRadius: 9999,
+                background: task.status === 'hecho' ? '#D1FAE510' : '#EFF6FF',
+                color: task.status === 'hecho' ? '#10B981' : '#3B82F6',
+                fontSize: 10, fontWeight: 500, maxWidth: 100,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {task.status === 'hecho' ? '\u2713' : '\u25CB'} {task.title || task.name || `Tarea ${idx + 1}`}
+              </span>
+            ))}
+            {prospect.tasks.length > 3 && (
+              <span style={{
+                padding: '2px 6px', borderRadius: 9999,
+                background: '#EFF6FF', color: '#3B82F6',
+                fontSize: 10, fontWeight: 600,
+              }}>
+                +{prospect.tasks.length - 3}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Deal Manager */}
         {prospect.dealManager && (
@@ -754,7 +825,7 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick, m
             </span>
             {/* Employee dots */}
             <div style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
-              {matchedCompany.employees.slice(0, 4).map(empId => (
+              {matchedCompany.employees.slice(0, 4).map((empId: string) => (
                 <div key={empId} title={empId.replace(/_/g, ' ')} style={{
                   width: 14, height: 14, borderRadius: '50%',
                   background: employeeColors[empId] || '#6B7F94',
@@ -809,7 +880,7 @@ function ProspectCard({ prospect, stageColor, onDragStart, onDragEnd, onClick, m
                 <path d="M9 11l3 3L22 4"/>
                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
               </svg>
-              {prospect.tasks.filter(t => t.status === 'hecho').length}/{prospect.tasks.length}
+              {prospect.tasks.filter((t: any) => t.status === 'hecho').length}/{prospect.tasks.length}
             </span>
           )}
         </div>
@@ -832,7 +903,7 @@ function SkeletonCard() {
 
 // ── Format helper ───────────────────────────────────────────────────
 
-function formatAmount(amount, currency = "EUR") {
+function formatAmount(amount: number | null | undefined, currency = "EUR"): string | null {
   if (!amount || amount === 0) return null;
   if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M ${currency}`;
   if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}K ${currency}`;
@@ -841,12 +912,12 @@ function formatAmount(amount, currency = "EUR") {
 
 // ── Styles ──────────────────────────────────────────────────────────
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    background: '#F7F9FC',
+    background: '#0A1628',
     overflow: 'hidden',
   },
 
@@ -856,8 +927,8 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '20px 24px',
-    background: '#FFFFFF',
-    borderBottom: '1px solid #E2E8F0',
+    background: '#132238',
+    borderBottom: '1px solid #1B3A5C',
   },
   headerLeft: {
     display: 'flex',
@@ -867,13 +938,13 @@ const styles = {
   title: {
     fontSize: 20,
     fontWeight: 800,
-    color: '#1A2B3D',
+    color: '#F1F5F9',
     margin: 0,
     letterSpacing: '-0.5px',
   },
   count: {
     fontSize: 13,
-    color: '#6B7F94',
+    color: '#94A3B8',
     fontWeight: 500,
   },
   headerRight: {
@@ -891,26 +962,27 @@ const styles = {
   searchIcon: {
     position: 'absolute',
     left: 12,
-    color: '#94A3B8',
+    color: '#64748B',
     pointerEvents: 'none',
   },
   searchInput: {
     padding: '8px 36px 8px 36px',
-    borderRadius: 8,
-    border: '1px solid #E2E8F0',
+    borderRadius: 10,
+    border: '1px solid #1B3A5C',
     fontSize: 13,
     fontFamily: "'DM Sans', system-ui",
     width: 260,
     outline: 'none',
     transition: 'all 0.2s ease',
-    background: '#FFFFFF',
+    background: '#1E293B',
+    color: '#F1F5F9',
   },
   clearButton: {
     position: 'absolute',
     right: 8,
     background: 'none',
     border: 'none',
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 16,
     cursor: 'pointer',
     padding: 4,
@@ -922,18 +994,18 @@ const styles = {
   filterGroup: {
     display: 'flex',
     gap: 0,
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: 'hidden',
-    border: '1px solid #E2E8F0',
+    border: '1px solid #1B3A5C',
   },
   filterButton: {
     padding: '7px 14px',
     fontSize: 12,
     fontWeight: 600,
-    color: '#6B7F94',
-    background: '#FFFFFF',
+    color: '#94A3B8',
+    background: '#1E293B',
     border: 'none',
-    borderRight: '1px solid #E2E8F0',
+    borderRight: '1px solid #1B3A5C',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
     fontFamily: "'DM Sans', system-ui",
@@ -952,7 +1024,7 @@ const styles = {
     background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)',
     color: '#FFFFFF',
     border: 'none',
-    borderRadius: 8,
+    borderRadius: 10,
     fontSize: 13,
     fontWeight: 600,
     cursor: 'pointer',
@@ -972,9 +1044,9 @@ const styles = {
     gap: 16,
     margin: '20px 24px',
     padding: '16px 20px',
-    background: '#FEF2F2',
-    border: '1px solid #FEE2E2',
-    borderRadius: 8,
+    background: '#2D1215',
+    border: '1px solid #7F1D1D',
+    borderRadius: 10,
   },
   errorIcon: {
     fontSize: 24,
@@ -984,20 +1056,20 @@ const styles = {
   errorTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: '#DC2626',
+    color: '#FCA5A5',
     marginBottom: 4,
   },
   errorMessage: {
     fontSize: 12,
-    color: '#991B1B',
+    color: '#F87171',
   },
   retryButton: {
     marginLeft: 'auto',
     padding: '6px 14px',
-    background: '#FFFFFF',
-    border: '1px solid #FCA5A5',
+    background: '#1E293B',
+    border: '1px solid #7F1D1D',
     borderRadius: 6,
-    color: '#DC2626',
+    color: '#FCA5A5',
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
@@ -1024,8 +1096,8 @@ const styles = {
     flex: '0 0 280px',
     display: 'flex',
     flexDirection: 'column',
-    background: '#FFFFFF',
-    borderRadius: 10,
+    background: '#132238',
+    borderRadius: 14,
     transition: 'all 0.2s ease',
   },
   columnHeader: {
@@ -1033,7 +1105,9 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '14px 16px',
-    borderBottom: '1px solid #E2E8F0',
+    background: '#1E293B',
+    borderRadius: '14px 14px 0 0',
+    borderBottom: '1px solid #1B3A5C',
   },
   columnTitle: {
     display: 'flex',
@@ -1042,6 +1116,7 @@ const styles = {
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
+    color: '#F1F5F9',
   },
   columnCount: {
     display: 'inline-flex',
@@ -1050,17 +1125,17 @@ const styles = {
     minWidth: 22,
     height: 22,
     padding: '0 6px',
-    background: '#F1F5F9',
+    background: '#243B53',
     borderRadius: 11,
     fontSize: 11,
     fontWeight: 700,
-    color: '#475569',
+    color: '#94A3B8',
   },
   columnAddButton: {
     width: 24,
     height: 24,
     borderRadius: 6,
-    border: '1px solid #E2E8F0',
+    border: '1px solid #1B3A5C',
     background: 'transparent',
     fontSize: 16,
     fontWeight: 600,
@@ -1070,6 +1145,7 @@ const styles = {
     justifyContent: 'center',
     transition: 'all 0.15s ease',
     lineHeight: 1,
+    color: '#94A3B8',
   },
 
   // Cards
@@ -1086,7 +1162,7 @@ const styles = {
   // Card
   card: {
     background: '#FFFFFF',
-    borderRadius: 8,
+    borderRadius: 14,
     padding: '12px',
     cursor: 'grab',
     transition: 'all 0.2s ease',
@@ -1129,7 +1205,7 @@ const styles = {
   badge: {
     display: 'inline-block',
     padding: '2px 7px',
-    borderRadius: 4,
+    borderRadius: 9999,
     fontSize: 10,
     fontWeight: 600,
     letterSpacing: '0.3px',
@@ -1151,20 +1227,20 @@ const styles = {
   },
   emptyText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#64748B',
     fontWeight: 500,
   },
 
   // Skeleton
   skeleton: {
-    background: '#FFFFFF',
-    borderRadius: 8,
+    background: '#1E293B',
+    borderRadius: 14,
     padding: '12px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
   },
   skeletonLine: {
     height: 14,
-    background: 'linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%)',
+    background: 'linear-gradient(90deg, #1E293B 25%, #243B53 50%, #1E293B 75%)',
     backgroundSize: '200% 100%',
     borderRadius: 4,
   },
@@ -1175,20 +1251,20 @@ const styles = {
     top: '50%',
     left: '50%',
     transform: 'translate(-50%, -50%)',
-    background: '#FFFFFF',
-    borderRadius: 12,
+    background: '#132238',
+    borderRadius: 20,
     padding: 28,
     maxWidth: 480,
     width: '90%',
-    border: '1px solid #E2E8F0',
-    boxShadow: '0 20px 60px rgba(26, 43, 61, 0.3)',
+    border: '1px solid #1B3A5C',
+    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
     zIndex: 151,
     animation: 'dialogFadeIn 0.2s ease-out',
   },
   convertDialogHeader: {
     fontSize: 20,
     fontWeight: 800,
-    color: '#1A2B3D',
+    color: '#F1F5F9',
     marginBottom: 12,
     display: 'flex',
     alignItems: 'center',
@@ -1196,19 +1272,19 @@ const styles = {
   },
   convertDialogBody: {
     fontSize: 14,
-    color: '#475569',
+    color: '#94A3B8',
     lineHeight: 1.6,
     marginBottom: 8,
   },
   convertDialogBody2: {
     fontSize: 13,
-    color: '#6B7F94',
+    color: '#64748B',
     lineHeight: 1.5,
     marginBottom: 24,
     padding: '10px 14px',
-    background: '#F7F9FC',
-    borderRadius: 6,
-    border: '1px solid #E2E8F0',
+    background: '#0A1628',
+    borderRadius: 10,
+    border: '1px solid #1B3A5C',
   },
   convertDialogActions: {
     display: 'flex',
@@ -1219,10 +1295,10 @@ const styles = {
     padding: '10px 18px',
     fontSize: 14,
     fontWeight: 600,
-    color: '#6B7F94',
-    background: '#F7F9FC',
-    border: '2px solid #E2E8F0',
-    borderRadius: 8,
+    color: '#94A3B8',
+    background: '#1E293B',
+    border: '2px solid #1B3A5C',
+    borderRadius: 10,
     cursor: 'pointer',
     fontFamily: 'inherit',
   },
@@ -1230,7 +1306,7 @@ const styles = {
     padding: '6px 12px',
     fontSize: 12,
     fontWeight: 500,
-    color: '#6B7F94',
+    color: '#64748B',
     background: 'transparent',
     border: 'none',
     borderRadius: 6,
@@ -1247,7 +1323,7 @@ const styles = {
     color: '#FFFFFF',
     background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)',
     border: 'none',
-    borderRadius: 8,
+    borderRadius: 10,
     cursor: 'pointer',
     fontFamily: 'inherit',
     boxShadow: '0 2px 8px rgba(139, 92, 246, 0.25)',

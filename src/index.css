@@ -1,35 +1,80 @@
-/* ── Alter5 Design Tokens ── */
+/* ══════════════════════════════════════════════════════════
+   Alter5 BI — Design Tokens (V2 Redesign)
+   ══════════════════════════════════════════════════════════ */
 :root {
-  /* Navy */
+  /* ── App Chrome ── */
+  --app-bg: #13285B;
+  --content-bg: #F0F4F8;
+  --header-bg: rgba(19,40,91,0.85);
+
+  /* ── Navy / Dark Surfaces ── */
   --navy-dark: #0A1628;
   --navy-mid: #132238;
   --navy-primary: #1B3A5C;
+  --dark-surface: #1E293B;
+  --dark-hover: #243B53;
 
-  /* Emerald — sectors, ESG, sustainability, energy */
-  --emerald: #10B981;
-  --emerald-light: #34D399;
-  --emerald-bg: #ECFDF5;
-
-  /* Blue — platform, solutions, tech, AI */
+  /* ── Accent Colors ── */
   --blue: #3B82F6;
   --blue-light: #60A5FA;
   --blue-bg: #EFF6FF;
+  --green: #10B981;
+  --green-light: #34D399;
+  --green-bg: #ECFDF5;
+  --purple: #8B5CF6;
+  --purple-light: #A78BFA;
+  --purple-bg: #F5F3FF;
+  --orange: #F97316;
+  --orange-light: #FB923C;
+  --orange-bg: #FFF7ED;
+  --red: #EF4444;
+  --yellow: #F59E0B;
+  --cyan: #06B6D4;
 
-  /* Surfaces */
-  --light-bg: #F7F9FC;
+  /* Legacy aliases */
+  --emerald: var(--green);
+  --emerald-light: var(--green-light);
+  --emerald-bg: var(--green-bg);
+
+  /* ── Surfaces ── */
+  --light-bg: #F0F4F8;
   --white: #FFFFFF;
 
-  /* Text */
+  /* ── Text ── */
   --text: #1A2B3D;
-  --muted: #6B7F94;
+  --text-secondary: #6B7F94;
+  --muted: #94A3B8;
+  --text-on-dark: #F1F5F9;
+  --text-on-dark-secondary: #94A3B8;
+  --text-on-dark-muted: #64748B;
 
-  /* Border */
+  /* ── Border ── */
   --border: #E2E8F0;
+  --border-dark: #1B3A5C;
 
-  /* Status */
+  /* ── Status ── */
   --status-active: #10B981;
   --status-dormant: #F59E0B;
   --status-lost: #EF4444;
+
+  /* ── Layout ── */
+  --header-height: 60px;
+  --sidenav-width: 200px;
+  --sidenav-collapsed: 64px;
+  --sidebar-width: 270px;
+  --detail-panel-width: 720px;
+
+  /* ── Radius ── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+  --shadow-panel: 0 25px 50px -12px rgba(0,0,0,0.25);
 }
 
 /* ── Reset & Base ── */
@@ -41,7 +86,7 @@
 
 body {
   font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
-  background: var(--light-bg);
+  background: var(--app-bg);
   color: var(--text);
   font-size: 14px;
   font-weight: 400;
@@ -54,9 +99,9 @@ body {
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
-::selection { background: var(--emerald); color: white; }
+::selection { background: var(--blue); color: white; }
 input::placeholder { color: var(--muted); }
 
 /* ── Animations ── */
@@ -70,9 +115,19 @@ input::placeholder { color: var(--muted); }
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes typewriter-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .fade-in { animation: fadeIn 0.25s ease both; }
 .slide-in { animation: slideIn 0.2s ease both; }
 
 /* ── Table rows ── */
 .row-hover { transition: background 0.12s ease; }
 .row-hover:hover { background: var(--light-bg) !important; }
+
+/* ── Dark scrollbar variant ── */
+.dark-scroll::-webkit-scrollbar-track { background: var(--navy-dark); }
+.dark-scroll::-webkit-scrollbar-thumb { background: var(--navy-primary); }
+.dark-scroll::-webkit-scrollbar-thumb:hover { background: var(--blue); }

@@ -133,7 +133,7 @@ function Toast({ msg, onClose }) {
 
 // ── Main Component ────────────────────────────────────────────────────
 
-export default function BridgeExplorerView({ allCompanies, campaignRef, previousTargets = {}, currentUser, onBack }) {
+export default function BridgeExplorerView({ allCompanies, campaignRef, previousTargets = {}, bridgeContacts = [], currentUser, onBack }) {
   // Data state
   const [trackingDomains, setTrackingDomains] = useState(new Set());
   const [allSentDomains, setAllSentDomains] = useState(new Set()); // domains from ALL Bridge targets (approved/sent)
@@ -193,6 +193,22 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   const [wizardError, setWizardError] = useState('');
 
   const showToast = useCallback(msg => setToast(msg), []);
+
+  // ── Domains from actual Bridge campaign recipients (authoritative source) ──
+  const GENERIC_DOMAINS = useMemo(() => new Set([
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
+    'live.com', 'msn.com', 'aol.com', 'protonmail.com', 'zoho.com',
+  ]), []);
+
+  const bridgeContactDomains = useMemo(() => {
+    const domains = new Set();
+    for (const c of bridgeContacts) {
+      const email = c.email || '';
+      const d = email.split('@')[1]?.toLowerCase();
+      if (d && !GENERIC_DOMAINS.has(d)) domains.add(d);
+    }
+    return domains;
+  }, [bridgeContacts, GENERIC_DOMAINS]);
 
   // ── Detect domains already contacted by Leticia (campaign sender) ──
   const leticiaDomains = useMemo(() => {
@@ -266,6 +282,9 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
       .filter(c => {
         const domain = c.domain?.toLowerCase();
         if (!domain) return false;
+
+        // Bridge contacts shield: domain appears in actual campaign recipients
+        if (bridgeContactDomains.has(domain)) return false;
 
         // Absolute shield: already contacted via campaign system (GAS tracking)
         if (trackingDomains.has(domain)) return false;
@@ -352,7 +371,7 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
         }
         return b.explorerScore - a.explorerScore;
       });
-  }, [allCompanies, trackingDomains, allSentDomains, leticiaDomains, savedTargets, previousTargets, segFilter, typeFilter,
+  }, [allCompanies, bridgeContactDomains, trackingDomains, allSentDomains, leticiaDomains, savedTargets, previousTargets, segFilter, typeFilter,
       techFilter, geoFilter, targetFilter, statusFilter, searchQuery, minScore, llmOrdering]);
 
   // Unique filter values
@@ -1338,9 +1357,14 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
             </div>
             <div style={{ fontFamily: T.sans, fontSize: 12, color: T.muted }}>
               {candidates.length} empresas por revisar · {selectedForSend.size} seleccionadas
+              {bridgeContactDomains.size > 0 && (
+                <span style={{ marginLeft: 6, color: '#10B981' }}>
+                  · {bridgeContactDomains.size} excluidas (destinatarios Bridge)
+                </span>
+              )}
               {allSentDomains.size > 0 && (
                 <span style={{ marginLeft: 6, color: '#3B82F6' }}>
-                  · {allSentDomains.size} excluidas (ya en campaña Bridge)
+                  · {allSentDomains.size} excluidas (CampaignTargets)
                 </span>
               )}
               {leticiaDomains.size > 0 && (

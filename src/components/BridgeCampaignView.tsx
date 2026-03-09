@@ -3048,6 +3048,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
         allCompanies={allCompanies || []}
         campaignRef={nextWaveRef || "Bridge_Q1_W2"}
         previousTargets={previousTargets}
+        bridgeContacts={data?.contactos || []}
         currentUser="Salvador Carrillo"
         onBack={() => setShowExplorer(false)}
       />

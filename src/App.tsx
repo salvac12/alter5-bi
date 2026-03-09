@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import alter5Logo from './assets/alter5-logo.svg';
-import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch, getOpportunityStages, getOpportunityCounts } from './utils/data';
-import { PER_PAGE, PRODUCTS } from './utils/constants';
+import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch } from './utils/data';
+import { PER_PAGE } from './utils/constants';
 import { KPI } from './components/UI';
 import Sidebar from './components/Sidebar';
 import CompanyTable from './components/CompanyTable';
@@ -19,12 +18,17 @@ import CampaignDetailView from './components/CampaignDetailView';
 import BridgeCampaignView from './components/BridgeCampaignView';
 import FollowUpQuickPanel from './components/FollowUpQuickPanel';
 import ProspectingView from './components/ProspectingView';
+import CandidateSearchView from './components/CandidateSearchView';
+import { AnalysisView } from './components/views/AnalysisView';
+import { HelpOverlay } from './components/shared/HelpOverlay';
 import { getCampaigns } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
 import { fetchAllVerified, saveVerification, invalidateVerifiedCache, verifiedToEnrichmentOverride } from './utils/airtableVerified';
 import { getCurrentUser } from './utils/userConfig';
 import CleanupToolbar from './components/CleanupToolbar';
+import AppShell from './components/layout/AppShell';
 import blocklist from './data/blocklist.json';
+import type { ViewId } from './types';
 
 export default function App() {
   const allCompanies = useMemo(() => parseCompanies(), []);
@@ -66,8 +70,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
   const [showUserSelector, setShowUserSelector] = useState(false);
 
-  // ── View state: "empresas" | "pipeline" | "prospects" ──
-  const [activeView, setActiveView] = useState("empresas");
+  // ── View state ──
+  const [activeView, setActiveView] = useState<ViewId>("empresas");
 
   // ── Pipeline panel state ──
   const [selectedOpp, setSelectedOpp] = useState(null);
@@ -89,6 +93,7 @@ export default function App() {
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [selectedCampaignName, setSelectedCampaignName] = useState(null);
   const [showFollowUpQuick, setShowFollowUpQuick] = useState(null); // prospect obj or null
+  const [showHelp, setShowHelp] = useState(false);
 
   // ── URL params: ?view=pipeline|prospects&add=CompanyName&stage=New ──
   useEffect(() => {
@@ -113,6 +118,19 @@ export default function App() {
     } else if (view === "campanas") {
       setActiveView("campanas");
     }
+  }, []);
+
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't trigger in input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === '/' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); setShowHelp(h => !h); }
+      if (e.key === 'k' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); setShowCerebro(true); }
+      if (e.key === 'Escape') { setShowHelp(false); setShowCerebro(false); setSelected(null); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   // ── Lazy load campaigns when tab is active ──
@@ -477,175 +495,42 @@ export default function App() {
     ? `Red de contactos · ${employees[0].name}`
     : `${employees.length} buzones · ${companies.length} empresas`;
 
+  // ── View change handler (also handles Bridge sub-views) ──
+  const handleViewChange = (view: ViewId) => {
+    // Bridge campaigns is a sub-view of campanas in the SideNav
+    if (view === 'bridge-campaigns') {
+      setActiveView('campanas');
+      // Simulate selecting a bridge campaign
+      setSelectedCampaignId('bridge');
+      setSelectedCampaignName('Bridge Energy Program');
+      return;
+    }
+    setActiveView(view);
+    // Reset campaign sub-navigation when leaving campanas
+    if (view !== 'campanas') {
+      setSelectedCampaignId(null);
+      setSelectedCampaignName(null);
+    }
+  };
+
   return (
-    <div style={{ minHeight: "100vh", background: "#F7F9FC" }}>
-      {/* ── Nav (White) ── */}
-      <div style={{
-        padding: "0 24px", background: "#FFFFFF",
-        borderBottom: "1px solid #E2E8F0",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 16, flexWrap: "wrap", minHeight: 57,
-      }}>
-        {/* Left: Logo + Title + Tabs */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <img src={alter5Logo} alt="Alter5" style={{ height: 32 }} />
-            <div>
-              <h1 style={{
-                fontSize: 15, fontWeight: 800, margin: 0,
-                color: "#1A2B3D", letterSpacing: "-0.5px",
-              }}>
-                Business Intelligence
-              </h1>
-              <p style={{
-                fontSize: 11, color: "#6B7F94", margin: 0, fontWeight: 400,
-              }}>{subtitle}</p>
-            </div>
-          </div>
-
-          {/* View tabs */}
-          <div style={{
-            display: "flex", gap: 0, marginLeft: 16,
-            background: "#F1F5F9", borderRadius: 8, padding: 3,
-          }}>
-            {[
-              { id: "empresas", label: "Empresas" },
-              { id: "prospects", label: "Prospects", badge: "PR" },
-              { id: "pipeline", label: "Pipeline", badge: "AT" },
-              { id: "campanas", label: "Campañas", badge: "EM" },
-              { id: "prospeccion", label: "Prospección", badge: "IA" },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveView(tab.id)}
-                style={{
-                  padding: "6px 18px", borderRadius: 6, border: "none",
-                  fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  fontFamily: "inherit", transition: "all 0.15s ease",
-                  background: activeView === tab.id ? "#FFFFFF" : "transparent",
-                  color: activeView === tab.id ? "#1A2B3D" : "#6B7F94",
-                  boxShadow: activeView === tab.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                }}
-              >
-                {tab.label}
-                {tab.badge && (
-                  <span style={{
-                    marginLeft: 6, fontSize: 8, fontWeight: 800,
-                    padding: "1px 5px", borderRadius: 4,
-                    background: activeView === tab.id
-                      ? (tab.id === "prospects" ? "#8B5CF620" : tab.id === "campanas" ? "#7C3AED20" : tab.id === "prospeccion" ? "#10B98120" : "#3B82F620")
-                      : "#E2E8F040",
-                    color: activeView === tab.id
-                      ? (tab.id === "prospects" ? "#8B5CF6" : tab.id === "campanas" ? "#7C3AED" : tab.id === "prospeccion" ? "#10B981" : "#3B82F6")
-                      : "#94A3B8",
-                    textTransform: "uppercase", letterSpacing: "0.5px",
-                    verticalAlign: "middle",
-                  }}>{tab.badge}</span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Right: User chip + Search + CSV */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {/* User chip */}
-          {currentUser && (
-            <button
-              onClick={() => setShowUserSelector(true)}
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "5px 12px 5px 6px", borderRadius: 20,
-                border: "1px solid #E2E8F0", background: "#F7F9FC",
-                cursor: "pointer", fontFamily: "inherit",
-                transition: "all 0.15s ease",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#3B82F6"; e.currentTarget.style.background = "#EFF6FF"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#E2E8F0"; e.currentTarget.style.background = "#F7F9FC"; }}
-            >
-              <div style={{
-                width: 24, height: 24, borderRadius: "50%",
-                background: "linear-gradient(135deg, #3B82F6, #10B981)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, fontWeight: 800, color: "#FFFFFF",
-              }}>
-                {currentUser.name.split(' ').map(w => w[0]).join('').toUpperCase()}
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#1A2B3D" }}>
-                {currentUser.name.split(' ')[0]}
-              </span>
-              {currentUser.isAdmin && (
-                <span style={{
-                  fontSize: 8, fontWeight: 800, color: "#F59E0B",
-                  background: "#FEF3C7", padding: "1px 5px", borderRadius: 4,
-                }}>ADMIN</span>
-              )}
-            </button>
-          )}
-        </div>
-
-        {/* Search + CSV (only in empresas view) */}
-        {activeView === "empresas" && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(0); }}
-              placeholder="Buscar empresa, grupo, tipo..."
-              style={{
-                width: 260, padding: "7px 14px", borderRadius: 6,
-                border: "1px solid #E2E8F0", background: "#F7F9FC",
-                color: "#1A2B3D", fontSize: 13, outline: "none",
-                fontFamily: "inherit", fontWeight: 400,
-              }}
-            />
-            <button
-              onClick={() => downloadCSV(filtered, productMatches)}
-              style={{
-                padding: "7px 16px", borderRadius: 6, border: "none",
-                background: "linear-gradient(135deg, #3B82F6, #10B981)",
-                color: "#FFFFFF", fontSize: 12, fontWeight: 700,
-                cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
-                letterSpacing: "-0.2px",
-              }}
-            >
-              CSV ({filtered.length})
-            </button>
-            <button
-              onClick={() => setShowCerebro(true)}
-              style={{
-                padding: "7px 16px", borderRadius: 6, border: "none",
-                background: "linear-gradient(135deg, #8B5CF6, #3B82F6)",
-                color: "#FFFFFF", fontSize: 12, fontWeight: 700,
-                cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
-                letterSpacing: "-0.2px", display: "flex", alignItems: "center", gap: 6,
-              }}
-            >
-              &#129504; Cerebro
-            </button>
-            <button
-              onClick={() => { setCleanupMode(m => !m); setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
-              style={{
-                padding: "7px 16px", borderRadius: 6,
-                border: cleanupMode ? "none" : "1px solid #E2E8F0",
-                background: cleanupMode
-                  ? "linear-gradient(135deg, #EF4444, #F59E0B)"
-                  : "#F7F9FC",
-                color: cleanupMode ? "#FFFFFF" : "#6B7F94",
-                fontSize: 12, fontWeight: 700,
-                cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
-                letterSpacing: "-0.2px",
-              }}
-            >
-              {cleanupMode ? "Limpieza ON" : "Limpieza"}
-            </button>
-          </div>
-        )}
-      </div>
-
+    <AppShell
+      activeView={activeView}
+      onViewChange={handleViewChange}
+      search={search}
+      onSearchChange={(val) => { setSearch(val); setPage(0); }}
+      onOpenCerebro={() => setShowCerebro(true)}
+      onExportCSV={() => downloadCSV(filtered, productMatches)}
+      filteredCount={filtered.length}
+      cleanupMode={cleanupMode}
+      onToggleCleanup={() => { setCleanupMode(m => !m); setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
+      currentUser={currentUser}
+      onOpenSettings={() => setShowUserSelector(true)}
+      subtitle={subtitle}
+    >
       {/* ── Content area ── */}
       {activeView === "empresas" ? (
-        /* ── Empresas view ── */
-        <div style={{ display: "flex" }}>
+        <div style={{ display: "flex", height: `calc(100vh - 60px)` }}>
           {/* Sidebar */}
           <Sidebar
             companies={companies} employees={employees}
@@ -664,7 +549,7 @@ export default function App() {
           />
 
           {/* Main */}
-          <div style={{ flex: 1, overflow: "auto", maxHeight: "calc(100vh - 57px)" }}>
+          <div style={{ flex: 1, overflow: "auto" }}>
             {/* KPIs */}
             <div style={{
               padding: "16px 20px",
@@ -732,7 +617,6 @@ export default function App() {
           </div>
         </div>
       ) : activeView === "prospects" ? (
-        /* ── Prospects (Kanban) view ── */
         <ProspectsView
           key={prospectsKey}
           onSelectProspect={handleSelectProspect}
@@ -740,20 +624,17 @@ export default function App() {
           companies={companies}
         />
       ) : activeView === "campanas" && selectedCampaignId && selectedCampaignName && selectedCampaignName.toLowerCase().includes('bridge') ? (
-        /* ── Bridge Energy Program — full standalone dashboard ── */
         <BridgeCampaignView
           allCompanies={companies}
           onBack={() => { setSelectedCampaignId(null); setSelectedCampaignName(null); loadCampaigns(); }}
         />
       ) : activeView === "campanas" && selectedCampaignId ? (
-        /* ── Generic campaign detail view ── */
         <CampaignDetailView
           campaignId={selectedCampaignId}
           allCompanies={companies}
           onBack={() => { setSelectedCampaignId(null); setSelectedCampaignName(null); loadCampaigns(); }}
         />
       ) : activeView === "campanas" ? (
-        /* ── Campaigns list ── */
         <CampaignsView
           campaigns={campaigns}
           loading={campaignsLoading}
@@ -763,10 +644,14 @@ export default function App() {
           onSelectCampaign={(c) => { setSelectedCampaignId(c.id); setSelectedCampaignName(c.name || ''); }}
         />
       ) : activeView === "prospeccion" ? (
-        /* ── Prospecting AI view ── */
         <ProspectingView currentUser={currentUser} />
+      ) : activeView === "candidates" ? (
+        <CandidateSearchView
+          allCompanies={companies}
+        />
+      ) : activeView === "analysis" ? (
+        <AnalysisView />
       ) : (
-        /* ── Pipeline (Kanban) view ── */
         <KanbanView
           key={kanbanKey}
           onSelectOpportunity={handleSelectOpp}
@@ -774,11 +659,11 @@ export default function App() {
         />
       )}
 
-      {/* ── Company Detail overlay (empresas view) ── */}
+      {/* ── Company Detail overlay ── */}
       {activeView === "empresas" && selected && (
         <>
           <div onClick={() => setSelected(null)}
-            style={{ position: "fixed", inset: 0, background: "rgba(10,22,40,0.35)", zIndex: 99 }}
+            style={{ position: "fixed", inset: 0, background: "rgba(10,22,40,0.5)", zIndex: 99, backdropFilter: "blur(4px)" }}
           />
           <DetailPanel
             company={selected}
@@ -793,11 +678,11 @@ export default function App() {
         </>
       )}
 
-      {/* ── Opportunity Panel (pipeline view) ── */}
+      {/* ── Opportunity Panel ── */}
       {(selectedOpp || isCreatingOpp) && (
         <>
           <div onClick={() => { setSelectedOpp(null); setIsCreatingOpp(false); }}
-            style={{ position: "fixed", inset: 0, background: "rgba(10,22,40,0.35)", zIndex: 99 }}
+            style={{ position: "fixed", inset: 0, background: "rgba(10,22,40,0.5)", zIndex: 99, backdropFilter: "blur(4px)" }}
           />
           <OpportunityPanel
             opportunity={selectedOpp}
@@ -810,7 +695,7 @@ export default function App() {
         </>
       )}
 
-      {/* ── Prospect Panel (prospects view) ── */}
+      {/* ── Prospect Panel ── */}
       {(selectedProspect || isCreatingProspect) && (
         <ProspectPanel
           prospect={selectedProspect}
@@ -854,7 +739,7 @@ export default function App() {
         />
       )}
 
-      {/* User selector: dropdown when changing */}
+      {/* ── User selector ── */}
       {showUserSelector && (
         <UserSelector
           currentUser={currentUser}
@@ -865,6 +750,11 @@ export default function App() {
         />
       )}
 
+      {/* ── Help overlay ── */}
+      {showHelp && (
+        <HelpOverlay isOpen={showHelp} onClose={() => setShowHelp(false)} />
+      )}
+
       {/* ── Bulk Hide Confirmation Modal ── */}
       {showBulkHideConfirm && (
         <>
@@ -873,12 +763,13 @@ export default function App() {
             style={{
               position: "fixed", inset: 0,
               background: "rgba(10,22,40,0.7)", zIndex: 200,
+              backdropFilter: "blur(4px)",
             }}
           />
           <div style={{
             position: "fixed", top: "50%", left: "50%",
             transform: "translate(-50%, -50%)",
-            background: "#0A1628", borderRadius: 12, padding: 28,
+            background: "#0A1628", borderRadius: 14, padding: 28,
             maxWidth: 480, width: "90%",
             border: "1px solid #1B3A5C",
             boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
@@ -888,7 +779,6 @@ export default function App() {
               fontSize: 20, fontWeight: 800, color: "#FFFFFF",
               marginBottom: 12, display: "flex", alignItems: "center", gap: 10,
             }}>
-              <span style={{ fontSize: 28 }}>&#9888;&#65039;</span>
               Confirmar ocultacion masiva
             </div>
             <p style={{
@@ -905,7 +795,7 @@ export default function App() {
               <button
                 onClick={() => setShowBulkHideConfirm(false)}
                 style={{
-                  background: "#132238", border: "1px solid #2A4A6C",
+                  background: "#132238", border: "1px solid #1B3A5C",
                   color: "#94A3B8", padding: "10px 20px", borderRadius: 8,
                   fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                 }}
@@ -926,6 +816,6 @@ export default function App() {
           </div>
         </>
       )}
-    </div>
+    </AppShell>
   );
 }
