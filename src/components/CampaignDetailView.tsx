@@ -5,6 +5,24 @@ import {
   classifyReply, getFollowUps, generateFollowUpBatch, sendFollowUpBatch,
 } from '../utils/campaignApi';
 
+// ── Design tokens ────────────────────────────────────────────────
+const COLORS = {
+  bg: '#F0F4F8',
+  card: '#FFFFFF',
+  border: '#E2E8F0',
+  text: '#1A2B3D',
+  textSecondary: '#64748B',
+  textMuted: '#94A3B8',
+  accent: '#3B82F6',
+  green: '#10B981',
+  purple: '#8B5CF6',
+  orange: '#F97316',
+  yellow: '#F59E0B',
+  red: '#EF4444',
+};
+
+const RADIUS = { sm: 6, md: 10, lg: 14 };
+
 // ── Proxy helper for GAS GET endpoints ───────────────────────────
 async function proxyFetch(action, params = {}) {
   const secret = import.meta.env.VITE_CAMPAIGN_PROXY_SECRET || '';
@@ -48,7 +66,7 @@ const CONTACT_FILTERS = [
 function normalizeContact(c) {
   const estado = (c.estado || '').toLowerCase();
   const normalStatus = ESTADO_MAP[estado] || (estado ? estado : 'pending');
-  const isReplied = normalStatus === 'replied' || c.respondido === 'Si' || c.respondido === 'Sí';
+  const isReplied = normalStatus === 'replied' || c.respondido === 'Si' || c.respondido === 'S\u00ed';
   return {
     email: c.email || '',
     nombre: [c.nombre, c.apellido].filter(Boolean).join(' ') || '',
@@ -108,10 +126,10 @@ export default function CampaignDetailView({ campaignId, onBack }) {
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 36, height: 36, borderRadius: '50%',
-            border: '3px solid #E2E8F0', borderTopColor: '#3B82F6',
+            border: `3px solid ${COLORS.border}`, borderTopColor: COLORS.accent,
             animation: 'spin 0.8s linear infinite', margin: '0 auto 12px',
           }} />
-          <p style={{ fontSize: 13, color: '#6B7F94' }}>Cargando campana...</p>
+          <p style={{ fontSize: 13, color: COLORS.textMuted }}>Cargando campana...</p>
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
@@ -120,30 +138,35 @@ export default function CampaignDetailView({ campaignId, onBack }) {
 
   if (error) {
     return (
-      <div style={{ margin: 24, padding: 20, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, color: '#DC2626', fontSize: 13 }}>
+      <div style={{ margin: 24, padding: 20, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: RADIUS.md, color: '#DC2626', fontSize: 13 }}>
         Error: {error}
-        <button onClick={loadData} style={{ marginLeft: 12, padding: '4px 12px', borderRadius: 6, border: '1px solid #DC2626', background: 'transparent', color: '#DC2626', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>Reintentar</button>
+        <button onClick={loadData} style={{ marginLeft: 12, padding: '4px 12px', borderRadius: RADIUS.sm, border: '1px solid #DC2626', background: 'transparent', color: '#DC2626', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>Reintentar</button>
       </div>
     );
   }
 
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+      {/* ── Header with subtle gradient ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
+        padding: '18px 22px', borderRadius: RADIUS.lg,
+        background: 'linear-gradient(135deg, #F8FAFC, #EFF6FF, #F0FDF4)',
+        border: `1px solid ${COLORS.border}`,
+      }}>
         <button
           onClick={onBack}
           style={{
-            padding: '6px 12px', borderRadius: 6, border: '1px solid #E2E8F0',
-            background: '#FFFFFF', color: '#334155', fontSize: 13, fontWeight: 600,
+            padding: '6px 12px', borderRadius: RADIUS.sm, border: `1px solid ${COLORS.border}`,
+            background: COLORS.card, color: '#334155', fontSize: 13, fontWeight: 600,
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >{'\u2190'} Volver</button>
         <div style={{ flex: 1 }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#1A2B3D' }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: COLORS.text }}>
             {campaign?.name || 'Campana'}
           </h2>
-          <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7F94' }}>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: COLORS.textSecondary }}>
             {campaign?.type === 'mass' ? 'Masiva' : '1-a-1'}
             {campaign?.senderName ? ` \u00b7 ${campaign.senderName}` : ''}
             {campaign?.status ? ` \u00b7 ${campaign.status}` : ''}
@@ -153,17 +176,17 @@ export default function CampaignDetailView({ campaignId, onBack }) {
       </div>
 
       {/* ── Sub-tabs ── */}
-      <div style={{ display: 'flex', gap: 0, background: '#F1F5F9', borderRadius: 8, padding: 3, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 0, background: COLORS.bg, borderRadius: 8, padding: 3, marginBottom: 20 }}>
         {SUB_TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setSubTab(t.id)}
             style={{
-              padding: '6px 18px', borderRadius: 6, border: 'none',
+              padding: '6px 18px', borderRadius: RADIUS.sm, border: 'none',
               fontSize: 13, fontWeight: 600, cursor: 'pointer',
               fontFamily: 'inherit', transition: 'all 0.15s ease',
-              background: subTab === t.id ? '#FFFFFF' : 'transparent',
-              color: subTab === t.id ? '#1A2B3D' : '#6B7F94',
+              background: subTab === t.id ? COLORS.card : 'transparent',
+              color: subTab === t.id ? COLORS.text : COLORS.textSecondary,
               boxShadow: subTab === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
             }}
           >{t.label}</button>
@@ -179,9 +202,9 @@ export default function CampaignDetailView({ campaignId, onBack }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ======================================================================
 // Sub-tab: Resumen
-// ══════════════════════════════════════════════════════════════════
+// ======================================================================
 function TabResumen({ campaign, metricas, contactos }) {
   // Use GAS metricas if available, otherwise compute from contacts
   const g = metricas?.Global || {};
@@ -196,10 +219,10 @@ function TabResumen({ campaign, metricas, contactos }) {
 
   const funnel = [
     { label: 'Total contactos', value: totalContacts, color: '#64748B' },
-    { label: 'Enviados', value: totalSent, color: '#3B82F6' },
-    { label: 'Abiertos', value: totalOpened, color: '#10B981' },
-    { label: 'Clics', value: totalClicked, color: '#F59E0B' },
-    { label: 'Respondidos', value: totalReplied, color: '#8B5CF6' },
+    { label: 'Enviados', value: totalSent, color: COLORS.accent },
+    { label: 'Abiertos', value: totalOpened, color: COLORS.green },
+    { label: 'Clics', value: totalClicked, color: COLORS.yellow },
+    { label: 'Respondidos', value: totalReplied, color: COLORS.purple },
   ];
   const maxVal = Math.max(totalContacts, 1);
 
@@ -211,26 +234,26 @@ function TabResumen({ campaign, metricas, contactos }) {
 
   return (
     <div>
-      {/* KPIs */}
+      {/* KPIs with accent-colored borders */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 24 }}>
-        <KPI label="Total" value={totalContacts} accent="#64748B" />
-        <KPI label="Enviados" value={totalSent} accent="#3B82F6" />
-        <KPI label="Abiertos" value={`${totalOpened} (${pct(totalOpened)})`} accent="#10B981" />
-        <KPI label="Clics" value={`${totalClicked} (${pct(totalClicked)})`} accent="#F59E0B" />
-        <KPI label="Respondidos" value={`${totalReplied} (${pct(totalReplied)})`} accent="#8B5CF6" />
+        <AccentKpi label="Total" value={totalContacts} accent="#64748B" />
+        <AccentKpi label="Enviados" value={totalSent} accent={COLORS.accent} />
+        <AccentKpi label="Abiertos" value={`${totalOpened} (${pct(totalOpened)})`} accent={COLORS.green} />
+        <AccentKpi label="Clics" value={`${totalClicked} (${pct(totalClicked)})`} accent={COLORS.yellow} />
+        <AccentKpi label="Respondidos" value={`${totalReplied} (${pct(totalReplied)})`} accent={COLORS.purple} />
       </div>
 
       {/* Funnel */}
-      <div style={{ padding: 20, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 10, marginBottom: 20 }}>
-        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#1A2B3D' }}>Embudo de conversion</h3>
+      <div style={{ padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, marginBottom: 20 }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text }}>Embudo de conversion</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {funnel.map(f => (
             <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ width: 110, fontSize: 12, color: '#6B7F94', textAlign: 'right' }}>{f.label}</span>
-              <div style={{ flex: 1, height: 28, background: '#F1F5F9', borderRadius: 6, overflow: 'hidden' }}>
+              <span style={{ width: 110, fontSize: 12, color: COLORS.textSecondary, textAlign: 'right' }}>{f.label}</span>
+              <div style={{ flex: 1, height: 28, background: COLORS.bg, borderRadius: RADIUS.sm, overflow: 'hidden' }}>
                 <div style={{
                   width: `${(f.value / maxVal) * 100}%`,
-                  height: '100%', background: f.color, borderRadius: 6,
+                  height: '100%', background: f.color, borderRadius: RADIUS.sm,
                   transition: 'width 0.4s ease',
                   minWidth: f.value > 0 ? 2 : 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8,
@@ -240,7 +263,7 @@ function TabResumen({ campaign, metricas, contactos }) {
                   )}
                 </div>
               </div>
-              <span style={{ width: 50, fontSize: 13, fontWeight: 700, color: '#1A2B3D' }}>{f.value}</span>
+              <span style={{ width: 50, fontSize: 13, fontWeight: 700, color: COLORS.text }}>{f.value}</span>
             </div>
           ))}
         </div>
@@ -251,22 +274,22 @@ function TabResumen({ campaign, metricas, contactos }) {
 
       {/* A/B Test comparison */}
       {hasAB && (
-        <div style={{ padding: 20, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 10, marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#1A2B3D' }}>Test A/B</h3>
+        <div style={{ padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, marginBottom: 20 }}>
+          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text }}>Test A/B</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <ABColumn label="A" subject={campaign?.subjectA} data={varA} color="#3B82F6" />
-            <ABColumn label="B" subject={campaign?.subjectB} data={varB} color="#F59E0B" />
+            <ABColumn label="A" subject={campaign?.subjectA} data={varA} color={COLORS.accent} />
+            <ABColumn label="B" subject={campaign?.subjectB} data={varB} color={COLORS.yellow} />
           </div>
           {varFinal && varFinal.total > 0 && (
-            <div style={{ marginTop: 16, padding: 14, background: '#F7F9FC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#1A2B3D', marginBottom: 8 }}>Grupo Final</div>
-              <div style={{ display: 'flex', gap: 20, fontSize: 12, color: '#6B7F94' }}>
-                <span>Total: <strong style={{ color: '#1A2B3D' }}>{varFinal.total}</strong></span>
-                <span>Enviados: <strong style={{ color: '#1A2B3D' }}>{varFinal.enviados}</strong></span>
+            <div style={{ marginTop: 16, padding: 14, background: COLORS.bg, borderRadius: 8, border: `1px solid ${COLORS.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.text, marginBottom: 8 }}>Grupo Final</div>
+              <div style={{ display: 'flex', gap: 20, fontSize: 12, color: COLORS.textSecondary }}>
+                <span>Total: <strong style={{ color: COLORS.text }}>{varFinal.total}</strong></span>
+                <span>Enviados: <strong style={{ color: COLORS.text }}>{varFinal.enviados}</strong></span>
                 <span>Pendientes: <strong style={{ color: '#D97706' }}>{varFinal.pendientes}</strong></span>
-                <span>Abiertos: <strong style={{ color: '#10B981' }}>{varFinal.abiertos}</strong></span>
-                <span>Clics: <strong style={{ color: '#F59E0B' }}>{varFinal.clics}</strong></span>
-                <span>Respondidos: <strong style={{ color: '#8B5CF6' }}>{varFinal.respondidos}</strong></span>
+                <span>Abiertos: <strong style={{ color: COLORS.green }}>{varFinal.abiertos}</strong></span>
+                <span>Clics: <strong style={{ color: COLORS.yellow }}>{varFinal.clics}</strong></span>
+                <span>Respondidos: <strong style={{ color: COLORS.purple }}>{varFinal.respondidos}</strong></span>
               </div>
             </div>
           )}
@@ -274,8 +297,8 @@ function TabResumen({ campaign, metricas, contactos }) {
       )}
 
       {/* Campaign info */}
-      <div style={{ padding: 20, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 10 }}>
-        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: '#1A2B3D' }}>Informacion</h3>
+      <div style={{ padding: 20, background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md }}>
+        <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700, color: COLORS.text }}>Informacion</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 13 }}>
           <InfoRow label="Remitente" value={campaign?.senderName || '\u2014'} />
           <InfoRow label="Tipo" value={campaign?.type === 'mass' ? 'Masiva' : '1-a-1'} />
@@ -289,39 +312,52 @@ function TabResumen({ campaign, metricas, contactos }) {
   );
 }
 
+function AccentKpi({ label, value, accent }) {
+  return (
+    <div style={{
+      background: COLORS.card,
+      border: `1px solid ${COLORS.border}`,
+      borderTop: `3px solid ${accent}`,
+      borderRadius: RADIUS.md,
+      padding: '14px 16px',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.text }}>{value}</div>
+    </div>
+  );
+}
+
 function ABColumn({ label, subject, data = {}, color }) {
   const pct = (n) => data.enviados > 0 ? ((n / data.enviados) * 100).toFixed(1) + '%' : '\u2014';
-  const isBetter = (otherData) => {
-    if (!otherData || !data.enviados || !otherData.enviados) return false;
-    return (data.tasaApertura || 0) > (otherData.tasaApertura || 0);
-  };
 
   return (
-    <div style={{ padding: 14, background: '#F7F9FC', borderRadius: 8, border: `2px solid ${color}20` }}>
+    <div style={{ padding: 14, background: COLORS.bg, borderRadius: 8, border: `2px solid ${color}20` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 14, fontWeight: 800, color }}>Variante {label}</span>
       </div>
       {subject && (
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#1A2B3D', marginBottom: 10, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.text, marginBottom: 10, lineHeight: 1.4 }}>
           {subject}
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
         <div>
-          <span style={{ color: '#6B7F94' }}>Enviados</span>
-          <div style={{ fontWeight: 700, color: '#1A2B3D' }}>{data.enviados || 0}</div>
+          <span style={{ color: COLORS.textSecondary }}>Enviados</span>
+          <div style={{ fontWeight: 700, color: COLORS.text }}>{data.enviados || 0}</div>
         </div>
         <div>
-          <span style={{ color: '#6B7F94' }}>Aperturas</span>
-          <div style={{ fontWeight: 700, color: '#10B981' }}>{data.abiertos || 0} ({pct(data.abiertos)})</div>
+          <span style={{ color: COLORS.textSecondary }}>Aperturas</span>
+          <div style={{ fontWeight: 700, color: COLORS.green }}>{data.abiertos || 0} ({pct(data.abiertos)})</div>
         </div>
         <div>
-          <span style={{ color: '#6B7F94' }}>Clics</span>
-          <div style={{ fontWeight: 700, color: '#F59E0B' }}>{data.clics || 0} ({pct(data.clics)})</div>
+          <span style={{ color: COLORS.textSecondary }}>Clics</span>
+          <div style={{ fontWeight: 700, color: COLORS.yellow }}>{data.clics || 0} ({pct(data.clics)})</div>
         </div>
         <div>
-          <span style={{ color: '#6B7F94' }}>Respondidos</span>
-          <div style={{ fontWeight: 700, color: '#8B5CF6' }}>{data.respondidos || 0} ({pct(data.respondidos)})</div>
+          <span style={{ color: COLORS.textSecondary }}>Respondidos</span>
+          <div style={{ fontWeight: 700, color: COLORS.purple }}>{data.respondidos || 0} ({pct(data.respondidos)})</div>
         </div>
       </div>
     </div>
@@ -331,17 +367,17 @@ function ABColumn({ label, subject, data = {}, color }) {
 function InfoRow({ label, value }) {
   return (
     <div>
-      <span style={{ fontSize: 11, fontWeight: 600, color: '#6B7F94', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <div style={{ fontSize: 13, color: '#1A2B3D', marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 13, color: COLORS.text, marginTop: 2 }}>{value}</div>
     </div>
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ======================================================================
 // Sub-tab: Contactos
-// ══════════════════════════════════════════════════════════════════
+// ======================================================================
 function TabContactos({ contactos }) {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -390,8 +426,8 @@ function TabContactos({ contactos }) {
             style={{
               padding: '4px 12px', borderRadius: 20, border: 'none',
               fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              background: filter === f.id ? '#3B82F6' : '#F1F5F9',
-              color: filter === f.id ? '#FFFFFF' : '#6B7F94',
+              background: filter === f.id ? COLORS.accent : COLORS.bg,
+              color: filter === f.id ? '#FFFFFF' : COLORS.textSecondary,
               transition: 'all 0.15s',
             }}
           >{f.label} ({counts[f.id] || 0})</button>
@@ -401,23 +437,23 @@ function TabContactos({ contactos }) {
           value={search} onChange={e => setSearch(e.target.value)}
           style={{
             marginLeft: 'auto', padding: '5px 12px', borderRadius: 8,
-            border: '1px solid #E2E8F0', fontSize: 12, fontFamily: 'inherit',
+            border: `1px solid ${COLORS.border}`, fontSize: 12, fontFamily: 'inherit',
             width: 220, outline: 'none',
           }}
         />
       </div>
 
-      <div style={{ marginBottom: 8, fontSize: 11, color: '#6B7F94' }}>
+      <div style={{ marginBottom: 8, fontSize: 11, color: COLORS.textSecondary }}>
         Mostrando {filtered.length} de {contactos.length} contactos
       </div>
 
       {/* Table */}
-      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, overflow: 'hidden' }}>
         {/* Header */}
         <div style={{
           display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 70px 80px 65px 65px 90px',
-          padding: '8px 14px', background: '#F7F9FC', borderBottom: '1px solid #E2E8F0',
-          fontSize: 10, fontWeight: 700, color: '#6B7F94', textTransform: 'uppercase', letterSpacing: '0.5px',
+          padding: '8px 14px', background: COLORS.bg, borderBottom: `1px solid ${COLORS.border}`,
+          fontSize: 10, fontWeight: 700, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '0.5px',
         }}>
           <span>Email</span>
           <span>Nombre</span>
@@ -435,7 +471,7 @@ function TabContactos({ contactos }) {
 
         {/* Rows */}
         {filtered.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: '#6B7F94', fontSize: 13 }}>Sin contactos</div>
+          <div style={{ padding: 24, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13 }}>Sin contactos</div>
         ) : filtered.map((c, i) => (
           <div key={c.email || i}>
             <div
@@ -456,61 +492,61 @@ function TabContactos({ contactos }) {
                   <span style={{
                     padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
                     background: c.variante === 'A' ? '#EFF6FF' : c.variante === 'B' ? '#FFFBEB' : '#F1F5F9',
-                    color: c.variante === 'A' ? '#3B82F6' : c.variante === 'B' ? '#D97706' : '#6B7F94',
+                    color: c.variante === 'A' ? COLORS.accent : c.variante === 'B' ? '#D97706' : COLORS.textSecondary,
                   }}>{c.variante}</span>
                 ) : '\u2014'}
               </span>
               <StatusBadge status={c.status} />
               <span style={{ fontWeight: c.numAperturas > 0 ? 700 : 400 }}>{c.numAperturas || 0}</span>
               <span style={{ fontWeight: c.numClics > 0 ? 700 : 400 }}>{c.numClics || 0}</span>
-              <span style={{ fontSize: 11, color: '#6B7F94' }}>
+              <span style={{ fontSize: 11, color: COLORS.textSecondary }}>
                 {c.fechaEnvio ? new Date(c.fechaEnvio).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : '\u2014'}
               </span>
             </div>
 
             {/* Expanded: tracking timeline */}
             {expanded === i && (
-              <div style={{ padding: '12px 14px 12px 28px', background: '#F7F9FC', borderBottom: '1px solid #E2E8F0' }}>
+              <div style={{ padding: '12px 14px 12px 28px', background: COLORS.bg, borderBottom: `1px solid ${COLORS.border}` }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 12 }}>
                   {c.fechaEnvio && (
                     <div>
-                      <span style={{ color: '#6B7F94' }}>Enviado: </span>
-                      <span style={{ color: '#1A2B3D' }}>{new Date(c.fechaEnvio).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span style={{ color: COLORS.textSecondary }}>Enviado: </span>
+                      <span style={{ color: COLORS.text }}>{new Date(c.fechaEnvio).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   )}
                   {c.primeraApertura && (
                     <div>
-                      <span style={{ color: '#6B7F94' }}>Primera apertura: </span>
-                      <span style={{ color: '#10B981' }}>{new Date(c.primeraApertura).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span style={{ color: COLORS.textSecondary }}>Primera apertura: </span>
+                      <span style={{ color: COLORS.green }}>{new Date(c.primeraApertura).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   )}
                   {c.primerClic && (
                     <div>
-                      <span style={{ color: '#6B7F94' }}>Primer clic: </span>
-                      <span style={{ color: '#F59E0B' }}>{new Date(c.primerClic).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span style={{ color: COLORS.textSecondary }}>Primer clic: </span>
+                      <span style={{ color: COLORS.yellow }}>{new Date(c.primerClic).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   )}
                   <div>
-                    <span style={{ color: '#6B7F94' }}>Aperturas totales: </span>
-                    <span style={{ fontWeight: 700, color: '#1A2B3D' }}>{c.numAperturas}</span>
+                    <span style={{ color: COLORS.textSecondary }}>Aperturas totales: </span>
+                    <span style={{ fontWeight: 700, color: COLORS.text }}>{c.numAperturas}</span>
                   </div>
                   <div>
-                    <span style={{ color: '#6B7F94' }}>Clics totales: </span>
-                    <span style={{ fontWeight: 700, color: '#1A2B3D' }}>{c.numClics}</span>
+                    <span style={{ color: COLORS.textSecondary }}>Clics totales: </span>
+                    <span style={{ fontWeight: 700, color: COLORS.text }}>{c.numClics}</span>
                   </div>
                   <div>
-                    <span style={{ color: '#6B7F94' }}>Grupo: </span>
-                    <span style={{ color: '#1A2B3D' }}>{c.grupo || 'N/A'}</span>
+                    <span style={{ color: COLORS.textSecondary }}>Grupo: </span>
+                    <span style={{ color: COLORS.text }}>{c.grupo || 'N/A'}</span>
                   </div>
                   {c.respondido && (
                     <div>
-                      <span style={{ color: '#8B5CF6', fontWeight: 700 }}>Ha respondido</span>
-                      {c.respuestaEnviada === 'Si' && <span style={{ marginLeft: 8, color: '#10B981', fontWeight: 600 }}>Resp. enviada</span>}
+                      <span style={{ color: COLORS.purple, fontWeight: 700 }}>Ha respondido</span>
+                      {c.respuestaEnviada === 'Si' && <span style={{ marginLeft: 8, color: COLORS.green, fontWeight: 600 }}>Resp. enviada</span>}
                     </div>
                   )}
                   {c.seguimientosEnviados > 0 && (
                     <div>
-                      <span style={{ color: '#6B7F94' }}>Follow-ups: </span>
+                      <span style={{ color: COLORS.textSecondary }}>Follow-ups: </span>
                       <span style={{ fontWeight: 700, color: '#7C3AED' }}>{c.seguimientosEnviados}</span>
                     </div>
                   )}
@@ -526,25 +562,25 @@ function TabContactos({ contactos }) {
 
 function StatusBadge({ status }) {
   const config = {
-    sent: { label: 'Enviado', bg: '#EFF6FF', color: '#3B82F6' },
+    sent: { label: 'Enviado', bg: '#EFF6FF', color: COLORS.accent },
     opened: { label: 'Abierto', bg: '#ECFDF5', color: '#059669' },
     clicked: { label: 'Clic', bg: '#FFFBEB', color: '#D97706' },
     replied: { label: 'Respondido', bg: '#F5F3FF', color: '#7C3AED' },
     error: { label: 'Error', bg: '#FEF2F2', color: '#DC2626' },
-    pending: { label: 'Pendiente', bg: '#F1F5F9', color: '#6B7F94' },
+    pending: { label: 'Pendiente', bg: '#F1F5F9', color: COLORS.textSecondary },
   };
   const c = config[status] || config.pending;
   return (
     <span style={{
-      padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+      padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
       background: c.bg, color: c.color,
     }}>{c.label}</span>
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ======================================================================
 // Sub-tab: Respuestas (Agente IA)
-// ══════════════════════════════════════════════════════════════════
+// ======================================================================
 function TabRespuestas({ contactos, campaign, campaignId }) {
   const [viewFilter, setViewFilter] = useState('pending');
   const [expandedEmail, setExpandedEmail] = useState(null);
@@ -629,15 +665,15 @@ function TabRespuestas({ contactos, campaign, campaignId }) {
             style={{
               padding: '5px 14px', borderRadius: 20, border: 'none',
               fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              background: viewFilter === f.id ? '#8B5CF6' : '#F1F5F9',
-              color: viewFilter === f.id ? '#FFFFFF' : '#6B7F94',
+              background: viewFilter === f.id ? COLORS.purple : COLORS.bg,
+              color: viewFilter === f.id ? '#FFFFFF' : COLORS.textSecondary,
             }}
           >{f.label}</button>
         ))}
       </div>
 
       {visible.length === 0 ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#6B7F94', fontSize: 13, background: '#F7F9FC', borderRadius: 10, border: '1px dashed #E2E8F0' }}>
+        <div style={{ padding: 32, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13, background: COLORS.bg, borderRadius: RADIUS.md, border: `1px dashed ${COLORS.border}` }}>
           {viewFilter === 'pending' ? 'No hay respuestas pendientes de gestionar' : 'No hay respuestas procesadas'}
         </div>
       ) : (
@@ -665,7 +701,7 @@ function TabRespuestas({ contactos, campaign, campaignId }) {
       {toast && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          padding: '8px 20px', borderRadius: 8, background: '#1A2B3D', color: '#FFFFFF',
+          padding: '8px 20px', borderRadius: 8, background: COLORS.text, color: '#FFFFFF',
           fontSize: 13, fontWeight: 600, zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
         }}>{toast}</div>
       )}
@@ -679,29 +715,29 @@ function ResponseCard({
   onCompose, onSaveDraft, onSendDraft,
 }) {
   return (
-    <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.md, overflow: 'hidden' }}>
       {/* Summary row */}
       <div onClick={onExpand} style={{ padding: '12px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#1A2B3D' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.text }}>
             {contact.nombre || contact.email}
-            {contact.organizacion && <span style={{ fontWeight: 400, color: '#6B7F94' }}> \u2014 {contact.organizacion}</span>}
+            {contact.organizacion && <span style={{ fontWeight: 400, color: COLORS.textSecondary }}> \u2014 {contact.organizacion}</span>}
           </div>
-          <div style={{ fontSize: 12, color: '#6B7F94', marginTop: 2 }}>{contact.email}</div>
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{contact.email}</div>
         </div>
         {contact.respuestaEnviada === 'Si' && (
-          <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600, background: '#ECFDF5', color: '#059669' }}>
+          <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: '#ECFDF5', color: '#059669' }}>
             Resp. enviada
           </span>
         )}
-        <span style={{ fontSize: 14, color: '#6B7F94' }}>{isExpanded ? '\u25B2' : '\u25BC'}</span>
+        <span style={{ fontSize: 14, color: COLORS.textSecondary }}>{isExpanded ? '\u25B2' : '\u25BC'}</span>
       </div>
 
       {/* Expanded: conversation + draft */}
       {isExpanded && (
         <div style={{ padding: '0 16px 16px', borderTop: '1px solid #F1F5F9' }}>
           {convLoading ? (
-            <div style={{ padding: 20, textAlign: 'center', color: '#6B7F94', fontSize: 12 }}>Cargando conversacion...</div>
+            <div style={{ padding: 20, textAlign: 'center', color: COLORS.textSecondary, fontSize: 12 }}>Cargando conversacion...</div>
           ) : conversation?.error ? (
             <div style={{ padding: 12, color: '#DC2626', fontSize: 12 }}>Error cargando la conversacion</div>
           ) : (
@@ -719,7 +755,7 @@ function ResponseCard({
               {/* Existing draft */}
               {conversation?.borrador && conversation.borrador.cuerpo && (
                 <div style={{ margin: '8px 0', padding: 10, background: '#EFF6FF', borderRadius: 8, border: '1px solid #BFDBFE' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#3B82F6', marginBottom: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.accent, marginBottom: 4 }}>
                     Borrador existente ({conversation.borrador.estado || 'preparado'})
                   </div>
                 </div>
@@ -728,11 +764,11 @@ function ResponseCard({
               {/* Draft editor */}
               <div style={{ marginTop: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1A2B3D' }}>Borrador de respuesta</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.text }}>Borrador de respuesta</span>
                   <button
                     onClick={onCompose} disabled={draftLoading}
                     style={{
-                      padding: '3px 10px', borderRadius: 6, border: '1px solid #DDD6FE',
+                      padding: '3px 10px', borderRadius: RADIUS.sm, border: '1px solid #DDD6FE',
                       background: '#F5F3FF', color: '#7C3AED', fontSize: 11, fontWeight: 600,
                       cursor: draftLoading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                     }}
@@ -743,21 +779,21 @@ function ResponseCard({
                   placeholder="Escribe o genera un borrador con IA..."
                   style={{
                     width: '100%', padding: '10px 12px', borderRadius: 8,
-                    border: '1px solid #E2E8F0', fontSize: 13, fontFamily: 'inherit',
+                    border: `1px solid ${COLORS.border}`, fontSize: 13, fontFamily: 'inherit',
                     resize: 'vertical', outline: 'none', boxSizing: 'border-box',
                   }}
                 />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button onClick={onSaveDraft} style={{
-                    padding: '6px 14px', borderRadius: 6, border: '1px solid #E2E8F0',
-                    background: '#FFFFFF', color: '#334155', fontSize: 12, fontWeight: 600,
+                    padding: '6px 14px', borderRadius: RADIUS.sm, border: `1px solid ${COLORS.border}`,
+                    background: COLORS.card, color: '#334155', fontSize: 12, fontWeight: 600,
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}>Guardar borrador</button>
                   <button
                     onClick={onSendDraft} disabled={sendingDraft || !draftText.trim()}
                     style={{
-                      padding: '6px 14px', borderRadius: 6, border: 'none',
-                      background: sendingDraft || !draftText.trim() ? '#CBD5E1' : '#10B981',
+                      padding: '6px 14px', borderRadius: RADIUS.sm, border: 'none',
+                      background: sendingDraft || !draftText.trim() ? '#CBD5E1' : COLORS.green,
                       color: '#FFFFFF', fontSize: 12, fontWeight: 700,
                       cursor: sendingDraft || !draftText.trim() ? 'not-allowed' : 'pointer',
                       fontFamily: 'inherit',
@@ -773,9 +809,9 @@ function ResponseCard({
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ======================================================================
 // Sub-tab: Seguimiento
-// ══════════════════════════════════════════════════════════════════
+// ======================================================================
 function TabSeguimiento({ campaign, campaignId, contactos }) {
   const [followUps, setFollowUps] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -841,10 +877,10 @@ function TabSeguimiento({ campaign, campaignId, contactos }) {
     <div>
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
-        <KPI label="Elegibles follow-up" value={eligible.length} accent="#3B82F6" />
-        <KPI label="Programados" value={scheduled.length} accent="#7C3AED" />
-        <KPI label="Generando" value={generatingFU.length} accent="#F59E0B" />
-        <KPI label="Enviados" value={sent.length} accent="#10B981" />
+        <AccentKpi label="Elegibles follow-up" value={eligible.length} accent={COLORS.accent} />
+        <AccentKpi label="Programados" value={scheduled.length} accent="#7C3AED" />
+        <AccentKpi label="Generando" value={generatingFU.length} accent={COLORS.yellow} />
+        <AccentKpi label="Enviados" value={sent.length} accent={COLORS.green} />
       </div>
 
       {/* Actions */}
@@ -866,7 +902,7 @@ function TabSeguimiento({ campaign, campaignId, contactos }) {
             onClick={handleSendBatch} disabled={sending}
             style={{
               padding: '8px 18px', borderRadius: 8, border: 'none',
-              background: sending ? '#CBD5E1' : '#10B981',
+              background: sending ? '#CBD5E1' : COLORS.green,
               color: '#FFFFFF', fontSize: 13, fontWeight: 700,
               cursor: sending ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             }}
@@ -876,11 +912,11 @@ function TabSeguimiento({ campaign, campaignId, contactos }) {
 
       {/* Follow-up list */}
       {loading ? (
-        <div style={{ padding: 24, textAlign: 'center', color: '#6B7F94', fontSize: 13 }}>Cargando follow-ups...</div>
+        <div style={{ padding: 24, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13 }}>Cargando follow-ups...</div>
       ) : followUps.length === 0 ? (
         <div style={{
-          padding: 32, textAlign: 'center', color: '#6B7F94', fontSize: 13,
-          background: '#F7F9FC', borderRadius: 10, border: '1px dashed #E2E8F0',
+          padding: 32, textAlign: 'center', color: COLORS.textSecondary, fontSize: 13,
+          background: COLORS.bg, borderRadius: RADIUS.md, border: `1px dashed ${COLORS.border}`,
         }}>
           No hay follow-ups registrados para esta campana
         </div>
@@ -895,7 +931,7 @@ function TabSeguimiento({ campaign, campaignId, contactos }) {
       {toast && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-          padding: '8px 20px', borderRadius: 8, background: '#1A2B3D', color: '#FFFFFF',
+          padding: '8px 20px', borderRadius: 8, background: COLORS.text, color: '#FFFFFF',
           fontSize: 13, fontWeight: 600, zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
         }}>{toast}</div>
       )}
@@ -907,7 +943,7 @@ function FollowUpRow({ followUp }) {
   const statusConfig = {
     scheduled: { label: 'Programado', color: '#7C3AED', bg: '#F5F3FF' },
     generating: { label: 'Generando', color: '#D97706', bg: '#FFFBEB' },
-    draft_ready: { label: 'Borrador listo', color: '#3B82F6', bg: '#EFF6FF' },
+    draft_ready: { label: 'Borrador listo', color: COLORS.accent, bg: '#EFF6FF' },
     sent: { label: 'Enviado', color: '#059669', bg: '#ECFDF5' },
     cancelled: { label: 'Cancelado', color: '#DC2626', bg: '#FEF2F2' },
   };
@@ -915,24 +951,24 @@ function FollowUpRow({ followUp }) {
 
   return (
     <div style={{
-      padding: '10px 16px', background: '#FFFFFF',
-      border: '1px solid #E2E8F0', borderRadius: 8,
+      padding: '10px 16px', background: COLORS.card,
+      border: `1px solid ${COLORS.border}`, borderRadius: 8,
       display: 'flex', alignItems: 'center', gap: 12,
     }}>
       <span style={{
-        padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 600,
+        padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600,
         background: st.bg, color: st.color,
       }}>{st.label}</span>
       <div style={{ flex: 1 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#1A2B3D' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.text }}>
           {followUp.name || followUp.email}
         </span>
         {followUp.email && (
-          <span style={{ fontSize: 12, color: '#6B7F94', marginLeft: 8 }}>{followUp.email}</span>
+          <span style={{ fontSize: 12, color: COLORS.textSecondary, marginLeft: 8 }}>{followUp.email}</span>
         )}
       </div>
       {followUp.scheduledAt && (
-        <span style={{ fontSize: 11, color: '#6B7F94' }}>
+        <span style={{ fontSize: 11, color: COLORS.textSecondary }}>
           {new Date(followUp.scheduledAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
         </span>
       )}

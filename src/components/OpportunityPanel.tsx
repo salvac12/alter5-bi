@@ -9,6 +9,23 @@ import {
 } from '../utils/airtable';
 import { TEAM_MEMBERS } from '../utils/airtableProspects';
 
+// ── Dark theme tokens ────────────────────────────────────────────
+const DK = {
+  bg: '#0A1628',
+  card: '#132238',
+  border: '#1B3A5C',
+  surface: '#1E293B',
+  text: '#F1F5F9',
+  textSecondary: '#94A3B8',
+  textMuted: '#64748B',
+  accent: '#3B82F6',
+  green: '#10B981',
+  purple: '#8B5CF6',
+  red: '#EF4444',
+};
+
+const RADIUS = { sm: 6, md: 10, lg: 14 };
+
 /**
  * OpportunityPanel - Slide-in panel for creating/editing Airtable opportunities
  *
@@ -206,6 +223,38 @@ export default function OpportunityPanel({
 
   const currentStageColor = getStageColor(formData.stage);
 
+  // ── Dark input style helpers ──
+  const darkInputStyle = (disabled) => ({
+    width: '100%',
+    padding: '10px 12px',
+    fontSize: 14,
+    fontWeight: 500,
+    color: DK.text,
+    background: DK.card,
+    border: `2px solid ${DK.border}`,
+    borderRadius: RADIUS.md,
+    outline: 'none',
+    transition: 'all 0.15s',
+    fontFamily: 'inherit',
+    opacity: disabled ? 0.6 : 1,
+    cursor: disabled ? 'not-allowed' : 'text',
+  });
+
+  const darkSelectStyle = (disabled) => ({
+    ...darkInputStyle(disabled),
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  });
+
+  const darkFocus = (e) => {
+    e.currentTarget.style.borderColor = DK.accent;
+    e.currentTarget.style.boxShadow = `0 0 0 3px ${DK.accent}20`;
+  };
+
+  const darkBlur = (e) => {
+    e.currentTarget.style.borderColor = DK.border;
+    e.currentTarget.style.boxShadow = 'none';
+  };
+
   return (
     <>
       {/* Backdrop overlay */}
@@ -214,8 +263,8 @@ export default function OpportunityPanel({
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(26, 43, 61, 0.4)',
-          backdropFilter: 'blur(2px)',
+          background: 'rgba(10, 22, 40, 0.6)',
+          backdropFilter: 'blur(4px)',
           zIndex: 100,
           animation: 'fadeIn 0.2s ease-out'
         }}
@@ -231,10 +280,10 @@ export default function OpportunityPanel({
           bottom: 0,
           width: 420,
           maxWidth: '100vw',
-          background: '#FFFFFF',
+          background: DK.bg,
           zIndex: 101,
           overflow: 'auto',
-          boxShadow: '-8px 0 32px rgba(26, 43, 61, 0.12)',
+          boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.4)',
           display: 'flex',
           flexDirection: 'column'
         }}
@@ -242,8 +291,8 @@ export default function OpportunityPanel({
         {/* Header */}
         <div style={{
           padding: '24px 28px',
-          borderBottom: '1px solid #E2E8F0',
-          background: '#F7F9FC',
+          borderBottom: `1px solid ${DK.border}`,
+          background: DK.surface,
           flexShrink: 0
         }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
@@ -256,8 +305,8 @@ export default function OpportunityPanel({
                   justifyContent: 'center',
                   width: 32,
                   height: 32,
-                  background: '#8B5CF6',
-                  borderRadius: 8,
+                  background: DK.purple,
+                  borderRadius: RADIUS.sm,
                   fontSize: 13,
                   fontWeight: 800,
                   color: '#FFFFFF',
@@ -269,7 +318,7 @@ export default function OpportunityPanel({
                   margin: 0,
                   fontSize: 22,
                   fontWeight: 800,
-                  color: '#1A2B3D',
+                  color: DK.text,
                   letterSpacing: '-0.5px',
                   lineHeight: 1.2
                 }}>
@@ -280,7 +329,7 @@ export default function OpportunityPanel({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{
                     fontSize: 12,
-                    color: '#6B7F94',
+                    color: DK.textMuted,
                     fontWeight: 500,
                     fontFamily: 'monospace'
                   }}>
@@ -295,8 +344,8 @@ export default function OpportunityPanel({
                       fontSize: 11,
                       fontWeight: 700,
                       letterSpacing: '0.3px',
-                      background: opportunity.businessType === 'Debt' ? '#EFF6FF' : '#F0FDF4',
-                      color: opportunity.businessType === 'Debt' ? '#3B82F6' : '#10B981',
+                      background: opportunity.businessType === 'Debt' ? `${DK.accent}20` : `${DK.green}20`,
+                      color: opportunity.businessType === 'Debt' ? DK.accent : DK.green,
                     }}>
                       {opportunity.businessType}
                     </span>
@@ -318,24 +367,24 @@ export default function OpportunityPanel({
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: loading ? 'not-allowed' : 'pointer',
-                borderRadius: 6,
-                color: '#6B7F94',
+                borderRadius: RADIUS.sm,
+                color: DK.textMuted,
                 fontSize: 20,
                 transition: 'all 0.15s',
                 opacity: loading ? 0.5 : 1
               }}
               onMouseEnter={(e) => {
                 if (!loading) {
-                  e.currentTarget.style.background = '#E2E8F0';
-                  e.currentTarget.style.color = '#1A2B3D';
+                  e.currentTarget.style.background = DK.border;
+                  e.currentTarget.style.color = DK.text;
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.color = '#6B7F94';
+                e.currentTarget.style.color = DK.textMuted;
               }}
             >
-              ✕
+              \u2715
             </button>
           </div>
         </div>
@@ -347,69 +396,29 @@ export default function OpportunityPanel({
           overflow: 'auto'
         }}>
           {/* Opportunity Name */}
-          <FormField label="Nombre de la oportunidad" required>
+          <DarkFormField label="Nombre de la oportunidad" required>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => updateField('name', e.target.value)}
-              placeholder="Ej: Financiación proyecto ABC"
+              placeholder="Ej: Financiacion proyecto ABC"
               disabled={loading}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                fontSize: 14,
-                fontWeight: 500,
-                color: '#1A2B3D',
-                background: '#FFFFFF',
-                border: '2px solid #E2E8F0',
-                borderRadius: 8,
-                outline: 'none',
-                transition: 'all 0.15s',
-                fontFamily: 'inherit',
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'not-allowed' : 'text'
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#3B82F6';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              style={darkInputStyle(loading)}
+              onFocus={darkFocus}
+              onBlur={darkBlur}
             />
-          </FormField>
+          </DarkFormField>
 
           {/* Global Status (Stage) */}
-          <FormField label="Estado global" required>
+          <DarkFormField label="Estado global" required>
             <div style={{ marginBottom: 8 }}>
               <select
                 value={formData.stage}
                 onChange={(e) => updateField('stage', e.target.value)}
                 disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  color: '#1A2B3D',
-                  background: '#FFFFFF',
-                  border: '2px solid #E2E8F0',
-                  borderRadius: 8,
-                  outline: 'none',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit',
-                  opacity: loading ? 0.6 : 1,
-                  transition: 'all 0.15s'
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#3B82F6';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#E2E8F0';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
+                style={darkSelectStyle(loading)}
+                onFocus={darkFocus}
+                onBlur={darkBlur}
               >
                 {KANBAN_STAGES.map(stage => (
                   <option key={stage} value={stage}>
@@ -428,7 +437,7 @@ export default function OpportunityPanel({
                 background: currentStageColor.bg,
                 color: currentStageColor.color,
                 border: `1px solid ${currentStageColor.border}`,
-                borderRadius: 6,
+                borderRadius: RADIUS.sm,
                 fontSize: 12,
                 fontWeight: 600
               }}>
@@ -441,82 +450,42 @@ export default function OpportunityPanel({
                 {STAGE_SHORT_LABELS[formData.stage] || formData.stage}
               </div>
             )}
-          </FormField>
+          </DarkFormField>
 
           {/* Workflow Phase */}
-          <FormField label="Fase del workflow (Debt)">
+          <DarkFormField label="Fase del workflow (Debt)">
             <input
               type="text"
               value={formData.phase}
               onChange={(e) => updateField('phase', e.target.value)}
               placeholder="Ej: Due Diligence"
               disabled={loading}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                fontSize: 14,
-                fontWeight: 500,
-                color: '#1A2B3D',
-                background: '#FFFFFF',
-                border: '2px solid #E2E8F0',
-                borderRadius: 8,
-                outline: 'none',
-                transition: 'all 0.15s',
-                fontFamily: 'inherit',
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'not-allowed' : 'text'
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#3B82F6';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              style={darkInputStyle(loading)}
+              onFocus={darkFocus}
+              onBlur={darkBlur}
             />
-          </FormField>
+          </DarkFormField>
 
           {/* Deal Manager */}
-          <FormField label="Deal Manager">
+          <DarkFormField label="Deal Manager">
             <select
               value={formData.dealManager}
               onChange={(e) => updateField('dealManager', e.target.value)}
               disabled={loading}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                fontSize: 14,
-                fontWeight: 500,
-                color: '#1A2B3D',
-                background: '#FFFFFF',
-                border: '2px solid #E2E8F0',
-                borderRadius: 8,
-                outline: 'none',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit',
-                opacity: loading ? 0.6 : 1,
-                transition: 'all 0.15s'
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#3B82F6';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              style={darkSelectStyle(loading)}
+              onFocus={darkFocus}
+              onBlur={darkBlur}
             >
               <option value="">-- Sin asignar --</option>
               {TEAM_MEMBERS.map(m => (
                 <option key={m.email} value={m.name}>{m.name}</option>
               ))}
             </select>
-          </FormField>
+          </DarkFormField>
 
           {/* Amount and Currency */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12 }}>
-            <FormField label="Ticket objetivo">
+            <DarkFormField label="Ticket objetivo">
               <input
                 type="text"
                 value={formData.amount}
@@ -526,29 +495,10 @@ export default function OpportunityPanel({
                 }}
                 placeholder="0"
                 disabled={loading}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#1A2B3D',
-                  background: '#FFFFFF',
-                  border: '2px solid #E2E8F0',
-                  borderRadius: 8,
-                  outline: 'none',
-                  transition: 'all 0.15s',
-                  fontFamily: 'inherit',
-                  opacity: loading ? 0.6 : 1,
-                  cursor: loading ? 'not-allowed' : 'text',
-                  textAlign: 'right'
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#3B82F6';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                }}
+                style={{ ...darkInputStyle(loading), textAlign: 'right', fontWeight: 600 }}
+                onFocus={darkFocus}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#E2E8F0';
-                  e.currentTarget.style.boxShadow = 'none';
+                  darkBlur(e);
                   // Format on blur
                   if (formData.amount) {
                     updateField('amount', String(parseAmount(formData.amount)));
@@ -559,53 +509,33 @@ export default function OpportunityPanel({
                 <div style={{
                   marginTop: 6,
                   fontSize: 12,
-                  color: '#6B7F94',
+                  color: DK.textSecondary,
                   textAlign: 'right',
                   fontWeight: 500
                 }}>
                   {formatAmount(formData.amount)} {formData.currency}
                 </div>
               )}
-            </FormField>
+            </DarkFormField>
 
-            <FormField label="Moneda">
+            <DarkFormField label="Moneda">
               <select
                 value={formData.currency}
                 onChange={(e) => updateField('currency', e.target.value)}
                 disabled={loading}
-                style={{
-                  width: 90,
-                  padding: '10px 8px',
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#1A2B3D',
-                  background: '#FFFFFF',
-                  border: '2px solid #E2E8F0',
-                  borderRadius: 8,
-                  outline: 'none',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit',
-                  opacity: loading ? 0.6 : 1,
-                  transition: 'all 0.15s'
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#3B82F6';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#E2E8F0';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
+                style={{ ...darkSelectStyle(loading), width: 90 }}
+                onFocus={darkFocus}
+                onBlur={darkBlur}
               >
                 <option value="EUR">EUR</option>
                 <option value="USD">USD</option>
                 <option value="GBP">GBP</option>
               </select>
-            </FormField>
+            </DarkFormField>
           </div>
 
           {/* Notes */}
-          <FormField label="Notas">
+          <DarkFormField label="Notas">
             <textarea
               value={formData.notes}
               onChange={(e) => updateField('notes', e.target.value)}
@@ -613,40 +543,23 @@ export default function OpportunityPanel({
               disabled={loading}
               rows={5}
               style={{
-                width: '100%',
-                padding: '10px 12px',
-                fontSize: 14,
-                fontWeight: 400,
-                color: '#1A2B3D',
-                background: '#FFFFFF',
-                border: '2px solid #E2E8F0',
-                borderRadius: 8,
-                outline: 'none',
-                transition: 'all 0.15s',
-                fontFamily: 'inherit',
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'not-allowed' : 'text',
+                ...darkInputStyle(loading),
                 resize: 'vertical',
                 minHeight: 100,
-                lineHeight: 1.5
+                lineHeight: 1.5,
+                fontWeight: 400,
               }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#3B82F6';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              onFocus={darkFocus}
+              onBlur={darkBlur}
             />
-          </FormField>
+          </DarkFormField>
         </div>
 
         {/* Footer actions */}
         <div style={{
           padding: '20px 28px',
-          borderTop: '1px solid #E2E8F0',
-          background: '#F7F9FC',
+          borderTop: `1px solid ${DK.border}`,
+          background: DK.surface,
           flexShrink: 0,
           display: 'flex',
           gap: 12,
@@ -661,10 +574,10 @@ export default function OpportunityPanel({
                 padding: '10px 16px',
                 fontSize: 14,
                 fontWeight: 600,
-                color: '#EF4444',
+                color: DK.red,
                 background: 'transparent',
-                border: '2px solid #FEE2E2',
-                borderRadius: 8,
+                border: `2px solid ${DK.red}30`,
+                borderRadius: RADIUS.md,
                 cursor: loading ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s',
                 fontFamily: 'inherit',
@@ -672,13 +585,13 @@ export default function OpportunityPanel({
               }}
               onMouseEnter={(e) => {
                 if (!loading) {
-                  e.currentTarget.style.background = '#FEF2F2';
-                  e.currentTarget.style.borderColor = '#FECACA';
+                  e.currentTarget.style.background = `${DK.red}15`;
+                  e.currentTarget.style.borderColor = `${DK.red}50`;
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = '#FEE2E2';
+                e.currentTarget.style.borderColor = `${DK.red}30`;
               }}
             >
               Eliminar
@@ -696,13 +609,13 @@ export default function OpportunityPanel({
               fontSize: 14,
               fontWeight: 700,
               color: '#FFFFFF',
-              background: loading ? '#94A3B8' : 'linear-gradient(135deg, #3B82F6, #10B981)',
+              background: loading ? DK.textMuted : `linear-gradient(135deg, ${DK.accent}, ${DK.green})`,
               border: 'none',
-              borderRadius: 8,
+              borderRadius: RADIUS.md,
               cursor: loading ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
               fontFamily: 'inherit',
-              boxShadow: loading ? 'none' : '0 2px 8px rgba(59, 130, 246, 0.25)',
+              boxShadow: loading ? 'none' : `0 2px 8px ${DK.accent}40`,
               display: 'flex',
               alignItems: 'center',
               gap: 8,
@@ -712,12 +625,12 @@ export default function OpportunityPanel({
             onMouseEnter={(e) => {
               if (!loading) {
                 e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.35)';
+                e.currentTarget.style.boxShadow = `0 4px 12px ${DK.accent}50`;
               }
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.25)';
+              e.currentTarget.style.boxShadow = `0 2px 8px ${DK.accent}40`;
             }}
           >
             {loading ? (
@@ -741,7 +654,7 @@ export default function OpportunityPanel({
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(26, 43, 61, 0.6)',
+              background: 'rgba(10, 22, 40, 0.7)',
               zIndex: 150
             }}
           />
@@ -751,34 +664,33 @@ export default function OpportunityPanel({
             top: '50%',
             left: '50%',
             transform: 'translate(-50%, -50%)',
-            background: '#FFFFFF',
-            borderRadius: 12,
+            background: DK.card,
+            borderRadius: RADIUS.lg,
             padding: 28,
             maxWidth: 420,
             width: '90%',
-            border: '1px solid #E2E8F0',
-            boxShadow: '0 20px 60px rgba(26, 43, 61, 0.3)',
+            border: `1px solid ${DK.border}`,
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
             zIndex: 151
           }}>
             <div style={{
               fontSize: 20,
               fontWeight: 800,
-              color: '#1A2B3D',
+              color: DK.text,
               marginBottom: 12,
               display: 'flex',
               alignItems: 'center',
               gap: 10
             }}>
-              <span style={{ fontSize: 24 }}>⚠️</span>
-              Confirmar eliminación
+              Confirmar eliminacion
             </div>
             <div style={{
               fontSize: 14,
-              color: '#6B7F94',
+              color: DK.textSecondary,
               lineHeight: 1.6,
               marginBottom: 24
             }}>
-              ¿Estás seguro de que deseas eliminar esta oportunidad? Esta acción no se puede deshacer.
+              Estas seguro de que deseas eliminar esta oportunidad? Esta accion no se puede deshacer.
             </div>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
               <button
@@ -788,10 +700,10 @@ export default function OpportunityPanel({
                   padding: '10px 20px',
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#6B7F94',
-                  background: '#F7F9FC',
-                  border: '2px solid #E2E8F0',
-                  borderRadius: 8,
+                  color: DK.textSecondary,
+                  background: DK.surface,
+                  border: `2px solid ${DK.border}`,
+                  borderRadius: RADIUS.md,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s',
                   fontFamily: 'inherit',
@@ -799,13 +711,13 @@ export default function OpportunityPanel({
                 }}
                 onMouseEnter={(e) => {
                   if (!loading) {
-                    e.currentTarget.style.background = '#E2E8F0';
-                    e.currentTarget.style.color = '#1A2B3D';
+                    e.currentTarget.style.background = DK.border;
+                    e.currentTarget.style.color = DK.text;
                   }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#F7F9FC';
-                  e.currentTarget.style.color = '#6B7F94';
+                  e.currentTarget.style.background = DK.surface;
+                  e.currentTarget.style.color = DK.textSecondary;
                 }}
               >
                 Cancelar
@@ -818,9 +730,9 @@ export default function OpportunityPanel({
                   fontSize: 14,
                   fontWeight: 700,
                   color: '#FFFFFF',
-                  background: loading ? '#94A3B8' : '#EF4444',
+                  background: loading ? DK.textMuted : DK.red,
                   border: 'none',
-                  borderRadius: 8,
+                  borderRadius: RADIUS.md,
                   cursor: loading ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s',
                   fontFamily: 'inherit',
@@ -835,7 +747,7 @@ export default function OpportunityPanel({
                 }}
                 onMouseLeave={(e) => {
                   if (!loading) {
-                    e.currentTarget.style.background = '#EF4444';
+                    e.currentTarget.style.background = DK.red;
                   }
                 }}
               >
@@ -859,13 +771,13 @@ export default function OpportunityPanel({
           position: 'fixed',
           bottom: 24,
           right: 24,
-          background: feedback.type === 'success' ? '#10B981' : '#EF4444',
+          background: feedback.type === 'success' ? DK.green : DK.red,
           color: '#FFFFFF',
           padding: '14px 20px',
-          borderRadius: 10,
+          borderRadius: RADIUS.md,
           fontSize: 14,
           fontWeight: 600,
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
           zIndex: 200,
           display: 'flex',
           alignItems: 'center',
@@ -874,7 +786,7 @@ export default function OpportunityPanel({
           animation: 'slideInUp 0.3s ease-out'
         }}>
           <span style={{ fontSize: 18 }}>
-            {feedback.type === 'success' ? '✓' : '✕'}
+            {feedback.type === 'success' ? '\u2713' : '\u2717'}
           </span>
           {feedback.message}
         </div>
@@ -912,22 +824,22 @@ export default function OpportunityPanel({
   );
 }
 
-/* ── Form Field Wrapper ── */
-function FormField({ label, required, children }) {
+/* ── Dark Form Field Wrapper ── */
+function DarkFormField({ label, required, children }) {
   return (
     <div style={{ marginBottom: 24 }}>
       <label style={{
         display: 'block',
         fontSize: 12,
         fontWeight: 700,
-        color: '#6B7F94',
+        color: DK.textSecondary,
         textTransform: 'uppercase',
         letterSpacing: '0.5px',
         marginBottom: 8
       }}>
         {label}
         {required && (
-          <span style={{ color: '#EF4444', marginLeft: 4 }}>*</span>
+          <span style={{ color: DK.red, marginLeft: 4 }}>*</span>
         )}
       </label>
       {children}
