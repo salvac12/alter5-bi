@@ -74,21 +74,27 @@ export async function fetchProspectingJobs() {
     return jobsCache || [];
   }
 
-  // Group by JobId
-  const jobMap = new Map();
+  // Group by JobId — include placeholder records so jobs show from creation (pending/running)
+  const jobMap = new Map<string, {
+    jobId: string; jobName: string; status: string; createdAt: string; createdBy: string;
+    criteria: Record<string, unknown>; totalCompanies: number; approvedCount: number;
+    pendingCount: number; highConfidenceCount: number; statuses: Set<string>;
+  }>();
   for (const r of allRecords) {
     const f = r.fields;
     const jobId = f.JobId || "";
-    if (!jobId || f.CompanyName === "__JOB_PLACEHOLDER__") continue;
+    if (!jobId) continue;
+
+    const isPlaceholder = f.CompanyName === "__JOB_PLACEHOLDER__";
+    const status = (f.JobStatus || "pending") as string;
 
     if (!jobMap.has(jobId)) {
-      let criteria = {};
+      let criteria: Record<string, unknown> = {};
       try { criteria = JSON.parse(f.SearchCriteria || "{}"); } catch {}
-
       jobMap.set(jobId, {
         jobId,
         jobName: f.JobName || jobId,
-        status: f.JobStatus || "pending",
+        status,
         createdAt: f.CreatedAt || "",
         createdBy: f.CreatedBy || "",
         criteria,
@@ -96,11 +102,19 @@ export async function fetchProspectingJobs() {
         approvedCount: 0,
         pendingCount: 0,
         highConfidenceCount: 0,
+        statuses: new Set([status]),
       });
     }
 
-    const job = jobMap.get(jobId);
-    if (f.CompanyName && f.CompanyName !== "__NO_RESULTS__") {
+    const job = jobMap.get(jobId)!;
+    job.statuses.add(status);
+    // Use most advanced status: failed > running > completed > pending
+    if (job.statuses.has("failed")) job.status = "failed";
+    else if (job.statuses.has("running")) job.status = "running";
+    else if (job.statuses.has("completed")) job.status = "completed";
+    else job.status = "pending";
+
+    if (!isPlaceholder && f.CompanyName && f.CompanyName !== "__NO_RESULTS__") {
       job.totalCompanies++;
       if (f.ReviewStatus === "approved") job.approvedCount++;
       if (f.ReviewStatus === "pending") job.pendingCount++;
@@ -108,9 +122,10 @@ export async function fetchProspectingJobs() {
     }
   }
 
-  const jobs = Array.from(jobMap.values()).sort((a, b) =>
-    (b.createdAt || "").localeCompare(a.createdAt || "")
-  );
+  // Drop internal statuses set and sort by CreatedAt desc
+  const jobs = Array.from(jobMap.values())
+    .map(({ statuses: _, ...j }) => j)
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 
   jobsCache = jobs;
   jobsCacheTimestamp = now;

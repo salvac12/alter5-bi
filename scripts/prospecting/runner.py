@@ -294,8 +294,28 @@ def upload_companies_to_airtable(companies, criteria, job_id, job_name, existing
     return uploaded, errors
 
 
+def set_job_running(job_id):
+    """
+    Update the existing job placeholder (created by frontend) to status 'running'.
+    Returns True if a record was updated, False if none found (e.g. manual workflow_dispatch).
+    """
+    filter_formula = f"AND({{JobId}}='{job_id}', {{CompanyName}}='__JOB_PLACEHOLDER__')"
+    params = f"?pageSize=1&filterByFormula={urllib.parse.quote(filter_formula)}&fields[]=JobId"
+    data, err = airtable_request("GET", PROSPECTING_TABLE, params=params)
+    if err or not data or not data.get("records"):
+        return False
+    record_ids = [r["id"] for r in data["records"]]
+    payload = {"records": [{"id": record_ids[0], "fields": {"JobStatus": "running"}}]}
+    _, err = airtable_request("PATCH", PROSPECTING_TABLE, payload=payload)
+    if err:
+        print(f"[runner] Warning: could not set job running: {err}")
+        return False
+    print(f"[runner] Set existing job record to 'running'")
+    return True
+
+
 def create_job_placeholder(job_id, job_name, criteria):
-    """Create a placeholder record to mark the job as running."""
+    """Create a placeholder record to mark the job as running (used when no frontend record exists)."""
     fields = {
         "JobId": job_id,
         "JobName": job_name,
@@ -348,8 +368,11 @@ def main():
     print(f"[runner] Starting job {job_id}: {job_name}")
     print(f"[runner] Criteria: {json.dumps(criteria, indent=2, ensure_ascii=False)}")
 
-    # Create placeholder to mark job as running
-    placeholder_id = create_job_placeholder(job_id, job_name, criteria)
+    # Mark job as running: update existing frontend placeholder if any, else create one
+    if set_job_running(job_id):
+        placeholder_id = None  # we updated the existing record; nothing to delete later
+    else:
+        placeholder_id = create_job_placeholder(job_id, job_name, criteria)
 
     try:
         # STEP 1: Find sources
