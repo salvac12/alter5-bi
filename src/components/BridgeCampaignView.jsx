@@ -10,11 +10,11 @@ const API_URL = import.meta.env.VITE_BRIDGE_WEB_APP_URL || "";
 const API_TOKEN = import.meta.env.VITE_BRIDGE_API_TOKEN || "";
 
 // ============================================================
-// ALTER5 BRAND TOKENS (Light Mode - Estilo BI Dashboard)
+// ALTER5 BRAND TOKENS (Figma Make Design System)
 // ============================================================
 const T = {
   // Backgrounds
-  bg:         "#F7F9FC",      // Fondo principal gris claro
+  bg:         "#F0F4F8",      // Fondo principal
   white:      "#FFFFFF",      // Cards y superficies
   sidebar:    "#F1F5F9",      // Sidebar/filtros
 
@@ -23,9 +23,9 @@ const T = {
   borderLight:"#F1F5F9",      // Bordes muy sutiles
 
   // Text
-  title:      "#1A2B3D",      // Títulos y texto principal
+  title:      "#0F172A",      // Títulos y texto principal
   text:       "#334155",      // Texto normal
-  muted:      "#6B7F94",      // Texto secundario
+  muted:      "#64748B",      // Texto secundario
   dim:        "#94A3B8",      // Texto muy sutil
 
   // Brand Colors
@@ -43,7 +43,7 @@ const T = {
   blueBg:     "#EFF6FF",      // Fondo azul
 
   // Typography
-  sans:       "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+  sans:       "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
   mono:       "'JetBrains Mono', 'Fira Code', monospace",
 };
 
@@ -167,7 +167,7 @@ function getDisplayName(contact) {
 // GLOBAL STYLES
 // ============================================================
 const globalCSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: ${T.bg}; color: ${T.text}; font-family: ${T.sans}; -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -194,8 +194,9 @@ function KPI({ label, value, sub, color = T.title, onClick }) {
       style={{
         background: hovered ? T.primaryBg : T.white,
         borderRadius: 12,
-        padding: "20px 24px",
+        padding: "18px 20px",
         border: `1px solid ${hovered ? T.primary : T.border}`,
+        borderTop: `3px solid ${color}`,
         animation: "fadeUp 0.4s ease both",
         cursor: clickable ? "pointer" : "default",
         transition: "background 0.15s, border-color 0.15s",
@@ -205,7 +206,7 @@ function KPI({ label, value, sub, color = T.title, onClick }) {
       {clickable && (
         <div style={{
           position: "absolute",
-          top: 12,
+          top: 10,
           right: 14,
           fontSize: 11,
           color: hovered ? T.primary : T.dim,
@@ -215,23 +216,23 @@ function KPI({ label, value, sub, color = T.title, onClick }) {
         }}>Ver →</div>
       )}
       <div style={{
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
         color: T.muted,
-        letterSpacing: "0.1em",
+        letterSpacing: "0.06em",
         textTransform: "uppercase",
         marginBottom: 8,
       }}>{label}</div>
       <div style={{
-        fontSize: 32,
-        fontWeight: 700,
+        fontSize: 20,
+        fontWeight: 600,
         color: hovered ? T.primary : color,
-        fontFamily: T.mono,
+        fontFamily: T.sans,
         lineHeight: 1,
         letterSpacing: "-0.02em",
         transition: "color 0.15s",
       }}>{value}</div>
-      {sub && <div style={{ fontSize: 13, color: T.muted, marginTop: 8 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 12, color: T.muted, marginTop: 8 }}>{sub}</div>}
     </div>
   );
 }
@@ -254,7 +255,7 @@ function Funnel({ label, count, total, color, idx = 0 }) {
         }} />
       </div>
       <div style={{ textAlign: "right" }}>
-        <span style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.title }}>{count}</span>
+        <span style={{ fontFamily: T.sans, fontSize: 15, fontWeight: 700, color: T.title }}>{count}</span>
         <span style={{ fontSize: 12, color: T.muted, marginLeft: 6 }}>{rate}</span>
       </div>
     </div>
@@ -276,13 +277,13 @@ function ABMetric({ label, a, b, fmt = "pct", aTotal, bTotal }) {
     }}>
       <div style={{ textAlign: "center" }}>
         <span style={{
-          fontFamily: T.mono,
+          fontFamily: T.sans,
           fontSize: 22,
           fontWeight: 700,
           color: win === "A" ? T.primary : T.title,
         }}>{dA}</span>
         {fmt === "pct" && aTotal !== undefined && (
-          <div style={{ fontSize: 12, color: T.muted, marginTop: 2, fontFamily: T.mono }}>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 2, fontFamily: T.sans }}>
             ({Math.round(a * aTotal)}/{aTotal})
           </div>
         )}
@@ -298,13 +299,13 @@ function ABMetric({ label, a, b, fmt = "pct", aTotal, bTotal }) {
       }}>{label}</div>
       <div style={{ textAlign: "center" }}>
         <span style={{
-          fontFamily: T.mono,
+          fontFamily: T.sans,
           fontSize: 22,
           fontWeight: 700,
           color: win === "B" ? T.emerald : T.title,
         }}>{dB}</span>
         {fmt === "pct" && bTotal !== undefined && (
-          <div style={{ fontSize: 12, color: T.muted, marginTop: 2, fontFamily: T.mono }}>
+          <div style={{ fontSize: 12, color: T.muted, marginTop: 2, fontFamily: T.sans }}>
             ({Math.round(b * bTotal)}/{bTotal})
           </div>
         )}
@@ -359,10 +360,10 @@ function VarBadge({ v }) {
       justifyContent: "center",
       width: 28,
       height: 28,
-      borderRadius: 6,
+      borderRadius: 7,
       fontSize: 12,
       fontWeight: 700,
-      fontFamily: T.mono,
+      fontFamily: T.sans,
       color: T.white,
       background: isA ? T.primary : T.emerald,
     }}>{v}</span>
@@ -372,12 +373,12 @@ function VarBadge({ v }) {
 function TabBtn({ active, label, onClick }) {
   return (
     <button onClick={onClick} style={{
-      background: active ? T.primary : "transparent",
-      color: active ? T.white : T.muted,
+      background: active ? "#1E293B" : "transparent",
+      color: active ? "#FFFFFF" : T.muted,
       border: "none",
       borderRadius: 8,
       padding: "10px 20px",
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: 600,
       cursor: "pointer",
       fontFamily: T.sans,
@@ -392,10 +393,10 @@ function FilterChip({ active, label, count, onClick }) {
       background: active ? T.primaryBg : "transparent",
       color: active ? T.primary : T.muted,
       border: `1px solid ${active ? T.primary : T.border}`,
-      borderRadius: 6,
+      borderRadius: 8,
       padding: "6px 14px",
       cursor: "pointer",
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: 500,
       fontFamily: T.sans,
       transition: "all 0.2s",
@@ -419,10 +420,11 @@ function Card({ children, style = {} }) {
   return (
     <div style={{
       background: T.white,
-      borderRadius: 12,
+      borderRadius: 14,
       padding: 24,
       border: `1px solid ${T.border}`,
       animation: "fadeUp 0.4s ease both",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
       ...style,
     }}>{children}</div>
   );
@@ -432,10 +434,10 @@ function CardTitle({ children }) {
   return (
     <h3 style={{
       margin: "0 0 20px 0",
-      fontSize: 11,
-      fontWeight: 600,
+      fontSize: 12,
+      fontWeight: 700,
       color: T.muted,
-      letterSpacing: "0.1em",
+      letterSpacing: "0.08em",
       textTransform: "uppercase",
     }}>{children}</h3>
   );
@@ -445,14 +447,14 @@ function RateBox({ label, value, color }) {
   return (
     <div style={{
       background: T.bg,
-      borderRadius: 10,
+      borderRadius: 12,
       padding: 18,
       textAlign: "center",
       border: `1px solid ${T.border}`,
     }}>
       <div style={{
-        fontFamily: T.mono,
-        fontSize: 28,
+        fontFamily: T.sans,
+        fontSize: 24,
         fontWeight: 700,
         color,
         letterSpacing: "-0.02em",
@@ -726,7 +728,7 @@ function CompanyRow({ company, expanded, onToggle }) {
                     padding: "2px 6px",
                     fontSize: 11,
                     fontWeight: 600,
-                    fontFamily: T.mono,
+                    fontFamily: T.sans,
                     borderRadius: 4,
                     color: T.muted,
                     border: `1px solid ${T.border}`,
@@ -745,7 +747,7 @@ function CompanyRow({ company, expanded, onToggle }) {
                   width: 320,
                   textAlign: "right",
                   fontSize: 12,
-                  fontFamily: T.mono,
+                  fontFamily: T.sans,
                   color: T.muted,
                 }}>
                   {timeline.join(" · ") || "—"}
@@ -865,11 +867,11 @@ function ResponseItem({ contact, pipelineCard, isExpanded, onToggle, onMoveStage
       onMouseLeave={() => setHovered(false)}
       style={{
         background: T.white,
-        borderRadius: 10,
+        borderRadius: 12,
         border: `1px solid ${hovered ? T.border : T.borderLight}`,
         overflow: 'hidden',
         transition: 'border-color 0.15s, box-shadow 0.15s',
-        boxShadow: hovered ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+        boxShadow: hovered ? '0 2px 12px rgba(0,0,0,0.06)' : '0 1px 3px rgba(0,0,0,0.03)',
         animation: 'fadeUp 0.3s ease both',
       }}
     >
@@ -909,7 +911,7 @@ function ResponseItem({ contact, pipelineCard, isExpanded, onToggle, onMoveStage
         {/* Messages badge */}
         {totalMessages > 0 && (
           <span style={{
-            fontSize: 11, fontWeight: 600, fontFamily: T.mono,
+            fontSize: 11, fontWeight: 600, fontFamily: T.sans,
             color: T.primary, background: T.primaryBg,
             padding: '2px 8px', borderRadius: 4, flexShrink: 0,
           }}>{totalMessages} msgs</span>
@@ -1193,7 +1195,7 @@ function PipelineListItem({ card, contact, isExpanded, onToggle, onViewDetail, o
 
   // Next stages for action buttons
   const nextStages = {
-    nurturing: [{ id: 'reunion', label: 'Reunión' }],
+    nurturing: [{ id: 'reunion', label: 'Reunion' }],
     reunion: [{ id: 'subida_docs', label: 'Subida docs' }],
     subida_docs: [{ id: 'doc_completada', label: 'Doc completada' }],
     doc_completada: [],
@@ -1205,10 +1207,10 @@ function PipelineListItem({ card, contact, isExpanded, onToggle, onViewDetail, o
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: T.white, borderRadius: 10,
+        background: T.white, borderRadius: 12,
         border: `1px solid ${hovered ? T.border : T.borderLight}`,
         overflow: 'hidden', transition: 'border-color 0.15s, box-shadow 0.15s',
-        boxShadow: hovered ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+        boxShadow: hovered ? '0 2px 12px rgba(0,0,0,0.06)' : '0 1px 3px rgba(0,0,0,0.03)',
         animation: 'fadeUp 0.3s ease both',
       }}
     >
@@ -1239,7 +1241,7 @@ function PipelineListItem({ card, contact, isExpanded, onToggle, onViewDetail, o
             {displayName}
             {isGroup && (
               <span style={{
-                fontSize: 11, fontWeight: 600, fontFamily: T.mono,
+                fontSize: 11, fontWeight: 600, fontFamily: T.sans,
                 color: T.primary, background: T.primaryBg,
                 padding: '1px 7px', borderRadius: 4, flexShrink: 0,
               }}>{card._contactCount} contactos</span>
@@ -1261,7 +1263,7 @@ function PipelineListItem({ card, contact, isExpanded, onToggle, onViewDetail, o
           onClick={e => { e.stopPropagation(); onViewDetail(card); }}
           title="Ver conversación"
           style={{
-            fontSize: 11, fontWeight: 600, fontFamily: T.mono,
+            fontSize: 11, fontWeight: 600, fontFamily: T.sans,
             color: T.primary, background: T.primaryBg,
             padding: '3px 10px', borderRadius: 6, flexShrink: 0,
             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
@@ -1283,7 +1285,7 @@ function PipelineListItem({ card, contact, isExpanded, onToggle, onViewDetail, o
 
         {/* Days badge */}
         <span style={{
-          fontSize: 11, fontWeight: 600, fontFamily: T.mono,
+          fontSize: 11, fontWeight: 600, fontFamily: T.sans,
           color: days > 7 ? T.amber : T.muted,
           background: days > 7 ? T.amberBg : T.bg,
           padding: '2px 8px', borderRadius: 4, flexShrink: 0,
@@ -1650,7 +1652,7 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
       {/* Panel — 720px, flex column, no global padding */}
       <div style={{
         position: 'relative', width: 720, height: '100%', background: T.white,
-        boxShadow: '-4px 0 20px rgba(0,0,0,0.1)',
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
         animation: 'fadeUp 0.25s ease both',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
@@ -1672,7 +1674,7 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
             <div style={{
               width: 48, height: 48, borderRadius: 12, background: sc.border, flexShrink: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 16, fontWeight: 700, fontFamily: T.mono,
+              color: '#fff', fontSize: 16, fontWeight: 700, fontFamily: T.sans,
             }}>{initials}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 18, fontWeight: 700, color: '#F1F5F9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1996,7 +1998,7 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
                             background: isLeticia ? T.primary : T.emerald, color: '#fff',
                           }}>{isLeticia ? 'Leticia (IA)' : contactName}</span>
                           <span style={{
-                            fontSize: 13, color: T.muted, fontFamily: T.mono,
+                            fontSize: 13, color: T.muted, fontFamily: T.sans,
                           }}>{isLeticia ? 'leticia@alter-5.com' : card.email}</span>
                           {isDraftCandidate && !editingDraft && (
                             <span style={{
@@ -3048,6 +3050,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
         allCompanies={allCompanies || []}
         campaignRef={nextWaveRef || "Bridge_Q1_W2"}
         previousTargets={previousTargets}
+        bridgeContacts={data?.contactos || []}
         currentUser="Salvador Carrillo"
         onBack={() => setShowExplorer(false)}
       />
@@ -3066,7 +3069,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
         justifyContent: "space-between",
         alignItems: "center",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {onBack && (
             <button
               onClick={onBack}
@@ -3092,26 +3095,36 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
               Campanas
             </button>
           )}
+          {/* Gradient icon */}
           <div style={{
-            width: 1,
-            height: 32,
-            background: T.border,
-          }} />
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            background: "linear-gradient(135deg, #1D4ED8, #059669)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}>
+            <span style={{ color: "#fff", fontSize: 18, lineHeight: 1 }}>⚡</span>
+          </div>
           <div>
             <h1 style={{
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: 700,
-              color: T.title,
+              background: "linear-gradient(90deg, #1D4ED8, #059669)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
               letterSpacing: "-0.02em",
               lineHeight: 1.2,
             }}>
-              Bridge Debt Energy Program
+              Bridge Energy Program
             </h1>
-            <span style={{ fontSize: 12, color: T.muted }}>Campaign Dashboard</span>
+            <span style={{ fontSize: 12, color: T.muted }}>Fast-track financing for ready-to-build projects</span>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {mock && (
             <span style={{
               fontSize: 12,
@@ -3122,45 +3135,45 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
               borderRadius: 6,
             }}>Datos de ejemplo</span>
           )}
-          <span style={{ fontSize: 13, color: T.dim }}>
+          <span style={{ fontSize: 12, color: T.dim }}>
             {data?.actualizado && fmtDate(data.actualizado)}
           </span>
           <button onClick={load} style={{
-            background: T.primary,
-            border: "none",
+            background: T.white,
+            border: `1px solid ${T.border}`,
             borderRadius: 8,
-            color: T.white,
-            padding: "10px 20px",
+            color: T.text,
+            padding: "9px 16px",
             cursor: "pointer",
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: 600,
             fontFamily: T.sans,
             display: "flex",
             alignItems: "center",
-            gap: 8,
-            transition: "opacity 0.2s",
+            gap: 6,
+            transition: "all 0.15s",
           }}
-          onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
-          onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+          onMouseEnter={e => { e.currentTarget.style.background = T.bg; }}
+          onMouseLeave={e => { e.currentTarget.style.background = T.white; }}
           >↻ Actualizar</button>
           <button onClick={handleOpenExplorer} style={{
-            background: T.emerald,
+            background: "linear-gradient(135deg, #1D4ED8, #059669)",
             border: "none",
             borderRadius: 8,
-            color: T.white,
-            padding: "10px 20px",
+            color: "#FFFFFF",
+            padding: "9px 18px",
             cursor: "pointer",
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: 600,
             fontFamily: T.sans,
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 6,
             transition: "opacity 0.2s",
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
           onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >＋ Continuar con más candidatos</button>
+          >+ Anadir proyecto</button>
         </div>
       </header>
 
@@ -3178,16 +3191,17 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
           <KPI label="Rebotados" value={tErrors} sub={tEnviadosTotal ? pct(tErrors/tEnviadosTotal)+" de enviados" : ""} color={T.red} onClick={() => goToFilter("errores")} />
         </div>
 
-        {/* Tabs — 3 tabs: Resumen, Contactos, Test A/B */}
+        {/* Tabs */}
         <div style={{
           display: "flex",
           gap: 4,
           marginBottom: 24,
           background: T.white,
-          borderRadius: 10,
+          borderRadius: 12,
           padding: 4,
           border: `1px solid ${T.border}`,
           width: "fit-content",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
         }}>
           <TabBtn active={tab==="resumen"} label="Resumen" onClick={()=>setTab("resumen")} />
           <TabBtn active={tab==="respuestas"} label="Respuestas" onClick={()=>setTab("respuestas")} />
@@ -3245,7 +3259,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{
-                        fontFamily: T.mono,
+                        fontFamily: T.sans,
                         fontSize: 24,
                         fontWeight: 700,
                         color: (m?.Final?.pendientes||0) > 0 ? T.amber : T.emerald,
@@ -3660,7 +3674,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
                   border: `1px solid ${T.primary}22`,
                 }}>
                   <span style={{
-                    fontFamily: T.mono,
+                    fontFamily: T.sans,
                     fontSize: 18,
                     fontWeight: 700,
                     color: T.primary,
@@ -3689,7 +3703,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
                   border: `1px solid ${T.emerald}22`,
                 }}>
                   <span style={{
-                    fontFamily: T.mono,
+                    fontFamily: T.sans,
                     fontSize: 18,
                     fontWeight: 700,
                     color: T.emerald,
@@ -3725,7 +3739,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
                     fontSize: 13,
                     color: T.muted,
                     marginTop: 8,
-                    fontFamily: T.mono,
+                    fontFamily: T.sans,
                   }}>
                     → Ejecuta enviarGanador{aWins ? "A" : "B"}()
                   </div>
@@ -3855,13 +3869,13 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: T.bg }}>
-                    {["VAR.", "CONTACTO", "ORGANIZACIÓN", "ESTADO", "APERTURAS", "CLICS", "ÚLTIMO"].map(h => (
+                  <tr style={{ background: "#FAFAFA" }}>
+                    {["VAR.", "CONTACTO", "ORGANIZACION", "ESTADO", "APERTURAS", "CLICS", "ULTIMO"].map(h => (
                       <th key={h} style={{
                         padding: "12px 16px",
                         textAlign: "left",
-                        fontSize: 11,
-                        fontWeight: 600,
+                        fontSize: 10,
+                        fontWeight: 700,
                         color: T.muted,
                         textTransform: "uppercase",
                         letterSpacing: "0.08em",
@@ -3902,14 +3916,14 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
                       <td style={{ padding: "14px 16px" }}><StatusBadge estado={c.estado} /></td>
                       <td style={{
                         padding: "14px 16px",
-                        fontFamily: T.mono,
+                        fontFamily: T.sans,
                         fontSize: 14,
                         fontWeight: 600,
                         color: c.numAperturas>0 ? T.title : T.dim,
                       }}>{c.numAperturas||0}</td>
                       <td style={{
                         padding: "14px 16px",
-                        fontFamily: T.mono,
+                        fontFamily: T.sans,
                         fontSize: 14,
                         fontWeight: 600,
                         color: c.numClics>0 ? T.title : T.dim,
@@ -4554,7 +4568,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
           }} onClick={() => !d.sending && setFollowUpDraft(null)}>
             <div style={{
               background: T.white, borderRadius: 16, width: '90%', maxWidth: 720,
-              maxHeight: '90vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+              maxHeight: '90vh', overflow: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
               padding: 0,
             }} onClick={e => e.stopPropagation()}>
               {/* Header */}
