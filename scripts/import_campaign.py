@@ -203,12 +203,12 @@ def export_to_compact_with_campaign(all_companies):
 
             details[str(i)] = [
                 [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
-                [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
+                [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[-20:]],
                 context[:500],
                 source_breakdown,
                 c.get("subjects", [])[:20],
                 c.get("enrichment", None),
-                dated_subjects[:30] if dated_subjects else None,
+                dated_subjects[-30:] if dated_subjects else None,
             ]
 
     return {"r": records, "d": details}

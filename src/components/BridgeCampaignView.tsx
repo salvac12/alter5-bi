@@ -3173,7 +3173,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
           onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >+ Anadir proyecto</button>
+          >+ Buscar más candidatos</button>
         </div>
       </header>
 

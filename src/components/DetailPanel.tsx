@@ -25,8 +25,8 @@ function contactPriorityInfo(role) {
   if (/\bm&a\b|\bm\s*&\s*a\b/.test(r))
     return { rank: 3, label: "M&A", color: "#10B981" };
   if (!r || r === "no identificado")
-    return { rank: 5, label: "Cargo desconocido", color: "#6B7F94" };
-  return { rank: 4, label: role, color: "#94A3B8" };
+    return { rank: 5, label: "Cargo desconocido", color: "#6B7280" };
+  return { rank: 4, label: role, color: "#6B7280" };
 }
 
 export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSave, productMatches, currentUser, verifiedCompanies, onVerifiedUpdate }) {
@@ -359,38 +359,38 @@ FORMATO (JSON valido, sin markdown):
 
   // Get group color
   const roleDef = COMPANY_ROLES.find(g => g.id === c.role) || COMPANY_ROLES.find(g => g.id === c.group);
-  const groupColor = roleDef?.color || "#94A3B8";
+  const groupColor = roleDef?.color || "#6B7280";
 
   return (
     <div className="slide-in" style={{
       position: "fixed", top: 0, right: 0, bottom: 0, width: 720, maxWidth: "100vw",
-      background: "#0A1628", zIndex: 100,
-      overflow: "auto", boxShadow: "-12px 0 40px rgba(10,22,40,0.4)",
+      background: "#FFFFFF", zIndex: 100,
+      overflow: "auto", boxShadow: "-12px 0 40px rgba(0,0,0,0.12)",
     }}>
       <div style={{ padding: 28 }}>
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
           <div style={{ flex: 1 }}>
             <h2 style={{
-              margin: 0, fontSize: 26, fontWeight: 800, color: "#FFFFFF",
+              margin: 0, fontSize: 26, fontWeight: 800, color: "#111827",
               letterSpacing: "-1px", lineHeight: 1.2,
             }}>{c.name}</h2>
-            <div style={{ fontSize: 14, color: "#6B7F94", marginTop: 6, fontWeight: 400 }}>{c.domain}</div>
+            <div style={{ fontSize: 14, color: "#6B7280", marginTop: 6, fontWeight: 400 }}>{c.domain}</div>
           </div>
           <button onClick={onClose} style={{
-            background: "#132238", border: "1px solid #1B3A5C", color: "#6B7F94",
+            background: "#F1F5F9", border: "1px solid #E2E8F0", color: "#6B7280",
             width: 36, height: 36, borderRadius: 8, cursor: "pointer", fontSize: 16,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: "inherit",
             transition: "all 0.15s ease",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#1B3A5C";
-            e.currentTarget.style.color = "#FFFFFF";
+            e.currentTarget.style.background = "#E2E8F0";
+            e.currentTarget.style.color = "#111827";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#132238";
-            e.currentTarget.style.color = "#6B7F94";
+            e.currentTarget.style.background = "#F1F5F9";
+            e.currentTarget.style.color = "#6B7280";
           }}
           >✕</button>
         </div>
@@ -413,7 +413,7 @@ FORMATO (JSON valido, sin markdown):
           {/* Market role badges */}
           {c.marketRoles?.map((role, i) => {
             const mrDef = MARKET_ROLES.find(m => m.id === role);
-            const col = mrDef?.color || "#6B7F94";
+            const col = mrDef?.color || "#6B7280";
             return (
               <span key={`mr${i}`} style={{
                 padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
@@ -437,7 +437,7 @@ FORMATO (JSON valido, sin markdown):
         {/* Tab Bar */}
         <div style={{
           display: "flex", gap: 0, marginBottom: 20,
-          borderBottom: "1px solid #1B3A5C",
+          borderBottom: "1px solid #E2E8F0",
         }}>
           {[
             { id: 'resumen', label: 'Resumen' },
@@ -451,7 +451,7 @@ FORMATO (JSON valido, sin markdown):
                 background: "none",
                 border: "none",
                 borderBottom: activeTab === tab.id ? "2px solid #3B82F6" : "2px solid transparent",
-                color: activeTab === tab.id ? "#FFFFFF" : "#6B7F94",
+                color: activeTab === tab.id ? "#111827" : "#6B7280",
                 fontSize: 13,
                 fontWeight: activeTab === tab.id ? 700 : 600,
                 padding: "10px 18px",
@@ -460,10 +460,10 @@ FORMATO (JSON valido, sin markdown):
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
-                if (activeTab !== tab.id) e.currentTarget.style.color = "#94A3B8";
+                if (activeTab !== tab.id) e.currentTarget.style.color = "#374151";
               }}
               onMouseLeave={(e) => {
-                if (activeTab !== tab.id) e.currentTarget.style.color = "#6B7F94";
+                if (activeTab !== tab.id) e.currentTarget.style.color = "#6B7280";
               }}
             >
               {tab.label}
@@ -482,17 +482,17 @@ FORMATO (JSON valido, sin markdown):
             {/* Market Roles */}
             {c.marketRoles?.length > 0 && (
               <div style={{
-                background: "#132238", borderRadius: 10, padding: "12px 16px",
-                border: "1px solid #1B3A5C",
+                background: "#F8FAFC", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #E2E8F0",
               }}>
                 <div style={{
-                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  fontSize: 9, color: "#6B7280", textTransform: "uppercase",
                   letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
                 }}>Market Roles</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {c.marketRoles.map((role, i) => {
                     const mrDef = MARKET_ROLES.find(m => m.id === role);
-                    const col = mrDef?.color || "#6B7F94";
+                    const col = mrDef?.color || "#6B7280";
                     return (
                       <span key={i} style={{
                         padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
@@ -518,11 +518,11 @@ FORMATO (JSON valido, sin markdown):
             {/* Airtable Pipeline */}
             {c.opportunity && (
               <div style={{
-                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                background: "#F8FAFC", borderRadius: 10, padding: "12px 16px",
                 border: "1px solid #8B5CF640",
               }}>
                 <div style={{
-                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  fontSize: 9, color: "#6B7280", textTransform: "uppercase",
                   letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
                   display: "flex", alignItems: "center", gap: 6,
                 }}>
@@ -533,16 +533,16 @@ FORMATO (JSON valido, sin markdown):
                   }}>LIVE</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>
                     {c.opportunity.stage}
                   </div>
                   {c.opportunity.amount > 0 && (
-                    <div style={{ fontSize: 12, color: "#94A3B8" }}>
+                    <div style={{ fontSize: 12, color: "#6B7280" }}>
                       {c.opportunity.amount.toLocaleString("es-ES")} {c.opportunity.currency}
                     </div>
                   )}
                   {c.opportunity.owner && (
-                    <div style={{ fontSize: 11, color: "#6B7F94" }}>
+                    <div style={{ fontSize: 11, color: "#6B7280" }}>
                       {c.opportunity.owner}
                     </div>
                   )}
@@ -553,22 +553,22 @@ FORMATO (JSON valido, sin markdown):
             {/* Productos IA */}
             {c.productosIA?.length > 0 && (
               <div style={{
-                background: "#132238", borderRadius: 10, padding: "12px 16px",
-                border: "1px solid #1B3A5C",
+                background: "#F8FAFC", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #E2E8F0",
               }}>
                 <div style={{
-                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  fontSize: 9, color: "#6B7280", textTransform: "uppercase",
                   letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
                 }}>Productos potenciales</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {c.productosIA.map((p, i) => {
-                    const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7F94" };
-                    const col = confColors[p.c] || "#6B7F94";
+                    const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7280" };
+                    const col = confColors[p.c] || "#6B7280";
                     return (
                       <span key={i} style={{
                         display: "inline-flex", alignItems: "center", gap: 6,
                         padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                        background: col + "15", color: "#FFFFFF", border: `1px solid ${col}40`,
+                        background: col + "15", color: "#111827", border: `1px solid ${col}40`,
                       }}>
                         {p.p}
                         <span style={{
@@ -585,18 +585,18 @@ FORMATO (JSON valido, sin markdown):
             {/* Senales */}
             {c.senales?.length > 0 && (
               <div style={{
-                background: "#132238", borderRadius: 10, padding: "12px 16px",
-                border: "1px solid #1B3A5C",
+                background: "#F8FAFC", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #E2E8F0",
               }}>
                 <div style={{
-                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  fontSize: 9, color: "#6B7280", textTransform: "uppercase",
                   letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
                 }}>Senales clave</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {c.senales.map((s, i) => (
                     <span key={i} style={{
                       padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                      background: "#F1F5F9", color: "#6B7280", border: "1px solid #E2E8F0",
                     }}>{s}</span>
                   ))}
                 </div>
@@ -620,12 +620,12 @@ FORMATO (JSON valido, sin markdown):
             {/* Resumen de la relacion — cronologico con fechas */}
             {(det?.datedSubjects?.length > 0 || det?.context) && (
               <div style={{
-                background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
+                background: "linear-gradient(135deg, #E2E8F0 0%, #F8FAFC 100%)",
                 borderRadius: 10, padding: "12px 16px",
-                border: "1px solid #2A4A6C",
+                border: "1px solid #CBD5E1",
               }}>
                 <div style={{
-                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  fontSize: 9, color: "#6B7280", textTransform: "uppercase",
                   letterSpacing: "1.5px", fontWeight: 700, marginBottom: 10,
                 }}>Resumen de la relacion</div>
                 {det.datedSubjects?.length > 0 ? (
@@ -640,11 +640,11 @@ FORMATO (JSON valido, sin markdown):
                             padding: "8px 10px",
                             borderRadius: 6,
                             cursor: hasExtract ? "pointer" : "default",
-                            background: isExpanded ? "#0A162840" : "transparent",
+                            background: isExpanded ? "#F1F5F940" : "transparent",
                             transition: "background 0.15s ease",
                           }}
                           onMouseEnter={(e) => {
-                            if (hasExtract && !isExpanded) e.currentTarget.style.background = "#0A162820";
+                            if (hasExtract && !isExpanded) e.currentTarget.style.background = "#F1F5F920";
                           }}
                           onMouseLeave={(e) => {
                             if (!isExpanded) e.currentTarget.style.background = "transparent";
@@ -657,12 +657,12 @@ FORMATO (JSON valido, sin markdown):
                               fontFamily: "'DM Sans', monospace",
                             }}>{ds.date}</span>
                             <span style={{
-                              fontSize: 12, color: "#FFFFFF", fontWeight: 400, lineHeight: 1.5,
+                              fontSize: 12, color: "#111827", fontWeight: 400, lineHeight: 1.5,
                               flex: 1,
                             }}>{ds.subject}</span>
                             {hasExtract && (
                               <span style={{
-                                fontSize: 10, color: "#475569", flexShrink: 0,
+                                fontSize: 10, color: "#9CA3AF", flexShrink: 0,
                                 transition: "transform 0.15s ease",
                                 transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
                               }}>▼</span>
@@ -671,9 +671,9 @@ FORMATO (JSON valido, sin markdown):
                           {isExpanded && ds.extract && (
                             <div style={{
                               marginTop: 8, marginLeft: 90, padding: "10px 12px",
-                              background: "#0A1628", borderRadius: 6,
-                              border: "1px solid #1B3A5C",
-                              fontSize: 12, color: "#94A3B8", lineHeight: 1.6,
+                              background: "#F1F5F9", borderRadius: 6,
+                              border: "1px solid #E2E8F0",
+                              fontSize: 12, color: "#6B7280", lineHeight: 1.6,
                               fontWeight: 400,
                             }}>{ds.extract}</div>
                           )}
@@ -683,7 +683,7 @@ FORMATO (JSON valido, sin markdown):
                   </div>
                 ) : (
                   <p style={{
-                    fontSize: 13, color: "#FFFFFF", lineHeight: 1.7, margin: 0, fontWeight: 400,
+                    fontSize: 13, color: "#111827", lineHeight: 1.7, margin: 0, fontWeight: 400,
                   }}>{det.context}</p>
                 )}
               </div>
@@ -698,17 +698,17 @@ FORMATO (JSON valido, sin markdown):
             {det?.timeline?.length > 0 ? (
               <>
                 <div style={{
-                  background: "#132238", borderRadius: 12, padding: 18,
-                  marginBottom: 20, border: "1px solid #1B3A5C",
+                  background: "#F8FAFC", borderRadius: 12, padding: 18,
+                  marginBottom: 20, border: "1px solid #E2E8F0",
                 }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr>
                         {["Trimestre", "Emails", "Resumen"].map(h => (
                           <th key={h} style={{
-                            textAlign: "left", fontSize: 9, color: "#6B7F94",
+                            textAlign: "left", fontSize: 9, color: "#6B7280",
                             textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
-                            padding: "8px 10px", borderBottom: "1px solid #1B3A5C",
+                            padding: "8px 10px", borderBottom: "1px solid #E2E8F0",
                           }}>{h}</th>
                         ))}
                       </tr>
@@ -716,18 +716,18 @@ FORMATO (JSON valido, sin markdown):
                     <tbody>
                       {[...det.timeline].reverse().map((t, i) => (
                         <tr key={i} style={{
-                          borderBottom: "1px solid #0A1628",
+                          borderBottom: "1px solid #F1F5F9",
                         }}>
                           <td style={{
                             padding: "10px", fontSize: 12, fontWeight: 700,
-                            color: "#FFFFFF", whiteSpace: "nowrap", width: 80,
+                            color: "#111827", whiteSpace: "nowrap", width: 80,
                           }}>{t.quarter}</td>
                           <td style={{
                             padding: "10px", fontSize: 12, fontWeight: 600,
                             color: "#60A5FA", width: 60, textAlign: "center",
                           }}>{t.emails}</td>
                           <td style={{
-                            padding: "10px", fontSize: 12, color: t.summary ? "#94A3B8" : "#475569",
+                            padding: "10px", fontSize: 12, color: t.summary ? "#6B7280" : "#9CA3AF",
                             fontStyle: t.summary ? "normal" : "italic", lineHeight: 1.5,
                           }}>{t.summary || "Sin resumen"}</td>
                         </tr>
@@ -738,8 +738,8 @@ FORMATO (JSON valido, sin markdown):
 
                 {/* Bar chart (reused from existing) */}
                 <div style={{
-                  marginBottom: 20, background: "#132238", borderRadius: 12,
-                  padding: 18, border: "1px solid #1B3A5C",
+                  marginBottom: 20, background: "#F8FAFC", borderRadius: 12,
+                  padding: 18, border: "1px solid #E2E8F0",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                     <span style={{ fontSize: 20 }}>📈</span>
@@ -747,24 +747,24 @@ FORMATO (JSON valido, sin markdown):
                       Historico de interacciones
                     </DarkSectionTitle>
                     <span style={{
-                      marginLeft: "auto", fontSize: 11, color: "#6B7F94", fontWeight: 600,
+                      marginLeft: "auto", fontSize: 11, color: "#6B7280", fontWeight: 600,
                     }}>{det.timeline.length} trimestres</span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {det.timeline.map((t, i) => {
                       const maxE = Math.max(...det.timeline.map(x => x.emails));
                       const pct = (t.emails / maxE) * 100;
-                      const isRecent = i < 3;
+                      const isRecent = i >= det.timeline.length - 3;
                       return (
                         <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0" }}>
                           <span style={{
                             width: 70, fontSize: 12,
-                            color: isRecent ? "#FFFFFF" : "#6B7F94",
+                            color: isRecent ? "#111827" : "#6B7280",
                             fontFamily: "'DM Sans', monospace",
                             fontWeight: isRecent ? 700 : 600,
                           }}>{t.quarter}</span>
                           <div style={{
-                            flex: 1, height: 20, background: "#0A1628",
+                            flex: 1, height: 20, background: "#E2E8F0",
                             borderRadius: 6, overflow: "hidden", position: "relative",
                           }}>
                             <div style={{
@@ -778,7 +778,7 @@ FORMATO (JSON valido, sin markdown):
                               <span style={{
                                 position: "absolute", right: 8, top: "50%",
                                 transform: "translateY(-50%)", fontSize: 10, fontWeight: 700,
-                                color: pct > 30 ? "#FFFFFF" : "#94A3B8",
+                                color: pct > 30 ? "#FFFFFF" : "#6B7280",
                               }}>{t.emails} emails</span>
                             )}
                           </div>
@@ -787,19 +787,19 @@ FORMATO (JSON valido, sin markdown):
                     })}
                   </div>
                   <div style={{
-                    marginTop: 12, padding: 12, background: "#0A1628", borderRadius: 8,
+                    marginTop: 12, padding: 12, background: "#F1F5F9", borderRadius: 8,
                     display: "flex", justifyContent: "space-between", alignItems: "center",
                   }}>
                     <div>
-                      <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
+                      <div style={{ fontSize: 9, color: "#6B7280", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
                         Total historico
                       </div>
-                      <div style={{ fontSize: 18, color: "#FFFFFF", fontWeight: 800, marginTop: 2 }}>
+                      <div style={{ fontSize: 18, color: "#111827", fontWeight: 800, marginTop: 2 }}>
                         {det.timeline.reduce((sum, t) => sum + t.emails, 0).toLocaleString()} emails
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
+                      <div style={{ fontSize: 9, color: "#6B7280", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
                         Promedio trimestral
                       </div>
                       <div style={{ fontSize: 18, color: "#10B981", fontWeight: 800, marginTop: 2 }}>
@@ -811,10 +811,10 @@ FORMATO (JSON valido, sin markdown):
               </>
             ) : (
               <div style={{
-                background: "#132238", borderRadius: 12, padding: 30,
-                border: "1px solid #1B3A5C", textAlign: "center",
+                background: "#F8FAFC", borderRadius: 12, padding: 30,
+                border: "1px solid #E2E8F0", textAlign: "center",
               }}>
-                <span style={{ fontSize: 11, color: "#6B7F94", fontWeight: 600 }}>
+                <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>
                   Sin datos de timeline para esta empresa
                 </span>
               </div>
@@ -823,7 +823,7 @@ FORMATO (JSON valido, sin markdown):
             {/* Per-employee breakdown */}
             {det?.sources?.length > 1 && (
               <div style={{
-                background: "#132238", borderRadius: 12, padding: 18, border: "1px solid #1B3A5C",
+                background: "#F8FAFC", borderRadius: 12, padding: 18, border: "1px solid #E2E8F0",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
                   <span style={{ fontSize: 20 }}>📊</span>
@@ -840,11 +840,11 @@ FORMATO (JSON valido, sin markdown):
                       display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "8px 0",
                     }}>
                       <span style={{
-                        width: 140, fontSize: 12, color: "#FFFFFF", fontWeight: 600,
+                        width: 140, fontSize: 12, color: "#111827", fontWeight: 600,
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>{empName}</span>
                       <div style={{
-                        flex: 1, height: 18, background: "#0A1628",
+                        flex: 1, height: 18, background: "#F1F5F9",
                         borderRadius: 6, overflow: "hidden", position: "relative",
                       }}>
                         <div style={{
@@ -856,7 +856,7 @@ FORMATO (JSON valido, sin markdown):
                           <span style={{
                             position: "absolute", right: 8, top: "50%",
                             transform: "translateY(-50%)", fontSize: 10, fontWeight: 700,
-                            color: pct > 30 ? "#FFFFFF" : "#94A3B8",
+                            color: pct > 30 ? "#FFFFFF" : "#6B7280",
                           }}>{s.interactions.toLocaleString()} emails</span>
                         )}
                       </div>
@@ -872,14 +872,14 @@ FORMATO (JSON valido, sin markdown):
         {activeTab === 'detalles' && (<>
         {/* Clasificación — Editable */}
         <div style={{
-          background: "#132238", borderRadius: 12, padding: 18,
-          marginBottom: 20, border: isEditingEnrichment ? "2px solid #8B5CF6" : "1px solid #1B3A5C",
+          background: "#F8FAFC", borderRadius: 12, padding: 18,
+          marginBottom: 20, border: isEditingEnrichment ? "2px solid #8B5CF6" : "1px solid #E2E8F0",
         }}>
           <div style={{
             display: "flex", alignItems: "center", gap: 8, marginBottom: 14,
           }}>
             <span style={{ fontSize: 16 }}>🏷️</span>
-            <DarkSectionTitle style={{ marginBottom: 0, color: isEditingEnrichment ? "#A78BFA" : "#6B7F94" }}>
+            <DarkSectionTitle style={{ marginBottom: 0, color: isEditingEnrichment ? "#A78BFA" : "#6B7280" }}>
               Clasificación
             </DarkSectionTitle>
             <span style={{ flex: 1 }} />
@@ -901,8 +901,8 @@ FORMATO (JSON valido, sin markdown):
                 <button
                   onClick={handleCancelEnrichment}
                   style={{
-                    background: "#1B3A5C", border: "1px solid #2A4A6C",
-                    color: "#94A3B8", padding: "5px 10px", borderRadius: 6,
+                    background: "#E2E8F0", border: "1px solid #CBD5E1",
+                    color: "#6B7280", padding: "5px 10px", borderRadius: 6,
                     fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                   }}
                 >
@@ -942,7 +942,7 @@ FORMATO (JSON valido, sin markdown):
               ) : (
                 <span style={{
                   fontSize: 13, fontWeight: 600,
-                  color: c.role ? groupColor : "#475569",
+                  color: c.role ? groupColor : "#9CA3AF",
                   fontStyle: c.role ? "normal" : "italic",
                 }}>{c.role || "Sin clasificar"}</span>
               )}
@@ -962,12 +962,12 @@ FORMATO (JSON valido, sin markdown):
                     ))}
                   </DarkSelect>
                 ) : (
-                  <span style={{ fontSize: 12, color: "#475569", fontStyle: "italic" }}>N/A</span>
+                  <span style={{ fontSize: 12, color: "#9CA3AF", fontStyle: "italic" }}>N/A</span>
                 )
               ) : (
                 <span style={{
                   fontSize: 13, fontWeight: 600,
-                  color: c.segment ? "#A78BFA" : "#475569",
+                  color: c.segment ? "#A78BFA" : "#9CA3AF",
                   fontStyle: c.segment ? "normal" : "italic",
                 }}>{c.segment || "—"}</span>
               )}
@@ -988,7 +988,7 @@ FORMATO (JSON valido, sin markdown):
               ) : (
                 <span style={{
                   fontSize: 13, fontWeight: 600,
-                  color: c.companyType ? "#A78BFA" : "#475569",
+                  color: c.companyType ? "#A78BFA" : "#9CA3AF",
                   fontStyle: c.companyType ? "normal" : "italic",
                 }}>{c.companyType || "Sin tipo"}</span>
               )}
@@ -1007,9 +1007,9 @@ FORMATO (JSON valido, sin markdown):
                       prev.includes(act) ? prev.filter(a => a !== act) : [...prev, act]
                     )} style={{
                       padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
-                      background: active ? "#F59E0B20" : "#0A1628",
-                      color: active ? "#F59E0B" : "#475569",
-                      border: `1px solid ${active ? "#F59E0B40" : "#1B3A5C"}`,
+                      background: active ? "#F59E0B20" : "#F1F5F9",
+                      color: active ? "#F59E0B" : "#9CA3AF",
+                      border: `1px solid ${active ? "#F59E0B40" : "#E2E8F0"}`,
                       cursor: "pointer", userSelect: "none",
                     }}>{act}</span>
                   );
@@ -1045,9 +1045,9 @@ FORMATO (JSON valido, sin markdown):
                     prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]
                   ) : undefined} style={{
                     padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
-                    background: active ? "#3B82F620" : "#0A1628",
-                    color: active ? "#60A5FA" : "#475569",
-                    border: `1px solid ${active ? "#3B82F640" : "#1B3A5C"}`,
+                    background: active ? "#3B82F620" : "#F1F5F9",
+                    color: active ? "#60A5FA" : "#9CA3AF",
+                    border: `1px solid ${active ? "#3B82F640" : "#E2E8F0"}`,
                     cursor: isEditingEnrichment ? "pointer" : "default",
                     userSelect: "none", opacity: isEditingEnrichment && !active ? 0.6 : 1,
                   }}>{t.icon} {t.label}</span>
@@ -1068,9 +1068,9 @@ FORMATO (JSON valido, sin markdown):
                       prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]
                     )} style={{
                       padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
-                      background: active ? "#10B98120" : "#0A1628",
-                      color: active ? "#10B981" : "#475569",
-                      border: `1px solid ${active ? "#10B98140" : "#1B3A5C"}`,
+                      background: active ? "#10B98120" : "#F1F5F9",
+                      color: active ? "#10B981" : "#9CA3AF",
+                      border: `1px solid ${active ? "#10B98140" : "#E2E8F0"}`,
                       cursor: "pointer", userSelect: "none",
                     }}>{g}</span>
                   );
@@ -1095,7 +1095,7 @@ FORMATO (JSON valido, sin markdown):
           {/* Market Roles */}
           <div style={{ marginBottom: 14 }}>
             <div style={{
-              fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+              fontSize: 9, color: "#6B7280", textTransform: "uppercase",
               letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
             }}>Market Roles</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -1109,9 +1109,9 @@ FORMATO (JSON valido, sin markdown):
                     onClick={isEditingEnrichment ? () => toggleMarketRole(mr.id) : undefined}
                     style={{
                       padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-                      background: active ? mr.color + "20" : "#0A1628",
-                      color: active ? mr.color : "#475569",
-                      border: `1px solid ${active ? mr.color + "40" : "#1B3A5C"}`,
+                      background: active ? mr.color + "20" : "#F1F5F9",
+                      color: active ? mr.color : "#9CA3AF",
+                      border: `1px solid ${active ? mr.color + "40" : "#E2E8F0"}`,
                       cursor: isEditingEnrichment ? "pointer" : "default",
                       opacity: isEditingEnrichment && !active ? 0.6 : 1,
                       transition: "all 0.15s ease",
@@ -1129,12 +1129,12 @@ FORMATO (JSON valido, sin markdown):
 
         {/* ═══ Verification Section ═══ */}
         <div style={{
-          background: "#132238", borderRadius: 12, padding: 18,
+          background: "#F8FAFC", borderRadius: 12, padding: 18,
           marginBottom: 20,
           border: verificationStatus === "Verified" ? "1px solid #10B98140"
             : verificationStatus === "Edited" ? "1px solid #8B5CF640"
             : verificationResult?.mismatch ? "1px solid #EF444440"
-            : "1px solid #1B3A5C",
+            : "1px solid #E2E8F0",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <span style={{ fontSize: 16 }}>
@@ -1174,9 +1174,9 @@ FORMATO (JSON valido, sin markdown):
               disabled={isVerifying || verifyCooldown}
               style={{
                 background: (isVerifying || verifyCooldown)
-                  ? "#1B3A5C"
+                  ? "#E2E8F0"
                   : "linear-gradient(135deg, #F59E0B, #D97706)",
-                border: "none", color: (isVerifying || verifyCooldown) ? "#6B7F94" : "#FFFFFF",
+                border: "none", color: (isVerifying || verifyCooldown) ? "#6B7280" : "#FFFFFF",
                 padding: "5px 12px", borderRadius: 6,
                 fontSize: 10, fontWeight: 700,
                 cursor: (isVerifying || verifyCooldown) ? "not-allowed" : "pointer",
@@ -1192,17 +1192,17 @@ FORMATO (JSON valido, sin markdown):
           {verifiedRecord?.webDescription && !verificationResult && (
             <div style={{
               padding: "10px 12px", borderRadius: 8,
-              background: "#0A1628", border: "1px solid #1B3A5C",
+              background: "#F1F5F9", border: "1px solid #E2E8F0",
               marginBottom: 10,
             }}>
-              <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+              <div style={{ fontSize: 9, color: "#6B7280", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
                 Descripcion web
               </div>
-              <p style={{ fontSize: 12, color: "#CBD5E1", lineHeight: 1.6, margin: 0 }}>
+              <p style={{ fontSize: 12, color: "#374151", lineHeight: 1.6, margin: 0 }}>
                 {verifiedRecord.webDescription}
               </p>
               {verifiedRecord.verifiedAt && (
-                <div style={{ fontSize: 10, color: "#475569", marginTop: 6 }}>
+                <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 6 }}>
                   Verificado por {verifiedRecord.verifiedBy || "agente"} el {new Date(verifiedRecord.verifiedAt).toLocaleDateString("es-ES")}
                 </div>
               )}
@@ -1226,17 +1226,17 @@ FORMATO (JSON valido, sin markdown):
               {/* Web description found */}
               <div style={{
                 padding: "10px 12px", borderRadius: 8,
-                background: "#0A1628", border: "1px solid #1B3A5C",
+                background: "#F1F5F9", border: "1px solid #E2E8F0",
                 marginBottom: 12,
               }}>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+                <div style={{ fontSize: 9, color: "#6B7280", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
                   Resultado de verificacion web
                 </div>
-                <p style={{ fontSize: 12, color: "#CBD5E1", lineHeight: 1.6, margin: 0 }}>
+                <p style={{ fontSize: 12, color: "#374151", lineHeight: 1.6, margin: 0 }}>
                   {verificationResult.company_description || "Sin descripcion encontrada"}
                 </p>
                 {verificationResult.web_sources && (
-                  <div style={{ fontSize: 10, color: "#475569", marginTop: 6 }}>
+                  <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 6 }}>
                     Fuentes: {verificationResult.web_sources}
                   </div>
                 )}
@@ -1260,13 +1260,13 @@ FORMATO (JSON valido, sin markdown):
 
               {/* Side-by-side comparison */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-                <div style={{ padding: "8px 10px", borderRadius: 6, background: "#1B3A5C30", border: "1px solid #1B3A5C" }}>
-                  <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Actual</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.6 }}>
-                    <div>Role: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.role || c.group || "?"}</span></div>
-                    {c.segment && <div>Seg: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.segment}</span></div>}
-                    {c.companyType && <div>Tipo: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.companyType}</span></div>}
-                    {(c.marketRoles || []).length > 0 && <div>MR: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.marketRoles.join(", ")}</span></div>}
+                <div style={{ padding: "8px 10px", borderRadius: 6, background: "#E2E8F030", border: "1px solid #E2E8F0" }}>
+                  <div style={{ fontSize: 9, color: "#6B7280", textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Actual</div>
+                  <div style={{ fontSize: 11, color: "#6B7280", lineHeight: 1.6 }}>
+                    <div>Role: <span style={{ color: "#374151", fontWeight: 600 }}>{c.role || c.group || "?"}</span></div>
+                    {c.segment && <div>Seg: <span style={{ color: "#374151", fontWeight: 600 }}>{c.segment}</span></div>}
+                    {c.companyType && <div>Tipo: <span style={{ color: "#374151", fontWeight: 600 }}>{c.companyType}</span></div>}
+                    {(c.marketRoles || []).length > 0 && <div>MR: <span style={{ color: "#374151", fontWeight: 600 }}>{c.marketRoles.join(", ")}</span></div>}
                   </div>
                 </div>
                 <div style={{
@@ -1275,22 +1275,22 @@ FORMATO (JSON valido, sin markdown):
                   border: `1px solid ${verificationResult.mismatch ? "#F59E0B30" : "#10B98130"}`,
                 }}>
                   <div style={{ fontSize: 9, color: verificationResult.mismatch ? "#F59E0B" : "#10B981", textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>Sugerido</div>
-                  <div style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.6 }}>
-                    <div>Role: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{verificationResult.verified_role || "?"}</span></div>
-                    {verificationResult.verified_segment && <div>Seg: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{verificationResult.verified_segment}</span></div>}
-                    {verificationResult.verified_type && <div>Tipo: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{verificationResult.verified_type}</span></div>}
-                    {(verificationResult.verified_market_roles || []).length > 0 && <div>MR: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{verificationResult.verified_market_roles.join(", ")}</span></div>}
+                  <div style={{ fontSize: 11, color: "#6B7280", lineHeight: 1.6 }}>
+                    <div>Role: <span style={{ color: "#374151", fontWeight: 600 }}>{verificationResult.verified_role || "?"}</span></div>
+                    {verificationResult.verified_segment && <div>Seg: <span style={{ color: "#374151", fontWeight: 600 }}>{verificationResult.verified_segment}</span></div>}
+                    {verificationResult.verified_type && <div>Tipo: <span style={{ color: "#374151", fontWeight: 600 }}>{verificationResult.verified_type}</span></div>}
+                    {(verificationResult.verified_market_roles || []).length > 0 && <div>MR: <span style={{ color: "#374151", fontWeight: 600 }}>{verificationResult.verified_market_roles.join(", ")}</span></div>}
                   </div>
                 </div>
               </div>
 
               {/* Confidence */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <span style={{ fontSize: 10, color: "#6B7F94" }}>Confianza:</span>
+                <span style={{ fontSize: 10, color: "#6B7280" }}>Confianza:</span>
                 <span style={{
                   padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700,
-                  background: verificationResult.confidence === "alta" ? "#10B98120" : verificationResult.confidence === "media" ? "#F59E0B20" : "#6B7F9420",
-                  color: verificationResult.confidence === "alta" ? "#10B981" : verificationResult.confidence === "media" ? "#F59E0B" : "#6B7F94",
+                  background: verificationResult.confidence === "alta" ? "#10B98120" : verificationResult.confidence === "media" ? "#F59E0B20" : "#6B728020",
+                  color: verificationResult.confidence === "alta" ? "#10B981" : verificationResult.confidence === "media" ? "#F59E0B" : "#6B7280",
                 }}>
                   {verificationResult.confidence || "?"}
                 </span>
@@ -1314,8 +1314,8 @@ FORMATO (JSON valido, sin markdown):
                 <button
                   onClick={() => setVerificationResult(null)}
                   style={{
-                    background: "#1B3A5C", border: "1px solid #2A4A6C",
-                    color: "#94A3B8", padding: "8px 14px", borderRadius: 6,
+                    background: "#E2E8F0", border: "1px solid #CBD5E1",
+                    color: "#6B7280", padding: "8px 14px", borderRadius: 6,
                     fontSize: 11, fontWeight: 600,
                     cursor: "pointer", fontFamily: "inherit",
                   }}
@@ -1328,7 +1328,7 @@ FORMATO (JSON valido, sin markdown):
 
           {/* No verification yet */}
           {!verificationResult && !verifiedRecord && !verificationError && !isVerifying && (
-            <p style={{ fontSize: 11, color: "#475569", margin: 0, fontStyle: "italic" }}>
+            <p style={{ fontSize: 11, color: "#9CA3AF", margin: 0, fontStyle: "italic" }}>
               Pulsa "Verificar" para buscar en internet que hace realmente esta empresa y validar la clasificacion.
             </p>
           )}
@@ -1337,7 +1337,7 @@ FORMATO (JSON valido, sin markdown):
         {/* Enrichment: Productos IA & Senales */}
         {(c.productosIA?.length > 0 || c.senales?.length > 0) && (
           <div style={{
-            background: "#132238", borderRadius: 12, padding: 18,
+            background: "#F8FAFC", borderRadius: 12, padding: 18,
             marginBottom: 20, border: "1px solid #8B5CF640",
           }}>
             {c.productosIA?.length > 0 && (
@@ -1348,13 +1348,13 @@ FORMATO (JSON valido, sin markdown):
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: c.senales?.length ? 16 : 0 }}>
                   {c.productosIA.map((p, i) => {
-                    const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7F94" };
-                    const col = confColors[p.c] || "#6B7F94";
+                    const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7280" };
+                    const col = confColors[p.c] || "#6B7280";
                     return (
                       <span key={i} style={{
                         display: "inline-flex", alignItems: "center", gap: 6,
                         padding: "5px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                        background: col + "15", color: "#FFFFFF", border: `1px solid ${col}40`,
+                        background: col + "15", color: "#111827", border: `1px solid ${col}40`,
                       }}>
                         {p.p}
                         <span style={{
@@ -1377,7 +1377,7 @@ FORMATO (JSON valido, sin markdown):
                   {c.senales.map((s, i) => (
                     <span key={i} style={{
                       padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                      background: "#F1F5F9", color: "#6B7280", border: "1px solid #E2E8F0",
                     }}>{s}</span>
                   ))}
                 </div>
@@ -1389,11 +1389,11 @@ FORMATO (JSON valido, sin markdown):
         {/* Context/Summary */}
         {det?.context && (
           <div style={{
-            background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
+            background: "linear-gradient(135deg, #E2E8F0 0%, #F8FAFC 100%)",
             borderRadius: 12,
             padding: 20,
             marginBottom: 20,
-            border: "1px solid #2A4A6C",
+            border: "1px solid #CBD5E1",
           }}>
             <div style={{
               display: "flex",
@@ -1402,13 +1402,13 @@ FORMATO (JSON valido, sin markdown):
               marginBottom: 12,
             }}>
               <span style={{ fontSize: 20 }}>💼</span>
-              <DarkSectionTitle style={{ marginBottom: 0, color: "#94A3B8" }}>
+              <DarkSectionTitle style={{ marginBottom: 0, color: "#6B7280" }}>
                 Resumen de la relación
               </DarkSectionTitle>
             </div>
             <p style={{
               fontSize: 14,
-              color: "#FFFFFF",
+              color: "#111827",
               lineHeight: 1.7,
               margin: 0,
               fontWeight: 400,
@@ -1428,8 +1428,8 @@ FORMATO (JSON valido, sin markdown):
               <span key={emp} style={{
                 display: "inline-flex", alignItems: "center", gap: 5,
                 padding: "5px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                color: "#60A5FA", background: "#132238", letterSpacing: "0.02em",
-                border: "1px solid #1B3A5C",
+                color: "#60A5FA", background: "#F8FAFC", letterSpacing: "0.02em",
+                border: "1px solid #E2E8F0",
               }}>
                 📧 {emp.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
               </span>
@@ -1439,11 +1439,11 @@ FORMATO (JSON valido, sin markdown):
 
         {/* Score */}
         <div style={{
-          background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
+          background: "linear-gradient(135deg, #E2E8F0 0%, #F8FAFC 100%)",
           borderRadius: 12,
           padding: 20,
           marginBottom: 20,
-          border: "1px solid #2A4A6C",
+          border: "1px solid #CBD5E1",
         }}>
           <div style={{
             display: "flex",
@@ -1456,7 +1456,7 @@ FORMATO (JSON valido, sin markdown):
               <span style={{
                 fontSize: 12,
                 textTransform: "uppercase",
-                color: "#94A3B8",
+                color: "#6B7280",
                 fontWeight: 700,
                 letterSpacing: "2px",
               }}>Score de Prioridad</span>
@@ -1499,21 +1499,21 @@ FORMATO (JSON valido, sin markdown):
             { label: "Último contacto", value: c.lastDate, icon: "📅" },
           ].map((m, i) => (
             <div key={i} style={{
-              background: "#132238", borderRadius: 10, padding: "14px 16px",
-              border: "1px solid #1B3A5C",
+              background: "#F8FAFC", borderRadius: 10, padding: "14px 16px",
+              border: "1px solid #E2E8F0",
               transition: "all 0.15s ease",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#1B3A5C";
-              e.currentTarget.style.borderColor = "#2A4A6C";
+              e.currentTarget.style.background = "#E2E8F0";
+              e.currentTarget.style.borderColor = "#CBD5E1";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#132238";
-              e.currentTarget.style.borderColor = "#1B3A5C";
+              e.currentTarget.style.background = "#F8FAFC";
+              e.currentTarget.style.borderColor = "#E2E8F0";
             }}
             >
               <div style={{
-                fontSize: 10, color: "#6B7F94", fontWeight: 700,
+                fontSize: 10, color: "#6B7280", fontWeight: 700,
                 textTransform: "uppercase", letterSpacing: "2px",
                 marginBottom: 6,
               }}>
@@ -1522,7 +1522,7 @@ FORMATO (JSON valido, sin markdown):
               </div>
               <div style={{
                 fontSize: m.big ? 22 : 15, fontWeight: m.big ? 800 : 600,
-                color: "#FFFFFF",
+                color: "#111827",
                 letterSpacing: m.big ? "-1px" : "0",
               }}>{m.value}</div>
             </div>
@@ -1533,10 +1533,10 @@ FORMATO (JSON valido, sin markdown):
         {det?.sources?.length > 1 && (
           <div style={{
             marginBottom: 20,
-            background: "#132238",
+            background: "#F8FAFC",
             borderRadius: 12,
             padding: 18,
-            border: "1px solid #1B3A5C",
+            border: "1px solid #E2E8F0",
           }}>
             <div style={{
               display: "flex",
@@ -1565,7 +1565,7 @@ FORMATO (JSON valido, sin markdown):
                   <span style={{
                     width: 140,
                     fontSize: 12,
-                    color: "#FFFFFF",
+                    color: "#111827",
                     fontWeight: 600,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -1574,7 +1574,7 @@ FORMATO (JSON valido, sin markdown):
                   <div style={{
                     flex: 1,
                     height: 18,
-                    background: "#0A1628",
+                    background: "#E2E8F0",
                     borderRadius: 6,
                     overflow: "hidden",
                     position: "relative",
@@ -1594,7 +1594,7 @@ FORMATO (JSON valido, sin markdown):
                         transform: "translateY(-50%)",
                         fontSize: 10,
                         fontWeight: 700,
-                        color: pct > 30 ? "#FFFFFF" : "#94A3B8",
+                        color: pct > 30 ? "#FFFFFF" : "#6B7280",
                       }}>
                         {s.interactions.toLocaleString()} emails
                       </span>
@@ -1610,10 +1610,10 @@ FORMATO (JSON valido, sin markdown):
         {(editedContacts.length > 0 || isEditingContacts) && (
           <div style={{
             marginBottom: 20,
-            background: "#132238",
+            background: "#F8FAFC",
             borderRadius: 12,
             padding: 18,
-            border: isEditingContacts ? "2px solid #3B82F6" : "1px solid #1B3A5C",
+            border: isEditingContacts ? "2px solid #3B82F6" : "1px solid #E2E8F0",
           }}>
             <div style={{
               display: "flex",
@@ -1622,13 +1622,13 @@ FORMATO (JSON valido, sin markdown):
               marginBottom: 16,
             }}>
               <span style={{ fontSize: 20 }}>👤</span>
-              <DarkSectionTitle style={{ marginBottom: 0, color: isEditingContacts ? "#60A5FA" : "#6B7F94" }}>
+              <DarkSectionTitle style={{ marginBottom: 0, color: isEditingContacts ? "#60A5FA" : "#6B7280" }}>
                 Contactos clave
               </DarkSectionTitle>
               <span style={{
                 marginLeft: "auto",
                 fontSize: 11,
-                color: "#6B7F94",
+                color: "#6B7280",
                 fontWeight: 600,
               }}>
                 {editedContacts.length} contactos
@@ -1655,9 +1655,9 @@ FORMATO (JSON valido, sin markdown):
                   <button
                     onClick={handleCancelContactsEdit}
                     style={{
-                      background: "#1B3A5C",
-                      border: "1px solid #2A4A6C",
-                      color: "#94A3B8",
+                      background: "#E2E8F0",
+                      border: "1px solid #CBD5E1",
+                      color: "#6B7280",
                       padding: "5px 10px",
                       borderRadius: 6,
                       fontSize: 10,
@@ -1698,17 +1698,17 @@ FORMATO (JSON valido, sin markdown):
                     return (
                       <div key={i} style={{
                         padding: "12px 14px",
-                        background: rank <= 3 ? color + "10" : "#0A1628",
+                        background: rank <= 3 ? color + "10" : "#F1F5F9",
                         borderRadius: 8,
-                        border: `1px solid ${rank <= 3 ? color + "40" : "#1B3A5C"}`,
+                        border: `1px solid ${rank <= 3 ? color + "40" : "#E2E8F0"}`,
                         transition: "all 0.15s ease",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = rank <= 3 ? color + "20" : "#132238";
+                        e.currentTarget.style.background = rank <= 3 ? color + "20" : "#E2E8F0";
                         e.currentTarget.style.transform = "translateY(-2px)";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = rank <= 3 ? color + "10" : "#0A1628";
+                        e.currentTarget.style.background = rank <= 3 ? color + "10" : "#F1F5F9";
                         e.currentTarget.style.transform = "translateY(0)";
                       }}
                       >
@@ -1716,7 +1716,7 @@ FORMATO (JSON valido, sin markdown):
                           <span style={{
                             fontSize: 14,
                             fontWeight: 700,
-                            color: "#FFFFFF",
+                            color: "#111827",
                             flex: 1,
                             lineHeight: 1.3,
                           }}>{ct.name}</span>
@@ -1735,7 +1735,7 @@ FORMATO (JSON valido, sin markdown):
                         </div>
                         <div style={{
                           fontSize: 10,
-                          color: "#6B7F94",
+                          color: "#6B7280",
                           marginBottom: ct.email ? 4 : 0,
                           fontWeight: 600,
                         }}>
@@ -1761,10 +1761,10 @@ FORMATO (JSON valido, sin markdown):
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {editedContacts.map((ct, i) => (
                   <div key={i} style={{
-                    background: "#0A1628",
+                    background: "#F1F5F9",
                     borderRadius: 8,
                     padding: "12px 14px",
-                    border: "1px solid #2A4A6C",
+                    border: "1px solid #CBD5E1",
                   }}>
                     <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                       <input
@@ -1774,11 +1774,11 @@ FORMATO (JSON valido, sin markdown):
                         placeholder="Nombre"
                         style={{
                           flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
+                          background: "#F8FAFC",
+                          border: "1px solid #CBD5E1",
                           borderRadius: 4,
                           padding: "6px 8px",
-                          color: "#FFFFFF",
+                          color: "#111827",
                           fontSize: 13,
                           fontFamily: "inherit",
                           fontWeight: 600,
@@ -1788,9 +1788,9 @@ FORMATO (JSON valido, sin markdown):
                       <button
                         onClick={() => handleDeleteContact(i)}
                         style={{
-                          background: "#7F1D1D",
-                          border: "1px solid #991B1B",
-                          color: "#FCA5A5",
+                          background: "#FEF2F2",
+                          border: "1px solid #FECACA",
+                          color: "#EF4444",
                           padding: "6px 10px",
                           borderRadius: 4,
                           fontSize: 11,
@@ -1811,11 +1811,11 @@ FORMATO (JSON valido, sin markdown):
                         placeholder="Cargo"
                         style={{
                           flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
+                          background: "#F8FAFC",
+                          border: "1px solid #CBD5E1",
                           borderRadius: 4,
                           padding: "6px 8px",
-                          color: "#94A3B8",
+                          color: "#6B7280",
                           fontSize: 12,
                           fontFamily: "inherit",
                           outline: "none",
@@ -1828,8 +1828,8 @@ FORMATO (JSON valido, sin markdown):
                         placeholder="Email"
                         style={{
                           flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
+                          background: "#F8FAFC",
+                          border: "1px solid #CBD5E1",
                           borderRadius: 4,
                           padding: "6px 8px",
                           color: "#60A5FA",
@@ -1847,8 +1847,8 @@ FORMATO (JSON valido, sin markdown):
                   <button
                     onClick={() => setShowAddContact(true)}
                     style={{
-                      background: "#132238",
-                      border: "1px dashed #2A4A6C",
+                      background: "#F8FAFC",
+                      border: "1px dashed #CBD5E1",
                       color: "#60A5FA",
                       padding: "10px",
                       borderRadius: 8,
@@ -1866,7 +1866,7 @@ FORMATO (JSON valido, sin markdown):
                   </button>
                 ) : (
                   <div style={{
-                    background: "#0A1628",
+                    background: "#F1F5F9",
                     borderRadius: 8,
                     padding: "12px 14px",
                     border: "2px solid #10B981",
@@ -1879,11 +1879,11 @@ FORMATO (JSON valido, sin markdown):
                         placeholder="Nombre *"
                         style={{
                           flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
+                          background: "#F8FAFC",
+                          border: "1px solid #CBD5E1",
                           borderRadius: 4,
                           padding: "6px 8px",
-                          color: "#FFFFFF",
+                          color: "#111827",
                           fontSize: 13,
                           fontFamily: "inherit",
                           fontWeight: 600,
@@ -1899,11 +1899,11 @@ FORMATO (JSON valido, sin markdown):
                         placeholder="Cargo"
                         style={{
                           flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
+                          background: "#F8FAFC",
+                          border: "1px solid #CBD5E1",
                           borderRadius: 4,
                           padding: "6px 8px",
-                          color: "#94A3B8",
+                          color: "#6B7280",
                           fontSize: 12,
                           fontFamily: "inherit",
                           outline: "none",
@@ -1916,8 +1916,8 @@ FORMATO (JSON valido, sin markdown):
                         placeholder="Email"
                         style={{
                           flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
+                          background: "#F8FAFC",
+                          border: "1px solid #CBD5E1",
                           borderRadius: 4,
                           padding: "6px 8px",
                           color: "#60A5FA",
@@ -1935,9 +1935,9 @@ FORMATO (JSON valido, sin markdown):
                         }}
                         style={{
                           flex: 1,
-                          background: "#1B3A5C",
-                          border: "1px solid #2A4A6C",
-                          color: "#94A3B8",
+                          background: "#E2E8F0",
+                          border: "1px solid #CBD5E1",
+                          color: "#6B7280",
                           padding: "6px 10px",
                           borderRadius: 6,
                           fontSize: 11,
@@ -1953,9 +1953,9 @@ FORMATO (JSON valido, sin markdown):
                         disabled={!newContact.name.trim()}
                         style={{
                           flex: 1,
-                          background: newContact.name.trim() ? "linear-gradient(135deg, #10B981, #059669)" : "#1B3A5C",
+                          background: newContact.name.trim() ? "linear-gradient(135deg, #10B981, #059669)" : "#E2E8F0",
                           border: "none",
-                          color: newContact.name.trim() ? "#FFFFFF" : "#6B7F94",
+                          color: newContact.name.trim() ? "#FFFFFF" : "#6B7280",
                           padding: "6px 10px",
                           borderRadius: 6,
                           fontSize: 11,
@@ -1978,10 +1978,10 @@ FORMATO (JSON valido, sin markdown):
         {det?.timeline?.length > 0 && (
           <div style={{
             marginBottom: 20,
-            background: "#132238",
+            background: "#F8FAFC",
             borderRadius: 12,
             padding: 18,
-            border: "1px solid #1B3A5C",
+            border: "1px solid #E2E8F0",
           }}>
             <div style={{
               display: "flex",
@@ -1996,7 +1996,7 @@ FORMATO (JSON valido, sin markdown):
               <span style={{
                 marginLeft: "auto",
                 fontSize: 11,
-                color: "#6B7F94",
+                color: "#6B7280",
                 fontWeight: 600,
               }}>
                 {det.timeline.length} trimestres
@@ -2006,7 +2006,7 @@ FORMATO (JSON valido, sin markdown):
               {det.timeline.map((t, i) => {
                 const maxE = Math.max(...det.timeline.map(x => x.emails));
                 const pct = (t.emails / maxE) * 100;
-                const isRecent = i < 3;
+                const isRecent = i >= det.timeline.length - 3;
 
                 return (
                   <div key={i} style={{
@@ -2018,14 +2018,14 @@ FORMATO (JSON valido, sin markdown):
                     <span style={{
                       width: 70,
                       fontSize: 12,
-                      color: isRecent ? "#FFFFFF" : "#6B7F94",
+                      color: isRecent ? "#111827" : "#6B7280",
                       fontFamily: "'DM Sans', monospace",
                       fontWeight: isRecent ? 700 : 600,
                     }}>{t.quarter}</span>
                     <div style={{
                       flex: 1,
                       height: 20,
-                      background: "#0A1628",
+                      background: "#E2E8F0",
                       borderRadius: 6,
                       overflow: "hidden",
                       position: "relative",
@@ -2047,7 +2047,7 @@ FORMATO (JSON valido, sin markdown):
                           transform: "translateY(-50%)",
                           fontSize: 10,
                           fontWeight: 700,
-                          color: pct > 30 ? "#FFFFFF" : "#94A3B8",
+                          color: pct > 30 ? "#FFFFFF" : "#6B7280",
                         }}>
                           {t.emails} emails
                         </span>
@@ -2060,22 +2060,22 @@ FORMATO (JSON valido, sin markdown):
             <div style={{
               marginTop: 12,
               padding: 12,
-              background: "#0A1628",
+              background: "#F1F5F9",
               borderRadius: 8,
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
             }}>
               <div>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
+                <div style={{ fontSize: 9, color: "#6B7280", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
                   Total histórico
                 </div>
-                <div style={{ fontSize: 18, color: "#FFFFFF", fontWeight: 800, marginTop: 2 }}>
+                <div style={{ fontSize: 18, color: "#111827", fontWeight: 800, marginTop: 2 }}>
                   {det.timeline.reduce((sum, t) => sum + t.emails, 0).toLocaleString()} emails
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
+                <div style={{ fontSize: 9, color: "#6B7280", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
                   Promedio trimestral
                 </div>
                 <div style={{ fontSize: 18, color: "#10B981", fontWeight: 800, marginTop: 2 }}>
@@ -2088,8 +2088,8 @@ FORMATO (JSON valido, sin markdown):
 
         {/* Información cualificada */}
         <div style={{
-          marginTop: 20, padding: 14, background: "#132238", borderRadius: 10,
-          border: "1px solid #1B3A5C", marginBottom: 16,
+          marginTop: 20, padding: 14, background: "#F8FAFC", borderRadius: 10,
+          border: "1px solid #E2E8F0", marginBottom: 16,
         }}>
           <DarkSectionTitle>Cualificación automática</DarkSectionTitle>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -2108,8 +2108,8 @@ FORMATO (JSON valido, sin markdown):
 
         {/* Manual fields */}
         <div style={{
-          marginTop: 0, padding: 14, background: "#132238", borderRadius: 10,
-          border: "1px dashed #1B3A5C",
+          marginTop: 0, padding: 14, background: "#F8FAFC", borderRadius: 10,
+          border: "1px dashed #E2E8F0",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <DarkSectionTitle style={{ marginBottom: 0 }}>Datos manuales</DarkSectionTitle>
@@ -2135,9 +2135,9 @@ FORMATO (JSON valido, sin markdown):
                 <button
                   onClick={handleCancel}
                   style={{
-                    background: "#1B3A5C",
-                    border: "1px solid #2A4A6C",
-                    color: "#94A3B8",
+                    background: "#E2E8F0",
+                    border: "1px solid #CBD5E1",
+                    color: "#6B7280",
                     padding: "6px 12px",
                     borderRadius: 6,
                     fontSize: 11,
@@ -2234,7 +2234,7 @@ FORMATO (JSON valido, sin markdown):
         <div style={{
           marginTop: 20,
           paddingTop: 20,
-          borderTop: "1px solid #1B3A5C",
+          borderTop: "1px solid #E2E8F0",
         }}>
           {(() => {
             const canHide = canHideCompany(c, currentUser);
@@ -2247,9 +2247,9 @@ FORMATO (JSON valido, sin markdown):
                   title={!canHide ? "Solo un admin o el dueño del buzón puede ocultar esta empresa" : undefined}
                   style={{
                     width: "100%",
-                    background: disabled ? "#1B3A5C" : "#EF4444",
+                    background: disabled ? "#E2E8F0" : "#EF4444",
                     border: "none",
-                    color: disabled ? "#6B7F94" : "#FFFFFF",
+                    color: disabled ? "#6B7280" : "#FFFFFF",
                     padding: "10px 16px",
                     borderRadius: 8,
                     fontSize: 12,
@@ -2277,7 +2277,7 @@ FORMATO (JSON valido, sin markdown):
                 {isEditing && (
                   <p style={{
                     fontSize: 11,
-                    color: "#6B7F94",
+                    color: "#6B7280",
                     textAlign: "center",
                     marginTop: 8,
                     marginBottom: 0,
@@ -2320,19 +2320,19 @@ FORMATO (JSON valido, sin markdown):
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            background: "#0A1628",
+            background: "#F1F5F9",
             borderRadius: 12,
             padding: 28,
             maxWidth: 440,
             width: "90%",
-            border: "1px solid #1B3A5C",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+            border: "1px solid #E2E8F0",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
             zIndex: 151,
           }}>
             <div style={{
               fontSize: 20,
               fontWeight: 800,
-              color: "#FFFFFF",
+              color: "#111827",
               marginBottom: 12,
               display: "flex",
               alignItems: "center",
@@ -2343,11 +2343,11 @@ FORMATO (JSON valido, sin markdown):
             </div>
             <p style={{
               fontSize: 14,
-              color: "#94A3B8",
+              color: "#6B7280",
               lineHeight: 1.6,
               marginBottom: 20,
             }}>
-              ¿Estás seguro de que deseas ocultar <strong style={{ color: "#FFFFFF" }}>{c.name}</strong>?
+              ¿Estás seguro de que deseas ocultar <strong style={{ color: "#111827" }}>{c.name}</strong>?
               La empresa desaparecerá de la vista pero se puede restaurar desde localStorage.
             </p>
             <div style={{
@@ -2358,9 +2358,9 @@ FORMATO (JSON valido, sin markdown):
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 style={{
-                  background: "#132238",
-                  border: "1px solid #2A4A6C",
-                  color: "#94A3B8",
+                  background: "#F8FAFC",
+                  border: "1px solid #CBD5E1",
+                  color: "#6B7280",
                   padding: "10px 20px",
                   borderRadius: 8,
                   fontSize: 13,
@@ -2370,12 +2370,12 @@ FORMATO (JSON valido, sin markdown):
                   transition: "all 0.15s ease",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#1B3A5C";
-                  e.currentTarget.style.color = "#FFFFFF";
+                  e.currentTarget.style.background = "#E2E8F0";
+                  e.currentTarget.style.color = "#374151";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#132238";
-                  e.currentTarget.style.color = "#94A3B8";
+                  e.currentTarget.style.background = "#F8FAFC";
+                  e.currentTarget.style.color = "#6B7280";
                 }}
               >
                 Cancelar
@@ -2435,21 +2435,21 @@ function ProductMatchSection({ companyIdx, productMatches }) {
 
   return (
     <div style={{
-      background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
+      background: "linear-gradient(135deg, #E2E8F0 0%, #F8FAFC 100%)",
       borderRadius: 12,
       padding: 20,
       marginBottom: 20,
-      border: "1px solid #2A4A6C",
+      border: "1px solid #CBD5E1",
     }}>
       <div style={{
         display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
       }}>
         <span style={{ fontSize: 20 }}>🎯</span>
-        <DarkSectionTitle style={{ marginBottom: 0, color: "#94A3B8" }}>
+        <DarkSectionTitle style={{ marginBottom: 0, color: "#6B7280" }}>
           Productos potenciales
         </DarkSectionTitle>
         <span style={{
-          marginLeft: "auto", fontSize: 11, color: "#6B7F94", fontWeight: 600,
+          marginLeft: "auto", fontSize: 11, color: "#6B7280", fontWeight: 600,
         }}>
           {relevant.length} match{relevant.length !== 1 ? "es" : ""}
         </span>
@@ -2458,7 +2458,7 @@ function ProductMatchSection({ companyIdx, productMatches }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {relevant.map((match) => (
           <div key={match.id} style={{
-            background: "#0A1628",
+            background: "#F1F5F9",
             borderRadius: 10,
             padding: 16,
             border: `1px solid ${match.color}40`,
@@ -2470,7 +2470,7 @@ function ProductMatchSection({ companyIdx, productMatches }) {
                 <span style={{
                   width: 10, height: 10, borderRadius: "50%", background: match.color,
                 }} />
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>
                   {match.name}
                 </span>
               </div>
@@ -2489,7 +2489,7 @@ function ProductMatchSection({ companyIdx, productMatches }) {
 
             {/* Score bar */}
             <div style={{
-              height: 6, background: "#132238", borderRadius: 3, overflow: "hidden", marginBottom: 12,
+              height: 6, background: "#E2E8F0", borderRadius: 3, overflow: "hidden", marginBottom: 12,
             }}>
               <div style={{
                 height: "100%", width: `${match.score}%`, borderRadius: 3,
@@ -2505,11 +2505,11 @@ function ProductMatchSection({ companyIdx, productMatches }) {
               return (
                 <div style={{
                   marginBottom: 10, padding: "8px 10px",
-                  background: "#132238", borderRadius: 6,
+                  background: "#F8FAFC", borderRadius: 6,
                   border: `1px solid ${match.color}20`,
                 }}>
                   <div style={{
-                    fontSize: 9, color: "#6B7F94", fontWeight: 700,
+                    fontSize: 9, color: "#6B7280", fontWeight: 700,
                     textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6,
                   }}>Subcategorías</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -2537,12 +2537,12 @@ function ProductMatchSection({ companyIdx, productMatches }) {
                     : sig.type === "marketRole" ? "#3B82F620"
                     : sig.type === "group" ? "#F59E0B20"
                     : sig.type === "role" ? "#10B98120"
-                    : "#6B7F9415",
+                    : "#6B728015",
                   color: sig.type.startsWith("keyword_high") ? match.color
                     : sig.type === "marketRole" ? "#60A5FA"
                     : sig.type === "group" ? "#FBBF24"
                     : sig.type === "role" ? "#34D399"
-                    : "#94A3B8",
+                    : "#6B7280",
                   whiteSpace: "nowrap",
                 }}>
                   {SIGNAL_LABELS[sig.type] || sig.type}: {sig.value}
@@ -2566,7 +2566,7 @@ function ScoreBarDark({ score, max, label }) {
           width: 70,
           fontSize: 11,
           fontWeight: 700,
-          color: "#94A3B8",
+          color: "#6B7280",
           textTransform: "uppercase",
           letterSpacing: "0.5px",
         }}>{label}</span>
@@ -2574,7 +2574,7 @@ function ScoreBarDark({ score, max, label }) {
       <div style={{
         flex: 1,
         height: 8,
-        background: "#0A1628",
+        background: "#F1F5F9",
         borderRadius: 4,
         overflow: "hidden",
         position: "relative",
@@ -2587,7 +2587,7 @@ function ScoreBarDark({ score, max, label }) {
             ? "linear-gradient(90deg, #10B981, #059669)"
             : pct > 40
               ? "linear-gradient(90deg, #3B82F6, #2563EB)"
-              : "linear-gradient(90deg, #6B7F94, #475569)",
+              : "linear-gradient(90deg, #6B7280, #9CA3AF)",
           transition: "width 0.3s ease",
         }} />
       </div>
@@ -2599,12 +2599,12 @@ function ScoreBarDark({ score, max, label }) {
       }}>
         <span style={{
           fontWeight: 800,
-          color: "#FFFFFF",
+          color: "#111827",
           fontSize: 14,
         }}>{score}</span>
         <span style={{
           fontSize: 10,
-          color: "#6B7F94",
+          color: "#6B7280",
           fontWeight: 600,
         }}>/{max}</span>
       </div>
@@ -2616,15 +2616,15 @@ function ScoreBarDark({ score, max, label }) {
 function SummaryRow({ label, value }) {
   return (
     <div style={{
-      background: "#132238", borderRadius: 10, padding: "12px 16px",
-      border: "1px solid #1B3A5C",
+      background: "#F8FAFC", borderRadius: 10, padding: "12px 16px",
+      border: "1px solid #E2E8F0",
     }}>
       <div style={{
-        fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+        fontSize: 9, color: "#6B7280", textTransform: "uppercase",
         letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
       }}>{label}</div>
       <div style={{
-        fontSize: 13, color: "#FFFFFF", fontWeight: 500, lineHeight: 1.5,
+        fontSize: 13, color: "#111827", fontWeight: 500, lineHeight: 1.5,
       }}>{value}</div>
     </div>
   );
@@ -2633,7 +2633,7 @@ function SummaryRow({ label, value }) {
 function DarkSectionTitle({ children, style = {} }) {
   return (
     <div style={{
-      fontSize: 10, textTransform: "uppercase", color: "#6B7F94",
+      fontSize: 10, textTransform: "uppercase", color: "#6B7280",
       fontWeight: 700, letterSpacing: "2.5px", marginBottom: 8,
       ...style,
     }}>{children}</div>
@@ -2643,7 +2643,7 @@ function DarkSectionTitle({ children, style = {} }) {
 function DarkFieldLabel({ children }) {
   return (
     <div style={{
-      fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+      fontSize: 9, color: "#6B7280", textTransform: "uppercase",
       letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6,
     }}>{children}</div>
   );
@@ -2652,9 +2652,9 @@ function DarkFieldLabel({ children }) {
 function DarkSelect({ value, onChange, children }) {
   return (
     <select value={value} onChange={onChange} style={{
-      width: "100%", background: "#0A1628",
+      width: "100%", background: "#F1F5F9",
       border: "1px solid #8B5CF640", borderRadius: 4,
-      padding: "7px 8px", color: "#FFFFFF", fontSize: 12,
+      padding: "7px 8px", color: "#111827", fontSize: 12,
       fontFamily: "inherit", outline: "none", cursor: "pointer",
     }}>
       {children}
@@ -2666,18 +2666,18 @@ function DarkSelect({ value, onChange, children }) {
 function InfoField({ label, value, icon }) {
   return (
     <div style={{
-      background: "#0A1628", borderRadius: 6, padding: "10px 12px",
-      border: "1px solid #1B3A5C",
+      background: "#F1F5F9", borderRadius: 6, padding: "10px 12px",
+      border: "1px solid #E2E8F0",
     }}>
       <div style={{
-        fontSize: 9, color: "#6B7F94", marginBottom: 4,
+        fontSize: 9, color: "#6B7280", marginBottom: 4,
         textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
       }}>
         {icon && <span style={{ marginRight: 4 }}>{icon}</span>}
         {label}
       </div>
       <div style={{
-        fontSize: 13, color: "#FFFFFF", fontWeight: 600,
+        fontSize: 13, color: "#111827", fontWeight: 600,
       }}>
         {value}
       </div>
@@ -2693,11 +2693,11 @@ function EditableField({ label, value, placeholder, isEditing, onChange, type = 
   if (!isEditing) {
     return (
       <div style={{
-        background: "#0A1628", borderRadius: 6, padding: "10px 12px",
-        border: "1px solid #1B3A5C",
+        background: "#F1F5F9", borderRadius: 6, padding: "10px 12px",
+        border: "1px solid #E2E8F0",
       }}>
         <div style={{
-          fontSize: 9, color: "#6B7F94", marginBottom: 4,
+          fontSize: 9, color: "#6B7280", marginBottom: 4,
           textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
         }}>
           {label}
@@ -2729,7 +2729,7 @@ function EditableField({ label, value, placeholder, isEditing, onChange, type = 
         ) : (
           <div style={{
             fontSize: 13,
-            color: hasValue ? "#FFFFFF" : "#475569",
+            color: hasValue ? "#111827" : "#9CA3AF",
             fontWeight: hasValue ? 500 : 400,
             fontStyle: hasValue ? "normal" : "italic",
             whiteSpace: multiline ? "pre-wrap" : "nowrap",
@@ -2747,7 +2747,7 @@ function EditableField({ label, value, placeholder, isEditing, onChange, type = 
 
   return (
     <div style={{
-      background: "#0A1628", borderRadius: 6, padding: "10px 12px",
+      background: "#F1F5F9", borderRadius: 6, padding: "10px 12px",
       border: "2px solid #3B82F6",
     }}>
       <div style={{
@@ -2763,11 +2763,11 @@ function EditableField({ label, value, placeholder, isEditing, onChange, type = 
         placeholder={placeholder}
         style={{
           width: "100%",
-          background: "#132238",
-          border: "1px solid #2A4A6C",
+          background: "#F8FAFC",
+          border: "1px solid #CBD5E1",
           borderRadius: 4,
           padding: "8px 10px",
-          color: "#FFFFFF",
+          color: "#111827",
           fontSize: 13,
           fontFamily: "inherit",
           fontWeight: 500,
@@ -2780,8 +2780,8 @@ function EditableField({ label, value, placeholder, isEditing, onChange, type = 
           e.target.style.background = "#1A2B3D";
         }}
         onBlur={(e) => {
-          e.target.style.borderColor = "#2A4A6C";
-          e.target.style.background = "#132238";
+          e.target.style.borderColor = "#CBD5E1";
+          e.target.style.background = "#F8FAFC";
         }}
       />
     </div>
@@ -2798,18 +2798,18 @@ function SelectField({ label, value, options, placeholder, isEditing, onChange }
   if (!isEditing) {
     return (
       <div style={{
-        background: "#0A1628", borderRadius: 6, padding: "10px 12px",
-        border: "1px solid #1B3A5C",
+        background: "#F1F5F9", borderRadius: 6, padding: "10px 12px",
+        border: "1px solid #E2E8F0",
       }}>
         <div style={{
-          fontSize: 9, color: "#6B7F94", marginBottom: 4,
+          fontSize: 9, color: "#6B7280", marginBottom: 4,
           textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700,
         }}>
           {label}
         </div>
         <div style={{
           fontSize: 13,
-          color: hasValue ? "#FFFFFF" : "#475569",
+          color: hasValue ? "#111827" : "#9CA3AF",
           fontWeight: hasValue ? 500 : 400,
           fontStyle: hasValue ? "normal" : "italic",
         }}>
@@ -2821,7 +2821,7 @@ function SelectField({ label, value, options, placeholder, isEditing, onChange }
 
   return (
     <div style={{
-      background: "#0A1628", borderRadius: 6, padding: "10px 12px",
+      background: "#F1F5F9", borderRadius: 6, padding: "10px 12px",
       border: "2px solid #3B82F6",
     }}>
       <div style={{
@@ -2835,11 +2835,11 @@ function SelectField({ label, value, options, placeholder, isEditing, onChange }
         onChange={(e) => onChange(e.target.value)}
         style={{
           width: "100%",
-          background: "#132238",
-          border: "1px solid #2A4A6C",
+          background: "#F8FAFC",
+          border: "1px solid #CBD5E1",
           borderRadius: 4,
           padding: "8px 10px",
-          color: "#FFFFFF",
+          color: "#111827",
           fontSize: 13,
           fontFamily: "inherit",
           fontWeight: 500,
@@ -2851,8 +2851,8 @@ function SelectField({ label, value, options, placeholder, isEditing, onChange }
           e.target.style.background = "#1A2B3D";
         }}
         onBlur={(e) => {
-          e.target.style.borderColor = "#2A4A6C";
-          e.target.style.background = "#132238";
+          e.target.style.borderColor = "#CBD5E1";
+          e.target.style.background = "#F8FAFC";
         }}
       >
         <option value="">{placeholder}</option>

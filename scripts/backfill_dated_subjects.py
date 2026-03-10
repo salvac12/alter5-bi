@@ -58,7 +58,7 @@ def extract_dated_subjects(excel_path):
             if entry[1] not in seen:
                 deduped.append(entry)
                 seen.add(entry[1])
-        by_domain[domain] = deduped[:30]
+        by_domain[domain] = deduped[-30:]
 
     print(f"    -> {len(by_domain)} domains, {sum(len(v) for v in by_domain.values())} dated subjects")
     return by_domain
@@ -130,7 +130,7 @@ def main():
                 if entry[1] not in seen:
                     existing.append(entry)
                     seen.add(entry[1])
-            all_dated[domain] = sorted(existing, key=lambda x: x[0])[:30]
+            all_dated[domain] = sorted(existing, key=lambda x: x[0])[-30:]
 
         # Merge quarterly summaries (later file overwrites, which is fine)
         for domain, quarters in summaries.items():
@@ -149,7 +149,7 @@ def main():
     for domain, company in all_companies.items():
         # Merge dated_subjects (replace with fresh data that includes extracts)
         if domain in all_dated:
-            company["dated_subjects"] = all_dated[domain][:30]
+            company["dated_subjects"] = all_dated[domain][-30:]
             ds_updated += 1
 
         # Merge quarterly summaries into timeline

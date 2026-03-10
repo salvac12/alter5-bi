@@ -133,7 +133,7 @@ def read_excel(filepath):
             "lastDate": str(row.get("Última Interacción", ""))[:10],
             "context": (str(row.get("Contexto General", ""))[:150] if pd.notna(row.get("Contexto General")) else ""),
             "contacts": [{"name": c["name"], "email": c.get("email", ""), "role": c["role"]} for c in contacts_by_co.get(name, [])[:5]],
-            "timeline": [{"quarter": t["quarter"], "emails": t["emails"]} for t in timeline_by_co.get(name, [])[:8]],
+            "timeline": [{"quarter": t["quarter"], "emails": t["emails"]} for t in timeline_by_co.get(name, [])[-20:]],
         }
 
         # Add raw data (subjects, snippets, dated_subjects)
@@ -143,7 +143,7 @@ def read_excel(filepath):
         if raw.get("snippets"):
             company["snippets"] = raw["snippets"][:15]
         if raw.get("dated_subjects"):
-            company["dated_subjects"] = sorted(raw["dated_subjects"], key=lambda x: x[0])[:30]
+            company["dated_subjects"] = sorted(raw["dated_subjects"], key=lambda x: x[0])[-30:]
 
         # Read extra columns as enrichment seed
         seed = {}
@@ -232,7 +232,7 @@ def merge_company(existing, new_data, employee_id):
         if ds[1] not in seen_ds:
             old_ds.append(ds)
             seen_ds.add(ds[1])
-    existing["dated_subjects"] = sorted(old_ds, key=lambda x: x[0])[:30]
+    existing["dated_subjects"] = sorted(old_ds, key=lambda x: x[0])[-30:]
 
     old_snippets = existing.get("snippets", [])
     new_snippets = new_data.get("snippets", [])
@@ -274,7 +274,7 @@ def merge_company(existing, new_data, employee_id):
     existing["timeline"] = [
         {"quarter": q, "emails": e, **({"summary": existing_summaries[q]} if q in existing_summaries else {})}
         for q, e in sorted(quarter_totals.items())
-    ][:8]
+    ][-20:]
 
     # Keep sectors and relType from whichever has more info
     if len(new_data.get("sectors", "")) > len(existing.get("sectors", "")):
@@ -322,12 +322,12 @@ def export_to_compact(all_companies):
 
             details[str(i)] = [
                 [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
-                [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
+                [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[-20:]],
                 context[:500],
                 source_breakdown,
                 subjects[:20],
                 c.get("enrichment", None),
-                dated_subjects[:30] if dated_subjects else None,
+                dated_subjects[-30:] if dated_subjects else None,
             ]
 
     return {"r": records, "d": details}

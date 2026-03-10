@@ -376,7 +376,7 @@ def export_to_compact(all_companies):
             # [0] contacts
             [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in c.get("contacts", [])[:5]],
             # [1] timeline
-            [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in c.get("timeline", [])[:8]],
+            [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in c.get("timeline", [])[-20:]],
             # [2] context
             c.get("context", "")[:500],
             # [3] source breakdown
@@ -386,7 +386,7 @@ def export_to_compact(all_companies):
             # [5] enrichment
             c.get("enrichment"),
             # [6] dated_subjects
-            dated_subjects[:30] if dated_subjects else None,
+            dated_subjects[-30:] if dated_subjects else None,
         ]
 
     return {"r": records, "d": details}

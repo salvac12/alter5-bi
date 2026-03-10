@@ -257,12 +257,12 @@ def export_to_compact_enriched(all_companies):
 
             details[str(i)] = [
                 [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
-                [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
+                [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[-20:]],
                 context[:500],  # Extended from 150 to 500
                 source_breakdown,
                 subjects[:20],
                 enrichment,  # index 5 - null if no enrichment
-                dated_subjects[:30] if dated_subjects else None,
+                dated_subjects[-30:] if dated_subjects else None,
             ]
 
     return {"r": records, "d": details}

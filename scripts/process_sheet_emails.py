@@ -1155,7 +1155,7 @@ def process_pipeline(reprocess=False):
                 "contacts": contacts_list[:5],
                 "timeline": [],  # Will be calculated by merge
                 "subjects": subjects[:20],
-                "dated_subjects": sorted(data.get("dated_subjects", []), key=lambda x: x[0])[:30],
+                "dated_subjects": sorted(data.get("dated_subjects", []), key=lambda x: x[0])[-30:],
                 "snippets": snippets[:10],
             }
 
