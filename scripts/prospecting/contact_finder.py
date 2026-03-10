@@ -19,14 +19,8 @@ APOLLO_API_KEY = os.environ.get("APOLLO_API_KEY", "")
 FINDYMAIL_API_KEY = os.environ.get("FINDYMAIL_API_KEY", "")
 
 # SSL context
-try:
-    import certifi
-    SSL_CTX = ssl.create_default_context(cafile=certifi.where())
-except ImportError:
-    SSL_CTX = ssl.create_default_context()
-    if not os.environ.get("CI"):
-        SSL_CTX.check_hostname = False
-        SSL_CTX.verify_mode = ssl.CERT_NONE
+import certifi
+SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 
 APOLLO_PEOPLE_SEARCH_URL = "https://api.apollo.io/v1/people/search"
 APOLLO_PEOPLE_MATCH_URL = "https://api.apollo.io/v1/people/match"

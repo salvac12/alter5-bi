@@ -41,6 +41,7 @@ SCAN_STATE_FILE = os.path.join(CONFIG_DIR, "scan_state.json")
 sys.path.insert(0, SCRIPT_DIR)
 from import_mailbox import merge_company, export_to_compact, get_data_paths
 from process_sheet_emails import classify_domains_with_gemini, PERSONAL_DOMAINS
+from utils import atomic_write_json
 
 # ---------------------------------------------------------------------------
 # Gmail API helpers
@@ -333,6 +334,7 @@ def apply_to_companies(grouped, all_companies):
     new_domain_keys = []
 
     for domain, data in grouped.items():
+        is_new = domain not in all_companies
         for emp_id, emp_stats in data["employees"].items():
             contacts_list = []
             for email, contact in data["contacts"].items():
@@ -363,16 +365,15 @@ def apply_to_companies(grouped, all_companies):
             if domain in all_companies:
                 new_company_data["name"] = all_companies[domain].get("name", new_company_data["name"])
 
-            is_new = domain not in all_companies
             all_companies[domain] = merge_company(
                 all_companies.get(domain),
                 new_company_data,
                 emp_id,
             )
 
-            if is_new:
-                new_domain_keys.append(domain)
-                break  # Only count once per domain
+        # Count new domains after all employees have been merged
+        if is_new:
+            new_domain_keys.append(domain)
 
     return new_domain_keys
 
@@ -500,14 +501,16 @@ def main():
     state = load_scan_state()
     scan_results = []
 
+    scan_timestamps = {}  # track scan time per mailbox, apply only after successful write
     for i, mailbox in enumerate(mailboxes):
         print(f"\n  --- Buzon {i+1}/{len(mailboxes)}: {mailbox['nombre']} ---")
         result = scan_mailbox(mailbox, state, blocked_domains, days_override=args.days)
         scan_results.append(result)
         print(f"    Dominios encontrados: {len(result)}")
 
-        # Update state timestamp for this mailbox
-        state[mailbox["email"]] = datetime.now(timezone.utc).isoformat()
+        # Record scan timestamp (will be applied to state only after successful file write)
+        if result:  # only update state if scan returned data
+            scan_timestamps[mailbox["email"]] = datetime.now(timezone.utc).isoformat()
 
     # [5/9] Merge all mailbox results
     print(f"\n  [5/9] Combinando resultados de {len(mailboxes)} buzones...")
@@ -559,21 +562,20 @@ def main():
     # [9/9] Write output files
     print("  [9/9] Escribiendo archivos...")
 
-    # companies_full.json
+    # companies_full.json (atomic write to prevent corruption on crash)
     full_data = {"companies": all_companies, "employees": employees}
-    with open(paths["full"], "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False, indent=2)
+    atomic_write_json(paths["full"], full_data, ensure_ascii=False, indent=2)
 
     # companies.json (compact)
     compact = export_to_compact(all_companies)
-    with open(paths["compact"], "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
+    atomic_write_json(paths["compact"], compact, ensure_ascii=False, separators=(",", ":"))
 
     # employees.json
-    with open(paths["employees"], "w", encoding="utf-8") as f:
-        json.dump(employees, f, ensure_ascii=False, indent=2)
+    atomic_write_json(paths["employees"], employees, ensure_ascii=False, indent=2)
 
-    # scan_state.json
+    # scan_state.json — update timestamps only after successful file write
+    for email, ts in scan_timestamps.items():
+        state[email] = ts
     save_scan_state(state)
 
     print()

@@ -75,8 +75,8 @@ export interface Company {
   idx: number;
   name: string;
   domain: string;
-  sector: string;
-  contacts: number;
+  sectors: string;
+  nContacts: number;
   interactions: number;
   firstDate: string;
   lastDate: string;
@@ -195,7 +195,7 @@ export interface VerifiedCompany {
   previousClassification: string;
   mismatch: boolean;
   notes: string;
-  confidence: number;
+  confidence: string;
   status: VerifiedStatus;
   verifiedBy: string;
   verifiedAt: string;

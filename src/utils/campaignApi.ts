@@ -19,7 +19,8 @@ async function proxyFetch(action, params = {}) {
     body: JSON.stringify({ action, ...params }),
   });
 
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); } catch { data = {}; }
   if (!res.ok || data.error) {
     throw new Error(data.error || `Proxy error ${res.status}`);
   }
@@ -38,7 +39,8 @@ function atToken() {
 async function fetchCampaignsFromAirtable(filters = {}) {
   const params = new URLSearchParams();
   if (filters.status) {
-    params.set('filterByFormula', `{Status} = '${filters.status}'`);
+    const safeStatus = String(filters.status).replace(/'/g, "\\'");
+    params.set('filterByFormula', `{Status} = '${safeStatus}'`);
   }
   params.set('sort[0][field]', 'Name');
   params.set('sort[0][direction]', 'asc');

@@ -135,7 +135,7 @@ export default function App() {
     if (activeView === "campanas" && campaigns.length === 0 && !campaignsLoading) {
       loadCampaigns();
     }
-  }, [activeView]);
+  }, [activeView, campaigns.length, campaignsLoading]);
 
   async function loadCampaigns() {
     setCampaignsLoading(true);
@@ -757,7 +757,7 @@ export default function App() {
             companies={paginated}
             sortBy={sortBy} sortDir={sortDir} onSort={handleSort}
             onSelect={setSelected} selected={selected}
-            page={page} totalPages={totalPages} setPage={setPage}
+            page={page} totalPages={totalPages} setPage={setPage} filteredCount={filtered.length}
             productMatches={productMatches}
             cleanupMode={cleanupMode}
             cleanupSelection={cleanupSelection}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   updateProspect,
   createProspect,
@@ -77,8 +77,6 @@ export default function ProspectPanel({
   onConverted,
   companies = [],
 }) {
-  if (!prospect && !isNew) return null;
-
   const [formData, setFormData] = useState({
     name: '',
     stage: initialStage || 'Lead',
@@ -163,6 +161,13 @@ export default function ProspectPanel({
     setMeetingNotesInput('');
     setAiError(null);
   }, [prospect, isNew]);
+
+  // Feedback timeout ref — clear on unmount to avoid setState on unmounted component
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current); }, []);
+
+  // Guard: render nothing if no data (AFTER all hooks to respect Rules of Hooks)
+  if (!prospect && !isNew) return null;
 
   // ── Match prospect to company in CRM data ──
   const matchedCompany = (() => {
@@ -265,8 +270,9 @@ export default function ProspectPanel({
   };
 
   const showFeedback = (type, message) => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
     setFeedback({ type, message });
-    setTimeout(() => setFeedback(null), 3500);
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 3500);
   };
 
   const formatAmount = (value) => {
@@ -384,8 +390,6 @@ export default function ProspectPanel({
             });
 
             if (resp.ok) {
-              // Mark task as notified
-              task.notifiedAt = new Date().toISOString();
               notifiedNames.push(member.name.split(' ')[0]);
             }
           } catch (err) {
@@ -395,11 +399,18 @@ export default function ProspectPanel({
 
         await Promise.allSettled(notifyPromises);
 
-        // Update tasks with notifiedAt timestamps
+        // Update tasks with notifiedAt timestamps (immutable update)
         if (notifiedNames.length > 0) {
-          const updatedFields = { 'Tasks': JSON.stringify(tasks) };
+          const updatedTasks = tasks.map(t => {
+            const member = TEAM_MEMBERS.find(m => m.email === t.assignedTo);
+            if (member && notifiedNames.includes(member.name.split(' ')[0])) {
+              return { ...t, notifiedAt: new Date().toISOString() };
+            }
+            return t;
+          });
+          setTasks(updatedTasks);
           if (!isNew) {
-            await updateProspect(result.id, updatedFields);
+            await updateProspect(result.id, { 'Tasks': JSON.stringify(updatedTasks) });
           }
         }
       }

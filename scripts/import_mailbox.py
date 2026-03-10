@@ -30,6 +30,7 @@ import sys
 import os
 import time
 from datetime import datetime
+from utils import atomic_write_json
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -566,17 +567,14 @@ Ejemplos:
 
     os.makedirs(os.path.dirname(FULL_FILE), exist_ok=True)
 
-    with open(FULL_FILE, "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False, indent=2)
+    atomic_write_json(FULL_FILE, full_data, ensure_ascii=False, indent=2)
 
     # 7. Save compact data (for React app)
     compact = export_to_compact(all_companies)
-    with open(COMPACT_FILE, "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
+    atomic_write_json(COMPACT_FILE, compact, ensure_ascii=False, separators=(",", ":"))
 
     # 8. Save employees list
-    with open(EMPLOYEES_FILE, "w", encoding="utf-8") as f:
-        json.dump(employees, f, ensure_ascii=False, indent=2)
+    atomic_write_json(EMPLOYEES_FILE, employees, ensure_ascii=False, indent=2)
 
     # 9. Register in Google Sheet (if email provided and env vars set)
     if args.email and not args.no_sheet:

@@ -11,8 +11,6 @@ import { scheduleFollowUp, cancelFollowUp } from '../utils/campaignApi';
  * @param {function} onScheduled — called after scheduling/cancel
  */
 export default function FollowUpQuickPanel({ prospect, existingFollowUp, onClose, onScheduled }) {
-  if (!prospect) return null;
-
   const isViewing = !!existingFollowUp;
 
   const [instructions, setInstructions] = useState(existingFollowUp?.instructions || '');
@@ -34,6 +32,8 @@ export default function FollowUpQuickPanel({ prospect, existingFollowUp, onClose
   const [scheduledTime, setScheduledTime] = useState('10:00');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  if (!prospect) return null;
 
   const sender = TEAM_MEMBERS[senderIdx] || TEAM_MEMBERS[6];
 

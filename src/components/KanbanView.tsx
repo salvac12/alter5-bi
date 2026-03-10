@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   fetchAllOpportunities,
@@ -57,6 +57,8 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
   const [draggedCard, setDraggedCard] = useState<any>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   // Fetch data on mount
   useEffect(() => {
@@ -105,8 +107,9 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
   }
 
   function showToast(type: string, message: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ type, message });
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }
 
   // Drag handlers
@@ -159,8 +162,10 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
       showToast('success', `"${draggedCard.name}" movido a ${STAGE_SHORT_LABELS[targetStage] || targetStage}`);
     } catch (err: any) {
       console.error('Failed to update opportunity stage:', err);
-      // Revert on error
-      setOpportunities(opportunities);
+      // Revert only the dragged card to avoid stale closure issues
+      setOpportunities(prev => prev.map(opp =>
+        opp.id === draggedCard.id ? { ...opp, stage: draggedCard.stage } : opp
+      ));
       showToast('error', 'Error al mover oportunidad: ' + err.message);
     }
   }

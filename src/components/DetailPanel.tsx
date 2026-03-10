@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Badge, StatusBadge, ScoreBar, SectionLabel } from './UI';
 import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompanySize, getCompanyContacts, saveCompanyContacts, getAllEnrichmentOverrides, canHideCompany } from '../utils/companyData';
 import { COUNTRIES, COMPANY_SIZES, COMPANY_ROLES, COMPANY_TYPES, ORIGINACION_SEGMENTS, COMPANY_TYPES_V2, CORPORATE_ACTIVITIES, TECHNOLOGIES, ASSET_PHASES, GEOGRAPHIES, COMMERCIAL_PHASES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
@@ -66,6 +66,8 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
   const [verificationResult, setVerificationResult] = useState(null);
   const [verificationError, setVerificationError] = useState(null);
   const [verifyCooldown, setVerifyCooldown] = useState(false);
+  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current); }, []);
 
   // Legacy alias for backward compat in rest of file
   const editedGroup = editedRole;
@@ -284,7 +286,7 @@ FORMATO (JSON valido, sin markdown):
       setIsVerifying(false);
       // Rate limit: 30s cooldown between verifications
       setVerifyCooldown(true);
-      setTimeout(() => setVerifyCooldown(false), 30000);
+      cooldownTimerRef.current = setTimeout(() => setVerifyCooldown(false), 30000);
     }
   };
 

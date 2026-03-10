@@ -5,7 +5,7 @@
  * Uses VITE_AIRTABLE_PAT (env var injected at build time by Vite).
  */
 
-import { createOpportunity } from './airtable';
+import { createOpportunity, deleteOpportunity } from './airtable';
 
 const BASE_ID = "appVu3TvSZ1E4tj0J";
 const TABLE_NAME = "BETA-Prospects";
@@ -196,7 +196,12 @@ export async function deleteProspect(recordId) {
 // ── CONVERSION: Prospect → Opportunity ──────────────────────────────
 
 export async function convertToOpportunity(prospect) {
-  // 1. Create Opportunity in Airtable Opportunities table
+  // 1. Check for existing conversion (idempotency guard)
+  if (prospect.converted || prospect._raw?.["Converted"]) {
+    throw new Error("Este prospect ya fue convertido a oportunidad");
+  }
+
+  // 2. Create Opportunity in Airtable Opportunities table
   const oppFields = {
     "Opportunity Name": prospect.name,
     "Global Status": "Origination - Termsheet",
@@ -208,14 +213,24 @@ export async function convertToOpportunity(prospect) {
 
   const newOpp = await createOpportunity(oppFields);
 
-  // 2. Mark prospect as converted
-  const updated = await updateProspect(prospect.id, {
-    "Converted": true,
-    "Opportunity ID": newOpp.id,
-    "Stage": "Listo para Term-Sheet",
-  });
-
-  return { opportunity: newOpp, prospect: { id: updated.id, fields: updated.fields } };
+  // 3. Mark prospect as converted — rollback opportunity if this fails
+  try {
+    const updated = await updateProspect(prospect.id, {
+      "Converted": true,
+      "Opportunity ID": newOpp.id,
+      "Stage": "Listo para Term-Sheet",
+    });
+    return { opportunity: newOpp, prospect: { id: updated.id, fields: updated.fields } };
+  } catch (err) {
+    // Rollback: delete the orphan opportunity
+    console.error("convertToOpportunity: step 2 failed, rolling back opportunity", newOpp.id, err);
+    try {
+      await deleteOpportunity(newOpp.id);
+    } catch (rollbackErr) {
+      console.error("convertToOpportunity: rollback also failed — orphan opportunity:", newOpp.id, rollbackErr);
+    }
+    throw err;
+  }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -277,6 +292,7 @@ export function isValidProspect(p) {
   const name = (p.name || "").trim();
   if (!name || name.length < 2) return false;
   if (!p.stage) return false;
+  if (p.converted) return false;
   if (p.recordStatus && /^(archived|deleted|inactive)$/i.test(p.recordStatus)) return false;
   return true;
 }

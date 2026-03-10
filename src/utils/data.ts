@@ -58,14 +58,17 @@ function inferSegment(grp, tp) {
  * Detail: [[contacts], [timeline], contexto, [[empId, interactions], ...], subjects, enrichment]
  */
 export function parseCompanies() {
-  const maxInteractions = Math.max(...rawData.r.map(r => r[4]));
+  const maxInteractions = rawData.r.reduce((m, r) => Math.max(m, r[4] || 0), 1); // min 1 to avoid log(0)
 
   return rawData.r.map((r, i) => {
-    const lastDate = new Date(r[7]);
-    const monthsAgo = Math.max(0, (REF_DATE - lastDate) / (1000 * 60 * 60 * 24 * 30));
+    const lastDate = r[7] ? new Date(r[7]) : null;
+    const isValidDate = lastDate && !isNaN(lastDate.getTime());
+    const monthsAgo = isValidDate
+      ? Math.max(0, (REF_DATE - lastDate) / (1000 * 60 * 60 * 24 * 30))
+      : 999;
     const status = monthsAgo <= 6 ? "active" : monthsAgo <= 18 ? "dormant" : "lost";
 
-    const volScore = Math.min(35, Math.round(Math.log(r[4] + 1) / Math.log(maxInteractions) * 35));
+    const volScore = Math.min(35, Math.round(Math.log((r[4] || 0) + 1) / Math.log(maxInteractions) * 35));
     const recScore = Math.max(0, Math.round(30 - monthsAgo * 1.5));
     const netScore = Math.min(15, r[3] * 3);
 
@@ -427,6 +430,9 @@ export function downloadCSV(companies, productMatches) {
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href = url;
-  a.download = "alter5_empresas_scored.csv"; a.click();
-  URL.revokeObjectURL(url);
+  a.download = "alter5_empresas_scored.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }

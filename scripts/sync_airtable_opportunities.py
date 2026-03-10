@@ -22,15 +22,8 @@ import urllib.request
 import urllib.error
 
 # SSL context for environments with missing certs (e.g. macOS Python)
-try:
-    import certifi
-    SSL_CTX = ssl.create_default_context(cafile=certifi.where())
-except ImportError:
-    SSL_CTX = ssl.create_default_context()
-    # Fallback: if system certs are missing, allow unverified (local dev only)
-    if not os.environ.get("CI"):
-        SSL_CTX.check_hostname = False
-        SSL_CTX.verify_mode = ssl.CERT_NONE
+import certifi
+SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 
 # ── Config ──────────────────────────────────────────────────────────
 AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", "")

@@ -262,7 +262,7 @@ function PageBtn({ children, onClick, disabled, active }: {
 
 export default function CompanyTable({
   companies, sortBy, sortDir, onSort, onSelect, selected,
-  page, totalPages, setPage, productMatches,
+  page, totalPages, setPage, filteredCount, productMatches,
   cleanupMode, cleanupSelection, onToggleCleanup, suspiciousMap,
   verifiedCompanies,
   bulkSelection, onToggleBulkSelect, onSelectAllPage, onBulkHide, onClearBulkSelection,
@@ -273,7 +273,7 @@ export default function CompanyTable({
   const allPageSelected = companies.length > 0 && companies.every((c: any) => bulkSelection?.has(c.domain));
   const somePageSelected = companies.some((c: any) => bulkSelection?.has(c.domain));
 
-  const totalCompanies = totalPages * PER_PAGE;
+  const totalCompanies = filteredCount || totalPages * PER_PAGE;
   const showFrom = page * PER_PAGE + 1;
   const showTo = Math.min((page + 1) * PER_PAGE, totalCompanies);
 

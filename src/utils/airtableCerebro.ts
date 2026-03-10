@@ -47,10 +47,9 @@ export async function fetchAllKnowledge() {
 
   try {
     do {
-      const params = new URLSearchParams({
-        sort: JSON.stringify([{ field: "CreatedAt", direction: "desc" }]),
-        pageSize: "100",
-      });
+      const params = new URLSearchParams({ pageSize: "100" });
+      params.set("sort[0][field]", "CreatedAt");
+      params.set("sort[0][direction]", "desc");
       if (offset) params.set("offset", offset);
 
       const res = await fetch(`${API_ROOT}?${params}`, { headers: headers() });

@@ -29,7 +29,8 @@ function headers() {
 export async function fetchCandidateTargets(campaignRef) {
   const all = [];
   let offset = null;
-  const formula = encodeURIComponent(`{CampaignRef}="${campaignRef}"`);
+  const safeCampaignRef = String(campaignRef).replace(/"/g, '\\"');
+  const formula = encodeURIComponent(`{CampaignRef}="${safeCampaignRef}"`);
 
   do {
     let url = `${API_ROOT}?filterByFormula=${formula}`;

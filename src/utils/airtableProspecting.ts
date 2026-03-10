@@ -9,7 +9,6 @@
 const BASE_ID = "appVu3TvSZ1E4tj0J";
 const TABLE_NAME = "ProspectingResults";
 const CAMPAIGN_TARGETS_TABLE = "CampaignTargets";
-const GITHUB_REPO = "salvac12/alter5-bi";
 const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
 const CAMPAIGN_API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(CAMPAIGN_TARGETS_TABLE)}`;
 
@@ -17,8 +16,8 @@ function getToken() {
   return import.meta.env.VITE_AIRTABLE_PAT || "";
 }
 
-function getGithubToken() {
-  return import.meta.env.VITE_GITHUB_TOKEN || "";
+function getProxySecret() {
+  return import.meta.env.VITE_CAMPAIGN_PROXY_SECRET || "";
 }
 
 function headers() {
@@ -57,7 +56,7 @@ export async function fetchProspectingJobs() {
 
   try {
     do {
-      let url = `${API_ROOT}?pageSize=100&fields[]=JobId&fields[]=JobName&fields[]=JobStatus&fields[]=SearchCriteria&fields[]=CreatedAt&fields[]=CreatedBy&fields[]=ReviewStatus&fields[]=Confidence`;
+      let url = `${API_ROOT}?pageSize=100&fields[]=JobId&fields[]=JobName&fields[]=JobStatus&fields[]=SearchCriteria&fields[]=CreatedAt&fields[]=CreatedBy&fields[]=ReviewStatus&fields[]=Confidence&fields[]=CompanyName`;
       if (offset) url += `&offset=${encodeURIComponent(offset)}`;
 
       const res = await fetch(url, { headers: headers() });
@@ -307,7 +306,7 @@ export async function createProspectingJob(criteria, jobName, createdBy = "") {
   const res = await fetch(API_ROOT, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ records: [{ fields }] }),
+    body: JSON.stringify({ fields }),
   });
 
   if (!res.ok) {
@@ -318,37 +317,33 @@ export async function createProspectingJob(criteria, jobName, createdBy = "") {
   const data = await res.json();
   invalidateJobsCache();
 
-  return { jobId, record: data.records?.[0] };
+  return { jobId, record: data };
 }
 
 /**
- * Trigger the GitHub Actions prospecting workflow.
+ * Trigger the GitHub Actions prospecting workflow via server-side proxy.
+ * The GITHUB_TOKEN stays server-side only — never exposed in browser bundle.
  */
 export async function triggerGitHubAction(criteria, jobId) {
-  const githubToken = getGithubToken();
-  if (!githubToken) throw new Error("VITE_GITHUB_TOKEN not configured");
+  const secret = getProxySecret();
+  if (!secret) throw new Error("VITE_CAMPAIGN_PROXY_SECRET not configured");
 
   const criteriaWithJob = { ...criteria, job_id: jobId };
 
-  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/dispatches`, {
+  const res = await fetch("/api/trigger-prospecting", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${githubToken}`,
       "Content-Type": "application/json",
-      Accept: "application/vnd.github.v3+json",
+      "x-proxy-secret": secret,
     },
-    body: JSON.stringify({
-      event_type: "run-prospecting",
-      client_payload: {
-        criteria: JSON.stringify(criteriaWithJob),
-        jobId,
-      },
-    }),
+    body: JSON.stringify({ criteria: criteriaWithJob, jobId }),
   });
 
-  if (!res.ok && res.status !== 204) {
-    const err = await res.text();
-    throw new Error(`GitHub API error ${res.status}: ${err}`);
+  let data;
+  try { data = await res.json(); } catch { data = {}; }
+
+  if (!res.ok || data.error) {
+    throw new Error(data.error || `Proxy error ${res.status}`);
   }
 
   return { success: true, jobId };
@@ -388,13 +383,13 @@ export async function exportToCampaignTargets(companies, jobName) {
       const domain = extractDomain(company.companyUrl);
       return {
         fields: {
-          domain,
-          companyName: company.companyName,
-          status: "pending",
-          campaignRef: jobName,
-          segment: company.segment || "",
-          companyType: company.companyType || "",
-          selectedContacts: JSON.stringify([{
+          Domain: domain,
+          CompanyName: company.companyName,
+          Status: "pending",
+          CampaignRef: jobName,
+          Segment: company.segment || "",
+          CompanyType: company.companyType || "",
+          SelectedContacts: JSON.stringify([{
             name: company.contactName,
             email: company.contactEmail,
             role: company.contactRole,

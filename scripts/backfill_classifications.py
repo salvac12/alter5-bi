@@ -26,13 +26,14 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 sys.path.insert(0, SCRIPT_DIR)
 
 from import_mailbox import export_to_compact, get_data_paths
+from utils import atomic_write_json
 from process_sheet_emails import (
     classify_domains_with_gemini,
     classify_roles_with_gemini,
@@ -54,13 +55,11 @@ def load_companies():
 
 
 def save_companies(data, paths):
-    """Write companies_full.json and companies.json."""
-    with open(paths["full"], "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    """Write companies_full.json and companies.json (atomic)."""
+    atomic_write_json(paths["full"], data, ensure_ascii=False, indent=2)
 
     compact = export_to_compact(data["companies"])
-    with open(paths["compact"], "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
+    atomic_write_json(paths["compact"], compact, ensure_ascii=False, separators=(",", ":"))
 
     print(f"  OK: Written {paths['full']}")
     print(f"  OK: Written {paths['compact']}")
@@ -182,7 +181,7 @@ def main():
     for domain, cls in classifications.items():
         enr = cls.get("enrichment")
         if enr and domain in all_companies:
-            enr["_classified_at"] = datetime.utcnow().isoformat()
+            enr["_classified_at"] = datetime.now(timezone.utc).isoformat()
             enr["_email_count"] = all_companies[domain].get("interactions", 0)
             enr["_backfill"] = True  # mark as backfill-generated
             all_companies[domain]["enrichment"] = enr

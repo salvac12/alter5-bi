@@ -53,14 +53,8 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_RPM_DELAY = float(os.environ.get("GEMINI_RPM_DELAY", "5"))
 
 # SSL context
-try:
-    import certifi
-    SSL_CTX = ssl.create_default_context(cafile=certifi.where())
-except ImportError:
-    SSL_CTX = ssl.create_default_context()
-    if not os.environ.get("CI"):
-        SSL_CTX.check_hostname = False
-        SSL_CTX.verify_mode = ssl.CERT_NONE
+import certifi
+SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 
 # Airtable config
 AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", "")

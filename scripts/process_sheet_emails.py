@@ -41,6 +41,7 @@ PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 # Import shared functions from import_mailbox
 sys.path.insert(0, SCRIPT_DIR)
 from import_mailbox import merge_company, export_to_compact, get_data_paths
+from utils import atomic_write_json
 
 # ---------------------------------------------------------------------------
 # Config
@@ -1122,6 +1123,9 @@ def process_pipeline(reprocess=False):
     for domain, data in grouped.items():
         if domain in blocked_domains:
             continue
+
+        is_new = domain not in all_companies
+
         # Build per-employee company records and merge each one
         for emp_id, emp_stats in data["employees"].items():
             contacts_list = []
@@ -1159,26 +1163,24 @@ def process_pipeline(reprocess=False):
             if domain in all_companies:
                 new_company_data["name"] = all_companies[domain].get("name", new_company_data["name"])
 
-            is_new = domain not in all_companies
             all_companies[domain] = merge_company(
                 all_companies.get(domain),
                 new_company_data,
                 emp_id,
             )
 
-            # Assign enrichment: for NEW companies always, for existing if re-classified
-            if is_new or domain in classifications:
-                enr = cls.get("enrichment")
-                if enr:
-                    # Add classification metadata for tracking re-classification triggers
-                    enr["_classified_at"] = datetime.utcnow().isoformat()
-                    enr["_email_count"] = all_companies[domain].get("interactions", 0)
-                    all_companies[domain]["enrichment"] = enr
+        # Assign enrichment: for NEW companies always, for existing if re-classified
+        if is_new or domain in classifications:
+            enr = cls.get("enrichment")
+            if enr:
+                # Add classification metadata for tracking re-classification triggers
+                from datetime import timezone as _tz
+                enr["_classified_at"] = datetime.now(_tz.utc).isoformat()
+                enr["_email_count"] = all_companies[domain].get("interactions", 0)
+                all_companies[domain]["enrichment"] = enr
 
-            if is_new:
-                new_count += 1
-                # Only count once per domain
-                break
+        if is_new:
+            new_count += 1
         else:
             updated_count += 1
 
@@ -1216,15 +1218,12 @@ def process_pipeline(reprocess=False):
     print("  [7/7] Escribiendo archivos JSON...")
 
     full_data = {"companies": all_companies, "employees": employees}
-    with open(paths["full"], "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False, indent=2)
+    atomic_write_json(paths["full"], full_data, ensure_ascii=False, indent=2)
 
     compact = export_to_compact(all_companies)
-    with open(paths["compact"], "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
+    atomic_write_json(paths["compact"], compact, ensure_ascii=False, separators=(",", ":"))
 
-    with open(paths["employees"], "w", encoding="utf-8") as f:
-        json.dump(employees, f, ensure_ascii=False, indent=2)
+    atomic_write_json(paths["employees"], employees, ensure_ascii=False, indent=2)
 
     # Mark rows as done in the sheet (skip for reprocess — already done)
     if not reprocess:

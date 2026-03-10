@@ -25,6 +25,7 @@ import os
 import sys
 import ssl
 import urllib.request
+import re
 import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
@@ -42,14 +43,13 @@ PROSPECTING_TABLE = "ProspectingResults"
 CAMPAIGN_TARGETS_TABLE = "CampaignTargets"
 
 # SSL context
-try:
-    import certifi
-    SSL_CTX = ssl.create_default_context(cafile=certifi.where())
-except ImportError:
-    SSL_CTX = ssl.create_default_context()
-    if not os.environ.get("CI"):
-        SSL_CTX.check_hostname = False
-        SSL_CTX.verify_mode = ssl.CERT_NONE
+import certifi
+SSL_CTX = ssl.create_default_context(cafile=certifi.where())
+
+
+def _safe_formula_str(value):
+    """Sanitize a string for use in Airtable formula — escape single quotes."""
+    return re.sub(r"['\"]", "", str(value))
 
 
 def airtable_headers():
@@ -61,7 +61,7 @@ def airtable_headers():
 
 def airtable_request(method, table, payload=None, params=""):
     """Make an Airtable API request."""
-    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{table}{params}"
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{urllib.parse.quote(table)}{params}"
     data = json.dumps(payload).encode("utf-8") if payload else None
     req = urllib.request.Request(
         url, data=data, method=method, headers=airtable_headers()
@@ -117,7 +117,7 @@ def fetch_existing_prospecting_domains(job_id):
     domains = set()
     offset = ""
     try:
-        filter_formula = f"FIND('{job_id}', {{JobId}})"
+        filter_formula = f"FIND('{_safe_formula_str(job_id)}', {{JobId}})"
         while True:
             params = f"?pageSize=100&fields[]=CompanyUrl&filterByFormula={urllib.parse.quote(filter_formula)}"
             if offset:
@@ -141,7 +141,7 @@ def fetch_existing_prospecting_domains(job_id):
 def update_job_status(job_id, status, notes=None):
     """Update the JobStatus field for all records with this job_id."""
     import urllib.parse
-    filter_formula = f"FIND('{job_id}', {{JobId}})"
+    filter_formula = f"FIND('{_safe_formula_str(job_id)}', {{JobId}})"
     params = f"?pageSize=100&filterByFormula={urllib.parse.quote(filter_formula)}&fields[]=JobId"
     data, err = airtable_request("GET", PROSPECTING_TABLE, params=params)
     if err or not data:
@@ -299,7 +299,7 @@ def set_job_running(job_id):
     Update the existing job placeholder (created by frontend) to status 'running'.
     Returns True if a record was updated, False if none found (e.g. manual workflow_dispatch).
     """
-    filter_formula = f"AND({{JobId}}='{job_id}', {{CompanyName}}='__JOB_PLACEHOLDER__')"
+    filter_formula = f"AND({{JobId}}='{_safe_formula_str(job_id)}', {{CompanyName}}='__JOB_PLACEHOLDER__')"
     params = f"?pageSize=1&filterByFormula={urllib.parse.quote(filter_formula)}&fields[]=JobId"
     data, err = airtable_request("GET", PROSPECTING_TABLE, params=params)
     if err or not data or not data.get("records"):

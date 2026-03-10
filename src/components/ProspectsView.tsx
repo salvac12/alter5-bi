@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   fetchAllProspects,
@@ -89,6 +89,8 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
   const [pendingDrop, setPendingDrop] = useState<{ prospect: any; targetStage: string } | null>(null);
   const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   // Fetch data on mount
   useEffect(() => {
@@ -106,9 +108,9 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(query) ||
-        p.origin.toLowerCase().includes(query) ||
-        p.product.toLowerCase().includes(query)
+        (p.name || '').toLowerCase().includes(query) ||
+        (p.origin || '').toLowerCase().includes(query) ||
+        (p.product || '').toLowerCase().includes(query)
       );
     }
 
@@ -138,8 +140,9 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
   }
 
   function showToast(type: string, message: string) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ type, message });
-    setTimeout(() => setToast(null), 3500);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }
 
   // Drag handlers
@@ -187,7 +190,10 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       await updateProspect(draggedCard.id, { "Stage": targetStage });
     } catch (err: any) {
       console.error('Failed to update prospect stage:', err);
-      setProspects(prospects);
+      // Revert only the dragged card to avoid stale closure overwriting concurrent changes
+      setProspects(prev => prev.map(p =>
+        p.id === draggedCard.id ? { ...p, stage: draggedCard.stage } : p
+      ));
       showToast('error', 'Error al mover prospect: ' + err.message);
     }
   }
@@ -231,7 +237,9 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       await updateProspect(prospect.id, { "Stage": targetStage });
     } catch (err: any) {
       console.error('Failed to move prospect:', err);
-      setProspects(prospects);
+      setProspects(prev => prev.map(p =>
+        p.id === prospect.id ? { ...p, stage: prospect.stage } : p
+      ));
       showToast('error', 'Error al mover prospect');
     } finally {
       setShowConvertDialog(false);

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { createCampaign, scheduleFollowUp } from '../utils/campaignApi';
 import { getSenders, addSender, removeSender } from '../utils/senderConfig';
 import CandidateSearchView from './CandidateSearchView';
@@ -42,7 +42,7 @@ export default function CampaignCreationPanel({ onClose, onCreated, allCompanies
   // Step 4: Candidates (from CandidateSearchView embedded)
   const [recipients, setRecipients] = useState([]);
   const [manualEmails, setManualEmails] = useState('');
-  const campaignRef = useCampaignRef(name);
+  const campaignRef = useMemo(() => getCampaignRef(name), [name]);
 
   // Step 5: Sender
   const [senders, setSenders] = useState(() => getSenders());
@@ -350,8 +350,9 @@ export default function CampaignCreationPanel({ onClose, onCreated, allCompanies
 }
 
 // ── Helper: generate campaignRef from name ──
-function useCampaignRef(name) {
-  if (!name.trim()) return 'Campaign_' + Date.now().toString(36);
+const _fallbackRef = 'Campaign_' + Date.now().toString(36);
+function getCampaignRef(name) {
+  if (!name.trim()) return _fallbackRef;
   return name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').slice(0, 30);
 }
 

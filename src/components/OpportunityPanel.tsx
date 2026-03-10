@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   updateOpportunity,
   createOpportunity,
@@ -44,9 +44,6 @@ export default function OpportunityPanel({
   onSaved,
   onDeleted
 }) {
-  // Don't render if no opportunity and not in create mode
-  if (!opportunity && !isNew) return null;
-
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -62,6 +59,10 @@ export default function OpportunityPanel({
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success'|'error', message: '' }
+
+  // Feedback timeout ref — clear on unmount
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current); }, []);
 
   // Initialize form data when opportunity changes
   useEffect(() => {
@@ -90,10 +91,14 @@ export default function OpportunityPanel({
     }
   }, [opportunity, isNew, initialStage]);
 
+  // Guard: render nothing if no data (AFTER all hooks to respect Rules of Hooks)
+  if (!opportunity && !isNew) return null;
+
   // Show feedback toast
   const showFeedback = (type, message) => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
     setFeedback({ type, message });
-    setTimeout(() => setFeedback(null), 3500);
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 3500);
   };
 
   // Format amount for display
