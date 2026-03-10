@@ -60,10 +60,10 @@ function RoleBadge({ role }: { role: string }) {
     "Originaci\u00f3n": { bg: "rgba(245,158,11,0.1)",  color: "#B45309" },
     "Inversion":    { bg: "rgba(59,130,246,0.1)",  color: "#1D4ED8" },
     "Inversi\u00f3n":   { bg: "rgba(59,130,246,0.1)",  color: "#1D4ED8" },
-    "Ecosistema":   { bg: "rgba(100,116,139,0.1)", color: "#475569" },
+    "Services":     { bg: "rgba(100,116,139,0.1)", color: "#475569" },
     "No relevante": { bg: "rgba(239,68,68,0.08)",  color: "#DC2626" },
   };
-  const c = cfg[role] ?? cfg["Ecosistema"];
+  const c = cfg[role] ?? cfg["Services"];
   return (
     <span style={{
       background: c.bg, color: c.color, fontSize: 10, fontWeight: 600,

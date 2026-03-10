@@ -6,7 +6,7 @@
 export const COMPANY_ROLES = [
   { id: "Originación", label: "Originación", color: "#F59E0B" },
   { id: "Inversión", label: "Inversión", color: "#3B82F6" },
-  { id: "Ecosistema", label: "Ecosistema", color: "#6B7F94" },
+  { id: "Services", label: "Services", color: "#6B7F94" },
   { id: "No relevante", label: "No relevante", color: "#94A3B8" },
 ];
 
@@ -25,8 +25,8 @@ export const COMPANY_TYPES_V2 = {
   // Inversión subtypes by debt/equity
   "Inversión > Deuda": ["Fondo de deuda", "Banco", "Bonista / Institucional"],
   "Inversión > Equity": ["Fondo de infraestructura", "Private equity", "Fondo renovable", "IPP comprador", "Utility compradora"],
-  // Ecosistema
-  "Ecosistema": ["Asesor legal", "Asesor técnico", "Consultor de precios", "Asset manager", "Ingeniería", "Asesor financiero", "Asociación / Institución"],
+  // Services
+  "Services": ["Asesor legal", "Asesor técnico", "Consultor de precios", "Asset manager", "Ingeniería", "Asesor financiero", "Asociación / Institución"],
 };
 
 /* ── All v2 types flat ── */
@@ -78,7 +78,7 @@ export const COMMERCIAL_PHASES = [
 export const ROLE_WEIGHTS = {
   "Originación": 20,
   "Inversión": 18,
-  "Ecosistema": 8,
+  "Services": 8,
   "No relevante": 0,
 };
 
@@ -89,20 +89,18 @@ export const COMPANY_GROUPS = COMPANY_ROLES;
 export const GROUP_WEIGHTS = {
   "Capital Seeker": 20,
   "Investor": 18,
-  "Services": 8,
   "Other": 2,
-  // v2 roles also in same map for scoring
+  // v2 roles also in same map for scoring (includes Services: 8)
   ...ROLE_WEIGHTS,
 };
 export const COMPANY_TYPES = {
   "Capital Seeker": ["Developer", "IPP", "Utility", "Asset Owner", "Corporate"],
   "Investor": ["Renewable Fund", "Institutional Investor", "Bank", "Family Office", "Infrastructure Fund"],
-  "Services": ["Legal Advisor", "Financial Advisor", "Technical Advisor", "EPC / Contractor", "Consultant", "Platform / Tech"],
   "Other": ["Public Institution", "Association", "Other"],
   // v2 roles map to their types
   "Originación": [...(COMPANY_TYPES_V2["Originación > Project Finance"] || []), ...(COMPANY_TYPES_V2["Originación > Corporate Finance"] || [])],
   "Inversión": [...(COMPANY_TYPES_V2["Inversión > Deuda"] || []), ...(COMPANY_TYPES_V2["Inversión > Equity"] || [])],
-  "Ecosistema": COMPANY_TYPES_V2["Ecosistema"] || [],
+  "Services": [...(COMPANY_TYPES_V2["Services"] || []), "Legal Advisor", "Financial Advisor", "Technical Advisor", "EPC / Contractor", "Consultant", "Platform / Tech"],
   "No relevante": [],
 };
 export const ALL_COMPANY_TYPES = [...new Set(Object.values(COMPANY_TYPES).flat())];

@@ -6,7 +6,7 @@
 
 export type CompanyStatus = 'active' | 'dormant' | 'lost';
 
-export type CompanyRole = 'Originación' | 'Inversión' | 'Ecosistema' | 'No relevante';
+export type CompanyRole = 'Originación' | 'Inversión' | 'Services' | 'No relevante';
 
 export type VerifiedStatus = 'Pending Review' | 'Verified' | 'Edited' | 'Rejected';
 

@@ -1,55 +1,50 @@
 [
   {
-    "id": "salvador_carrillo",
-    "name": "Salvador Carrillo",
-    "importedAt": "2026-02-18T09:13:37.739999",
-    "companiesCount": 1751
-  },
-  {
-    "id": "guillermo_souto",
-    "name": "Guillermo Souto",
-    "importedAt": "2026-02-18T09:13:46.941885",
-    "companiesCount": 1347
-  },
-  {
-    "id": "leticia_menéndez",
-    "name": "Leticia Menéndez",
-    "importedAt": "2026-02-18T09:13:53.341394",
-    "companiesCount": 611
-  },
-  {
-    "id": "javier_ruiz",
-    "name": "Javier Ruiz",
-    "importedAt": "2026-03-03T13:49:04.836434",
-    "companiesCount": 1209,
-    "email": "javier.ruiz@alter-5.com"
-  },
-  {
-    "id": "miguel_solana",
-    "name": "Miguel Solana",
-    "importedAt": "2026-03-05T09:16:01.646240",
-    "companiesCount": 2120,
-    "email": "miguel.solana@alter-5.com"
-  },
-  {
     "id": "carlos_almodóvar",
     "name": "Carlos Almodóvar",
-    "importedAt": "2026-03-05T09:16:08.655720",
-    "companiesCount": 122,
-    "email": "carlos.almodovar@alter-5.com"
+    "importedAt": "2026-03-10T09:20:20.764694",
+    "companiesCount": 122
   },
   {
     "id": "gonzalo_de_gracia",
     "name": "Gonzalo de Gracia",
-    "importedAt": "2026-03-05T09:16:16.407509",
-    "companiesCount": 52,
-    "email": "gonzalo.degracia@alter-5.com"
+    "importedAt": "2026-03-10T09:20:20.764707",
+    "companiesCount": 53
+  },
+  {
+    "id": "guillermo_souto",
+    "name": "Guillermo Souto",
+    "importedAt": "2026-03-10T09:20:20.764711",
+    "companiesCount": 1467
+  },
+  {
+    "id": "javier_ruiz",
+    "name": "Javier Ruiz",
+    "importedAt": "2026-03-10T09:20:20.764715",
+    "companiesCount": 1209
+  },
+  {
+    "id": "leticia_menéndez",
+    "name": "Leticia Menéndez",
+    "importedAt": "2026-03-10T09:20:20.764719",
+    "companiesCount": 659
+  },
+  {
+    "id": "miguel_solana",
+    "name": "Miguel Solana",
+    "importedAt": "2026-03-10T09:20:20.764722",
+    "companiesCount": 2507
   },
   {
     "id": "rafael_nevado",
     "name": "Rafael Nevado",
-    "importedAt": "2026-03-05T09:16:22.121885",
-    "companiesCount": 372,
-    "email": "rafael.nevado@alter-5.com"
+    "importedAt": "2026-03-10T09:20:20.764724",
+    "companiesCount": 372
+  },
+  {
+    "id": "salvador_carrillo",
+    "name": "Salvador Carrillo",
+    "importedAt": "2026-03-10T09:20:20.764726",
+    "companiesCount": 2228
   }
 ]

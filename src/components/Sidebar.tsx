@@ -9,7 +9,7 @@ const ROLE_ACTIVE_COLORS: Record<string, string> = {
   "Originación": "#B45309",
   "Inversion": "#1D4ED8",
   "Inversión": "#1D4ED8",
-  "Ecosistema": "#64748B",
+  "Services": "#64748B",
   "No relevante": "#DC2626",
 };
 
@@ -178,8 +178,8 @@ export default function Sidebar({
       } else if (role === "Inversión") {
         availableTypes.push(...(COMPANY_TYPES_V2["Inversión > Deuda"] || []));
         availableTypes.push(...(COMPANY_TYPES_V2["Inversión > Equity"] || []));
-      } else if (role === "Ecosistema") {
-        availableTypes.push(...(COMPANY_TYPES_V2["Ecosistema"] || []));
+      } else if (role === "Services") {
+        availableTypes.push(...(COMPANY_TYPES_V2["Services"] || []));
       }
       availableTypes.push(...((COMPANY_TYPES as Record<string, string[]>)[role] || []));
     }

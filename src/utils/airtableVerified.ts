@@ -192,7 +192,7 @@ export function invalidateVerifiedCache() {
 const ROLE_ACCENT_MAP = {
   "Originacion": "Originación",
   "Inversion": "Inversión",
-  "Ecosistema": "Ecosistema",
+  "Services": "Services",
   "No relevante": "No relevante",
 };
 

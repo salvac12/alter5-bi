@@ -29,7 +29,7 @@ function roleBadge(role) {
   return {
     'Originación': { color: '#92400E', bg: '#FEF3C7' },
     'Inversión': { color: '#1D4ED8', bg: '#EFF6FF' },
-    'Ecosistema': { color: '#374151', bg: '#F3F4F6' },
+    'Services': { color: '#374151', bg: '#F3F4F6' },
     'No relevante': { color: '#6B7280', bg: '#F9FAFB' },
   }[role] || { color: '#6B7F94', bg: '#F1F5F9' };
 }

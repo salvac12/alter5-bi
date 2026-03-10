@@ -42,7 +42,7 @@ export function getOpportunityCounts(companies) {
 
 // ── Legacy → v2 taxonomy helpers ──
 function mapLegacyGroup(grp) {
-  return { "Capital Seeker": "Originación", "Investor": "Inversión", "Services": "Ecosistema", "Other": "No relevante" }[grp] || "No relevante";
+  return { "Capital Seeker": "Originación", "Investor": "Inversión", "Services": "Services", "Other": "No relevante" }[grp] || "No relevante";
 }
 
 function inferSegment(grp, tp) {

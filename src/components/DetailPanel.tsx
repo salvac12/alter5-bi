@@ -235,13 +235,13 @@ INSTRUCCIONES:
 3. Compara con la clasificacion actual
 
 TAXONOMIA:
-- Role: ["Originacion", "Inversion", "Ecosistema", "No relevante"]
+- Role: ["Originacion", "Inversion", "Services", "No relevante"]
 - Segment Originacion: ["Project Finance", "Corporate Finance"]
 - Segment Inversion: ["Deuda", "Equity"]
 - Types Inversion>Deuda: ["Fondo de deuda", "Banco", "Bonista / Institucional"]
 - Types Inversion>Equity: ["Fondo de infraestructura", "Private equity", "Fondo renovable", "IPP comprador", "Utility compradora"]
 - Types Originacion>PF: ["Developer", "IPP", "Developer + IPP"]
-- Types Ecosistema: ["Asesor legal", "Asesor tecnico", "Consultor de precios", "Asset manager", "Ingenieria", "Asesor financiero", "Asociacion / Institucion"]
+- Types Services: ["Asesor legal", "Asesor tecnico", "Consultor de precios", "Asset manager", "Ingenieria", "Asesor financiero", "Asociacion / Institucion"]
 - Market Roles: ["Borrower", "Seller (M&A)", "Buyer Investor (M&A)", "Debt Investor", "Equity Investor", "Partner & Services"]
 
 FORMATO (JSON valido, sin markdown):
@@ -350,7 +350,7 @@ FORMATO (JSON valido, sin markdown):
       return [...(COMPANY_TYPES_V2["Originación > Project Finance"] || [])];
     }
     if (editedRole === "Inversión") return [...(COMPANY_TYPES_V2["Inversión > Deuda"] || []), ...(COMPANY_TYPES_V2["Inversión > Equity"] || [])];
-    if (editedRole === "Ecosistema") return COMPANY_TYPES_V2["Ecosistema"] || [];
+    if (editedRole === "Services") return COMPANY_TYPES_V2["Services"] || [];
     // Legacy fallback
     return COMPANY_TYPES[editedRole] || COMPANY_TYPES[editedGroup] || [];
   })();
