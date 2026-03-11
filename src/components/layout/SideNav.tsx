@@ -187,8 +187,9 @@ export default function SideNav({ activeView, onViewChange }: SideNavProps) {
       } else {
         setExpandedParent(item.id);
       }
-      // Always navigate to the parent view
-      onViewChange(item.id);
+      // Navigate to the first child view (parent id has no render case)
+      const targetView = item.children[0]?.id ?? item.id;
+      onViewChange(targetView);
     } else {
       onViewChange(item.id);
     }
