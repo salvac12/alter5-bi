@@ -68,6 +68,12 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: python scripts/fix_stuck_subjects.py --${{ github.event.inputs.fix_subjects }}
 
+      - name: Scan calendars for meetings
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          AIRTABLE_PAT: ${{ secrets.AIRTABLE_PAT }}
+        run: python scripts/scan_calendars.py
+
       - name: Sync Airtable opportunities
         if: ${{ env.AIRTABLE_PAT != '' }}
         env:

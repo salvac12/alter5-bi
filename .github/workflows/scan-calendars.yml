@@ -1,0 +1,67 @@
+name: Scan Calendars
+
+on:
+  schedule:
+    - cron: '0 0,6,12,18 * * *'  # Cada 6 horas
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Override scan window (number of days to look back)'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: 'Dry run (log only, no Airtable changes)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scan calendars for meetings
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          AIRTABLE_PAT: ${{ secrets.AIRTABLE_PAT }}
+        run: |
+          DAYS_ARG=""
+          if [ -n "${{ github.event.inputs.days }}" ]; then
+            DAYS_ARG="--days ${{ github.event.inputs.days }}"
+          fi
+          DRY_ARG=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_ARG="--dry-run"
+          fi
+          python scripts/scan_calendars.py $DAYS_ARG $DRY_ARG
+
+      - name: Commit and push scan state
+        run: |
+          git config user.name "alter5-bi-bot"
+          git config user.email "bot@alter5.com"
+          git add config/scan_state.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update calendar scan state
+
+          $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push
+          fi
