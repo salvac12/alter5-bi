@@ -137,29 +137,128 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       // Exclude already converted prospects
       const active = normalized.filter((p: any) => !p.converted);
 
-      // Fix names that are emails: extract domain-based company name
+      // --- Step 1: Fix names that are emails or domains ---
+      const domainFromEmail = (email: string): string => {
+        const at = email.indexOf('@');
+        return at > 0 ? email.slice(at + 1).toLowerCase() : '';
+      };
+
+      const domainToName = (domain: string): string => {
+        // Strip TLD(s): "dunascapital.com" -> "dunascapital", "foo.co.uk" -> "foo"
+        const base = domain.split('.')[0] || domain;
+        return base
+          .replace(/[-_]/g, ' ')
+          .replace(/\b\w/g, (c: string) => c.toUpperCase());
+      };
+
+      const isDomainLike = (s: string): boolean => /^[\w.-]+\.\w{2,}$/.test(s);
+
+      const CORP_SUFFIXES = /[,.]?\s*\b(s\.?a\.?u?\.?|s\.?l\.?u?\.?|s\.?l\.?|gmbh|ltd\.?|inc\.?|llc|plc|corp\.?|group|holding|capital)\s*\.?\s*$/i;
+
+      const stripCorpSuffix = (name: string): string => {
+        let prev = name;
+        for (let i = 0; i < 3; i++) {
+          const cleaned = prev.replace(CORP_SUFFIXES, '').trim();
+          if (cleaned === prev) break;
+          prev = cleaned;
+        }
+        return prev;
+      };
+
       for (const p of active) {
-        if (p.name && p.name.includes('@')) {
-          const domain = p.name.split('@')[1] || '';
-          // Use domain without TLD as readable name (e.g. "energia-aljaval.com" -> "Energia Aljaval")
-          const baseName = domain.split('.')[0] || domain;
-          p.name = baseName
-            .replace(/[-_]/g, ' ')
-            .replace(/\b\w/g, (c: string) => c.toUpperCase());
+        let name = (p.name || '').trim();
+
+        // If name is an email address → extract company name from domain
+        if (name.includes('@')) {
+          const domain = domainFromEmail(name);
+          name = domain ? domainToName(domain) : name;
+        }
+        // If name looks like a bare domain (e.g. "alfanar.com")
+        else if (isDomainLike(name)) {
+          name = domainToName(name);
+        }
+        // If name is empty/too short, fallback to contactEmail domain
+        else if (name.length < 2 && p.contactEmail) {
+          const domain = domainFromEmail(p.contactEmail);
+          if (domain) name = domainToName(domain);
+        }
+
+        p.name = name;
+      }
+
+      // --- Step 2: Aggressive multi-key dedup ---
+      const normalizeName = (name: string): string => {
+        return stripCorpSuffix(name)
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      };
+
+      // Stage ordering for picking the most advanced prospect
+      const stageOrder: Record<string, number> = {};
+      PROSPECT_STAGES.forEach((s: string, i: number) => { stageOrder[s] = i; });
+
+      const prospectScore = (p: any): number => {
+        let score = stageOrder[p.stage] ?? 0;
+        if (p.amount > 0) score += 10;
+        if (p.product) score += 5;
+        if (p.contactEmail) score += 3;
+        if (p.contacts?.length) score += 3;
+        if (p.context) score += 2;
+        if (p.nextSteps) score += 2;
+        return score;
+      };
+
+      const pickBetter = (a: any, b: any): any => {
+        const sa = prospectScore(a);
+        const sb = prospectScore(b);
+        if (sa !== sb) return sa > sb ? a : b;
+        return a.id > b.id ? a : b; // tiebreaker: most recent Airtable ID
+      };
+
+      // Index by normalized name AND by email domain
+      const byName = new Map<string, any>();
+      const byDomain = new Map<string, any>();
+
+      for (const p of active) {
+        const nk = normalizeName(p.name);
+        if (!nk) continue;
+
+        // Check if this prospect matches an existing one by domain
+        const pDomain = p.contactEmail ? domainFromEmail(p.contactEmail) : '';
+        const domainMatch = pDomain ? byDomain.get(pDomain) : undefined;
+        const nameMatch = byName.get(nk);
+        const existing = domainMatch || nameMatch;
+
+        if (existing) {
+          const winner = pickBetter(existing, p);
+          // Merge contacts from loser into winner
+          const loser = winner === existing ? p : existing;
+          if (loser.contacts?.length && winner.contacts) {
+            const existingEmails = new Set(winner.contacts.map((c: any) => c.email?.toLowerCase()));
+            for (const c of loser.contacts) {
+              if (c.email && !existingEmails.has(c.email.toLowerCase())) {
+                winner.contacts.push(c);
+              }
+            }
+          }
+          // Update maps to point to winner
+          const winnerNk = normalizeName(winner.name);
+          const existingNk = normalizeName(existing.name);
+          byName.set(nk, winner);
+          byName.set(winnerNk, winner);
+          byName.set(existingNk, winner);
+          if (pDomain) byDomain.set(pDomain, winner);
+          const eDomain = existing.contactEmail ? domainFromEmail(existing.contactEmail) : '';
+          if (eDomain) byDomain.set(eDomain, winner);
+        } else {
+          byName.set(nk, p);
+          if (pDomain) byDomain.set(pDomain, p);
         }
       }
 
-      // Deduplicate by name (keep the most recent record per name)
-      const seen = new Map<string, any>();
-      for (const p of active) {
-        const key = (p.name || '').trim().toLowerCase();
-        if (!key) continue;
-        const existing = seen.get(key);
-        if (!existing || (p.id > existing.id)) {
-          seen.set(key, p);
-        }
-      }
-      const deduped = Array.from(seen.values());
+      const deduped = [...new Set(byName.values())];
       setProspects(deduped);
 
       // Run Bridge + CRM sync detection in background
