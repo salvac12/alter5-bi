@@ -395,11 +395,7 @@ function handleStartCampaign(payload) {
     body = replacePlaceholders(body, recipientName, org);
 
     try {
-      GmailApp.sendEmail(email, subject, '', {
-        htmlBody: body,
-        from: campaign.senderEmail,
-        name: campaign.senderName,
-      });
+      sendWithFallback(email, subject, body, campaign.senderEmail, campaign.senderName);
 
       // Update recipient row
       recSheet.getRange(r + 1, statusCol + 1).setValue('sent');
@@ -448,6 +444,37 @@ function replacePlaceholders(text, name, org) {
     .replace(/\{\{empresa\}\}/gi, org)
     .replace(/\{\{organization\}\}/gi, org)
     .replace(/\{\{company\}\}/gi, org);
+}
+
+/** Build email options, trying 'from' alias — falls back to script owner */
+function emailOptions(body, senderEmail, senderName) {
+  var opts = { htmlBody: body, name: senderName || '' };
+  if (senderEmail) opts.from = senderEmail;
+  return opts;
+}
+
+function sendWithFallback(email, subject, body, senderEmail, senderName) {
+  try {
+    GmailApp.sendEmail(email, subject, '', emailOptions(body, senderEmail, senderName));
+  } catch (err) {
+    if (String(err.message).indexOf('Invalid argument') !== -1 && senderEmail) {
+      GmailApp.sendEmail(email, subject, '', emailOptions(body, '', senderName));
+    } else {
+      throw err;
+    }
+  }
+}
+
+function createDraftWithFallback(email, subject, body, senderEmail, senderName) {
+  try {
+    return GmailApp.createDraft(email, subject, '', emailOptions(body, senderEmail, senderName));
+  } catch (err) {
+    if (String(err.message).indexOf('Invalid argument') !== -1 && senderEmail) {
+      return GmailApp.createDraft(email, subject, '', emailOptions(body, '', senderName));
+    } else {
+      throw err;
+    }
+  }
 }
 
 /**
@@ -627,11 +654,7 @@ function handleSendTestEmail(payload) {
   subject = '[TEST] ' + subject;
 
   try {
-    GmailApp.sendEmail(testEmail, subject, '', {
-      htmlBody: body,
-      from: campaign.senderEmail || '',
-      name: campaign.senderName || '',
-    });
+    sendWithFallback(testEmail, subject, body, campaign.senderEmail || '', campaign.senderName || '');
     return { success: true, sentTo: testEmail };
   } catch (err) {
     return { error: 'Failed to send test: ' + err.message };
@@ -697,11 +720,7 @@ function handleCreateDrafts(payload) {
     body = replacePlaceholders(body, recipientName, org);
 
     try {
-      var draft = GmailApp.createDraft(email, subject, '', {
-        htmlBody: body,
-        from: campaign.senderEmail,
-        name: campaign.senderName,
-      });
+      var draft = createDraftWithFallback(email, subject, body, campaign.senderEmail, campaign.senderName);
 
       // Save draft ID in messageId field, update status to draft_ready
       recSheet.getRange(r + 1, messageIdCol + 1).setValue(draft.getId());
