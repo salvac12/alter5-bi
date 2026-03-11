@@ -12,6 +12,11 @@ import {
   ORIGIN_OPTIONS,
 } from '../utils/airtableProspects';
 import { isAirtableConfigured } from '../utils/airtable';
+import {
+  fetchBridgePipelineCards,
+  computeSyncSuggestions,
+  type SyncSuggestion,
+} from '../utils/bridgeProspectSync';
 
 // Domains for internal tools — never match prospects to these companies
 const INTERNAL_TOOL_DOMAINS = [
@@ -89,6 +94,8 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
   const [pendingDrop, setPendingDrop] = useState<{ prospect: any; targetStage: string } | null>(null);
   const [toast, setToast] = useState<{ type: string; message: string } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [syncSuggestions, setSyncSuggestions] = useState<SyncSuggestion[]>([]);
+  const [syncDismissed, setSyncDismissed] = useState<Set<string>>(new Set());
 
   // Fetch data on mount
   useEffect(() => {
@@ -128,7 +135,38 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       const records = await fetchAllProspects();
       const normalized = records.map(normalizeProspect).filter(isValidProspect);
       // Exclude already converted prospects
-      setProspects(normalized.filter((p: any) => !p.converted));
+      const active = normalized.filter((p: any) => !p.converted);
+
+      // Fix names that are emails: extract domain-based company name
+      for (const p of active) {
+        if (p.name && p.name.includes('@')) {
+          const domain = p.name.split('@')[1] || '';
+          // Use domain without TLD as readable name (e.g. "energia-aljaval.com" -> "Energia Aljaval")
+          const baseName = domain.split('.')[0] || domain;
+          p.name = baseName
+            .replace(/[-_]/g, ' ')
+            .replace(/\b\w/g, (c: string) => c.toUpperCase());
+        }
+      }
+
+      // Deduplicate by name (keep the most recent record per name)
+      const seen = new Map<string, any>();
+      for (const p of active) {
+        const key = (p.name || '').trim().toLowerCase();
+        if (!key) continue;
+        const existing = seen.get(key);
+        if (!existing || (p.id > existing.id)) {
+          seen.set(key, p);
+        }
+      }
+      const deduped = Array.from(seen.values());
+      setProspects(deduped);
+
+      // Run Bridge + CRM sync detection in background
+      fetchBridgePipelineCards().then(bridgeCards => {
+        const suggestions = computeSyncSuggestions(deduped, bridgeCards, companies, companyByName);
+        setSyncSuggestions(suggestions);
+      }).catch(() => { /* silent */ });
     } catch (err: any) {
       console.error('Failed to load prospects:', err);
       setError(err.message || 'Error al cargar prospects');
@@ -238,6 +276,47 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       setPendingDrop(null);
     }
   }
+
+  // ── Sync handlers ────────────────────────────────────────────────
+
+  const pendingSuggestions = syncSuggestions.filter(s => !syncDismissed.has(s.prospectId));
+
+  async function handleApplySync(suggestion: SyncSuggestion) {
+    try {
+      // Optimistic UI update
+      setProspects(prev => prev.map(p =>
+        p.id === suggestion.prospectId ? { ...p, stage: suggestion.suggestedStage } : p
+      ));
+      setSyncSuggestions(prev => prev.filter(s => s.prospectId !== suggestion.prospectId));
+      await updateProspect(suggestion.prospectId, { "Stage": suggestion.suggestedStage });
+      showToast('success', `"${suggestion.prospectName}" movido a ${suggestion.suggestedStage}`);
+    } catch (err: any) {
+      // Revert
+      setProspects(prev => prev.map(p =>
+        p.id === suggestion.prospectId ? { ...p, stage: suggestion.currentStage } : p
+      ));
+      showToast('error', 'Error al aplicar sugerencia: ' + err.message);
+    }
+  }
+
+  async function handleApplyAllSync() {
+    for (const s of pendingSuggestions) {
+      await handleApplySync(s);
+    }
+  }
+
+  function handleDismissSync(prospectId: string) {
+    setSyncDismissed(prev => new Set(prev).add(prospectId));
+  }
+
+  // Check if a prospect has a pending sync suggestion
+  const syncSuggestionMap = useMemo(() => {
+    const map = new Map<string, SyncSuggestion>();
+    for (const s of pendingSuggestions) {
+      map.set(s.prospectId, s);
+    }
+    return map;
+  }, [pendingSuggestions]);
 
   // Group by stage
   const prospectsByStage = PROSPECT_STAGES.reduce((acc: any, stage: string) => {
@@ -394,6 +473,114 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
         </div>
       )}
 
+      {/* Sync suggestions banner */}
+      {pendingSuggestions.length > 0 && (
+        <div style={{
+          margin: '0 36px', padding: '12px 16px',
+          background: 'linear-gradient(135deg, #EEF2FF, #F5F3FF)',
+          border: '1px solid #C7D2FE',
+          borderRadius: 12,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            marginBottom: pendingSuggestions.length > 1 ? 10 : 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2">
+                <polyline points="17 1 21 5 17 9"/>
+                <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                <polyline points="7 23 3 19 7 15"/>
+                <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+              </svg>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#4338CA' }}>
+                {pendingSuggestions.length} {pendingSuggestions.length === 1 ? 'sugerencia' : 'sugerencias'} de avance
+              </span>
+            </div>
+            {pendingSuggestions.length > 1 && (
+              <button
+                onClick={handleApplyAllSync}
+                style={{
+                  fontSize: 12, fontWeight: 600, color: '#FFFFFF',
+                  background: '#6366F1', border: 'none', borderRadius: 6,
+                  padding: '5px 12px', cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                Aplicar todos
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {pendingSuggestions.map(s => (
+              <div key={s.prospectId} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 12px', background: '#FFFFFF',
+                borderRadius: 8, border: '1px solid #E0E7FF',
+              }}>
+                {/* Source icon */}
+                <div style={{
+                  width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                  background: s.source === 'bridge' ? '#DBEAFE' : '#EDE9FE',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {s.source === 'bridge' ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2.5">
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                      <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                  )}
+                </div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>
+                    {s.prospectName}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#64748B', marginLeft: 8 }}>
+                    {s.currentStage} → <span style={{ fontWeight: 600, color: '#4338CA' }}>{s.suggestedStage}</span>
+                  </span>
+                  {s.evidence.length > 0 && (
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.evidence[0]}
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <button
+                  onClick={() => handleApplySync(s)}
+                  style={{
+                    fontSize: 12, fontWeight: 600, color: '#FFFFFF',
+                    background: '#6366F1', border: 'none', borderRadius: 6,
+                    padding: '5px 10px', cursor: 'pointer', flexShrink: 0,
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  Aplicar
+                </button>
+                <button
+                  onClick={() => handleDismissSync(s.prospectId)}
+                  style={{
+                    fontSize: 12, fontWeight: 500, color: '#94A3B8',
+                    background: 'transparent', border: '1px solid #E2E8F0', borderRadius: 6,
+                    padding: '5px 10px', cursor: 'pointer', flexShrink: 0,
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  Ignorar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Board */}
       <div style={styles.boardContainer}>
         <div style={styles.board}>
@@ -413,6 +600,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
               onCardClick={onSelectProspect}
               onAddClick={() => onCreateProspect && onCreateProspect(stage)}
               findCompany={findCompanyForProspect}
+              syncSuggestionMap={syncSuggestionMap}
             />
           ))}
         </div>
@@ -518,6 +706,10 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
         }
+        @keyframes syncPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.5); }
+          50% { box-shadow: 0 0 0 6px rgba(99,102,241,0); }
+        }
         button:focus-visible {
           outline: 2px solid #6366F1;
           outline-offset: 2px;
@@ -533,7 +725,7 @@ function ProspectColumn({
   stage, prospects, loading, isDragOver,
   onDragOver, onDragEnter, onDragLeave, onDrop,
   onCardDragStart, onCardDragEnd, onCardClick, onAddClick,
-  findCompany,
+  findCompany, syncSuggestionMap,
 }: {
   stage: string;
   prospects: any[];
@@ -548,6 +740,7 @@ function ProspectColumn({
   onCardClick?: (prospect: any) => void;
   onAddClick: () => void;
   findCompany: (prospect: any) => any;
+  syncSuggestionMap: Map<string, SyncSuggestion>;
 }) {
   const colColor = (FIGMA_STAGE_COLORS as Record<string, string>)[stage] || '#6366F1';
   const shortLabel = (PROSPECT_STAGE_SHORT as Record<string, string>)[stage] || stage;
@@ -667,6 +860,7 @@ function ProspectColumn({
               onDragEnd={onCardDragEnd}
               onClick={() => onCardClick && onCardClick(prospect)}
               matchedCompany={findCompany ? findCompany(prospect) : null}
+              syncSuggestion={syncSuggestionMap.get(prospect.id) || null}
             />
           ))
         )}
@@ -749,13 +943,14 @@ function TaskPill({ tasks }: { tasks: any[] }) {
 
 // ── KanbanCard Component (Figma design) ──────────────────────────────
 
-function KanbanCard({ prospect, colColor, onDragStart, onDragEnd, onClick, matchedCompany }: {
+function KanbanCard({ prospect, colColor, onDragStart, onDragEnd, onClick, matchedCompany, syncSuggestion }: {
   prospect: any;
   colColor: string;
   onDragStart: (e: React.DragEvent, prospect: any) => void;
   onDragEnd: (e: React.DragEvent) => void;
   onClick: () => void;
   matchedCompany: any;
+  syncSuggestion: SyncSuggestion | null;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const formattedAmount = formatAmount(prospect.amount, prospect.currency);
@@ -851,6 +1046,23 @@ function KanbanCard({ prospect, colColor, onDragStart, onDragEnd, onClick, match
           zIndex: 2,
         }}>
           {pendingTaskCount}
+        </div>
+      )}
+
+      {/* Sync suggestion indicator */}
+      {syncSuggestion && (
+        <div style={{
+          position: 'absolute', top: pendingTaskCount > 0 ? 28 : 8, right: 10,
+          width: 18, height: 18, borderRadius: '50%',
+          background: '#6366F1',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 2,
+          animation: 'syncPulse 2s ease-in-out infinite',
+        }} title={`Sugerencia: mover a ${syncSuggestion.suggestedStage}`}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="3">
+            <polyline points="7 17 17 7"/>
+            <polyline points="7 7 17 7 17 17"/>
+          </svg>
         </div>
       )}
 
