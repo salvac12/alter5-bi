@@ -84,6 +84,10 @@ TOOL_DOMAINS = {
 # Stages that can be advanced to "Reunion"
 ADVANCEABLE_STAGES = {"Lead", "Interesado"}
 
+# Max external domains per event — events with more are likely conferences/webinars
+# Real client meetings have 1-2 external orgs, rarely 3
+MAX_EXTERNAL_DOMAINS = 3
+
 # Map mailbox email -> Airtable "Deal Manager" singleSelect name
 MAILBOX_TO_MANAGER = {
     "salvador.carrillo@alter-5.com": "Salvador Carrillo",
@@ -336,6 +340,7 @@ def main():
     total_events = 0
     total_advanced = 0
     total_created = 0
+    total_skipped = 0
 
     for mb in active_mailboxes:
         email = mb["email"]
@@ -388,10 +393,20 @@ def main():
 
             summary = event.get("summary", "(sin titulo)")
 
+            # Filter: skip events with too many external domains (conferences/webinars)
+            if len(ext_domains) > MAX_EXTERNAL_DOMAINS:
+                print(f"  ⊘ Skipped '{summary}' — {len(ext_domains)} external domains (likely conference)")
+                total_skipped += 1
+                continue
+
+            # Check which domains match existing prospects
+            has_known_prospect = any(domain_index.get(d) for d in ext_domains)
+
             for domain in ext_domains:
                 matching = domain_index.get(domain, [])
 
                 if matching:
+                    # Domain matches an existing prospect — advance if eligible
                     for prospect in matching:
                         pf = prospect.get("fields", {})
                         stage = pf.get("Stage", "")
@@ -408,7 +423,13 @@ def main():
                         else:
                             print(f"  · {pname} already at {stage}, skipping")
                 else:
-                    # No matching prospect — create a new one
+                    # Unknown domain — only create prospect if this looks like
+                    # a real 1:1 or small meeting (not a multi-org event where
+                    # one attendee happens to be a known prospect)
+                    if len(ext_domains) > 2 and has_known_prospect:
+                        # 3 external orgs but one is known → skip the unknowns
+                        continue
+
                     prefix = "[DRY-RUN] " if args.dry_run else ""
                     print(f"  {prefix}+ New prospect from domain '{domain}' — {summary}")
                     ok = create_prospect_from_meeting(domain, email, summary, dry_run=args.dry_run)
@@ -439,6 +460,7 @@ def main():
     print(f"\n{'='*50}")
     print(f"Calendar scan complete:")
     print(f"  Events processed: {total_events}")
+    print(f"  Events skipped (conferences): {total_skipped}")
     print(f"  Prospects advanced to Reunion: {total_advanced}")
     print(f"  New prospects created: {total_created}")
     if args.dry_run:
