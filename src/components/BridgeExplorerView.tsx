@@ -4,8 +4,8 @@ import { fetchSentDomains } from '../utils/campaignApi';
 import { callGemini } from '../utils/gemini';
 // Sender is fixed — Leticia is the Bridge campaign owner
 
-const BRIDGE_API_URL = import.meta.env.VITE_BRIDGE_WEB_APP_URL || '';
-const BRIDGE_API_TOKEN = import.meta.env.VITE_BRIDGE_API_TOKEN || '';
+// Campaign actions routed through /api/campaign-proxy → campaignBackend.gs
+const CAMPAIGN_PROXY_SECRET = import.meta.env.VITE_CAMPAIGN_PROXY_SECRET || '';
 
 // ── Design tokens (same palette as BridgeCampaignView) ──────────────
 const T = {
@@ -145,7 +145,7 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   const [loadingData, setLoadingData] = useState(true);
 
   // Bridge GAS readiness
-  const bridgeReady = !!BRIDGE_API_URL;
+  const bridgeReady = !!CAMPAIGN_PROXY_SECRET;
 
   // LLM ordering
   const [llmOpen, setLlmOpen] = useState(false);
@@ -591,20 +591,23 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
   }
 
   async function bridgeGasCall(action, extra = {}) {
-    if (!BRIDGE_API_URL) throw new Error('VITE_BRIDGE_WEB_APP_URL no configurada');
-    const res = await fetch(BRIDGE_API_URL, {
+    const secret = import.meta.env.VITE_CAMPAIGN_PROXY_SECRET || '';
+    const res = await fetch('/api/campaign-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({ action, token: BRIDGE_API_TOKEN, ...extra }),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-proxy-secret': secret,
+      },
+      body: JSON.stringify({ action, ...extra }),
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    if (!res.ok || data.error) throw new Error(data.error || `Proxy error ${res.status}`);
     return data;
   }
 
   async function handleTestEmail() {
     if (!bridgeReady) {
-      setWizardError('Bridge GAS no configurado. Verifica VITE_BRIDGE_WEB_APP_URL.');
+      setWizardError('Campaign proxy no configurado. Verifica VITE_CAMPAIGN_PROXY_SECRET.');
       return;
     }
     setTestEmailLoading(true);
@@ -625,7 +628,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
 
   async function handlePrepare() {
     if (!bridgeReady) {
-      setWizardError('Bridge GAS no configurado. Verifica VITE_BRIDGE_WEB_APP_URL.');
+      setWizardError('Campaign proxy no configurado. Verifica VITE_CAMPAIGN_PROXY_SECRET.');
       return;
     }
     if (wizardRecipients.length === 0) {
