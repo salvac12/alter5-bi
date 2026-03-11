@@ -78,8 +78,8 @@ def find_targets(all_companies, mode="stuck", min_interactions=10, cutoff_year="
 
 
 def fetch_domain_messages(service, mailbox_email, domain, max_results=50):
-    """Fetch message IDs from a specific domain in a mailbox."""
-    query = f"from:@{domain}"
+    """Fetch message IDs from/to a specific domain in a mailbox."""
+    query = f"from:@{domain} OR to:@{domain}"
     ids = []
     page_token = None
 
@@ -142,24 +142,46 @@ def parse_messages(messages):
     return entries
 
 
+def get_search_domains(domain, company):
+    """Get all domains to search for a company (main + contact email domains)."""
+    domains = {domain}
+    for contact in company.get("contacts", []):
+        email = contact.get("email", "")
+        if "@" in email:
+            contact_domain = email.split("@")[1].lower()
+            if contact_domain != domain:
+                domains.add(contact_domain)
+    return domains
+
+
 def fix_domain(domain, company, gmail_services, dry_run=False):
     """Query Gmail for a domain across all mailboxes and update dated_subjects."""
     all_entries = []
     seen_subjects = set()
+    search_domains = get_search_domains(domain, company)
+
+    if len(search_domains) > 1:
+        extra = search_domains - {domain}
+        print(f"    Dominios de contacto adicionales: {', '.join(extra)}")
 
     for mailbox_email, service in gmail_services.items():
-        # Fetch messages from this domain (newest first, Gmail default order)
-        try:
-            msg_ids = fetch_domain_messages(service, mailbox_email, domain, max_results=50)
-        except Exception as e:
-            print(f"    {mailbox_email}: [ERROR] {e}")
-            continue
+        # Fetch messages for all related domains
+        all_msg_ids = []
+        for search_domain in search_domains:
+            try:
+                msg_ids = fetch_domain_messages(service, mailbox_email, search_domain, max_results=50)
+                all_msg_ids.extend(msg_ids)
+            except Exception as e:
+                print(f"    {mailbox_email}: [ERROR] {search_domain}: {e}")
 
-        if not msg_ids:
+        # Dedup message IDs
+        all_msg_ids = list(dict.fromkeys(all_msg_ids))[:50]
+
+        if not all_msg_ids:
             continue
 
         # Fetch metadata
-        messages = fetch_messages_batch(service, mailbox_email, msg_ids)
+        messages = fetch_messages_batch(service, mailbox_email, all_msg_ids)
         entries = parse_messages(messages)
 
         # Dedup by subject across mailboxes

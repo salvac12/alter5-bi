@@ -3,6 +3,9 @@
     {"email": "salvador.carrillo@alter-5.com", "nombre": "Salvador Carrillo", "id": "salvador_carrillo", "activo": true},
     {"email": "leticia.menendez@alter-5.com", "nombre": "Leticia Menéndez", "id": "leticia_menéndez", "activo": true},
     {"email": "javier.ruiz@alter-5.com", "nombre": "Javier Ruiz", "id": "javier_ruiz", "activo": true},
-    {"email": "miguel.solana@alter-5.com", "nombre": "Miguel Solana", "id": "miguel_solana", "activo": true}
+    {"email": "miguel.solana@alter-5.com", "nombre": "Miguel Solana", "id": "miguel_solana", "activo": true},
+    {"email": "carlos.almodovar@alter-5.com", "nombre": "Carlos Almodóvar", "id": "carlos_almodóvar", "activo": true},
+    {"email": "gonzalo.degracia@alter-5.com", "nombre": "Gonzalo de Gracia", "id": "gonzalo_de_gracia", "activo": true},
+    {"email": "rafael.nevado@alter-5.com", "nombre": "Rafael Nevado", "id": "rafael_nevado", "activo": true}
   ]
 }
