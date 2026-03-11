@@ -495,20 +495,18 @@ export default function App() {
 
   // ── View change handler (also handles Bridge sub-views) ──
   const handleViewChange = (view: ViewId) => {
-    // Bridge campaigns is a sub-view of campanas in the SideNav
+    // "Activas" shows campaign listing (user clicks "Ver detalles" to enter dashboard)
     if (view === 'bridge-campaigns') {
       setActiveView('campanas');
-      // Simulate selecting a bridge campaign
-      setSelectedCampaignId('bridge');
-      setSelectedCampaignName('Bridge Energy Program');
+      setSelectedCampaignId(null);
+      setSelectedCampaignName(null);
+      loadCampaigns();
       return;
     }
     setActiveView(view);
-    // Reset campaign sub-navigation when leaving campanas
-    if (view !== 'campanas') {
-      setSelectedCampaignId(null);
-      setSelectedCampaignName(null);
-    }
+    // Always reset campaign sub-navigation so listing shows instead of stale dashboard
+    setSelectedCampaignId(null);
+    setSelectedCampaignName(null);
   };
 
   return (
