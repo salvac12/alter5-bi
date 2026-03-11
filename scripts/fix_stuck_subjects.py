@@ -199,8 +199,8 @@ def main():
     parser.add_argument("--stuck", action="store_true", help="Fix only stuck (30 old entries)")
     parser.add_argument("--empty", action="store_true", help="Fix only empty dated_subjects")
     parser.add_argument("--all", action="store_true", help="Fix both stuck and empty")
-    parser.add_argument("--min", type=int, default=10, dest="min_interactions",
-                        help="Min interactions to bother fixing (default: 10)")
+    parser.add_argument("--min", type=int, default=1, dest="min_interactions",
+                        help="Min interactions to bother fixing (default: 1)")
     args = parser.parse_args()
 
     # Default mode
