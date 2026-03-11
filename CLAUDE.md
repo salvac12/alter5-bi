@@ -4,6 +4,10 @@
 Dashboard de inteligencia comercial para Alter5 (financiacion energias renovables).
 React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 
+## Deploy
+- Cuando termines una tarea, siempre haz merge a main y push a origin
+- Vercel despliega automáticamente desde main
+
 ## Commands
 - `npm run dev` — dev server (tiene CSP eval issues, usar preview)
 - `npm run preview` — build + preview (recomendado para testing)
