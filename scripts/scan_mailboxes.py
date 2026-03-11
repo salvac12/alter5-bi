@@ -314,7 +314,7 @@ def merge_all_mailboxes(results_list):
             # Merge dated_subjects (dedup by subject text)
             existing_ds = {ds[1] for ds in co["dated_subjects"]}
             for ds in data["dated_subjects"]:
-                if ds[1] not in existing_ds and len(co["dated_subjects"]) < 30:
+                if ds[1] not in existing_ds:
                     co["dated_subjects"].append(ds)
                     existing_ds.add(ds[1])
 
