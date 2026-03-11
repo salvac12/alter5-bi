@@ -40,6 +40,7 @@ PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 CONFIG_DIR = os.path.join(PROJECT_DIR, "config")
 MAILBOXES_FILE = os.path.join(CONFIG_DIR, "mailboxes.json")
 SCAN_STATE_FILE = os.path.join(CONFIG_DIR, "scan_state.json")
+COMPANIES_FULL_FILE = os.path.join(PROJECT_DIR, "src", "data", "companies_full.json")
 
 # ---------------------------------------------------------------------------
 # Airtable config
@@ -93,6 +94,11 @@ ADVANCEABLE_STAGES = {"Lead", "Interesado"}
 # Max external domains per event — events with more are likely conferences/webinars
 # Real client meetings have 1-2 external orgs, rarely 3
 MAX_EXTERNAL_DOMAINS = 3
+
+# Only create new prospects for companies in these CRM groups (enrichment.grp)
+# "Capital Seeker" = originacion (developers, IPPs, utilities que buscan deuda/equity)
+# Domains not in CRM are also allowed (unknown company with a real meeting)
+PROSPECT_ELIGIBLE_GROUPS = {"Capital Seeker"}
 
 # Map mailbox email -> Airtable "Deal Manager" singleSelect name
 MAILBOX_TO_MANAGER = {
@@ -269,10 +275,10 @@ def patch_prospect_stage(record_id, dry_run=False):
     return result is not None
 
 
-def create_prospect_from_meeting(domain, employee_email, event_summary, dry_run=False):
+def create_prospect_from_meeting(domain, employee_email, event_summary, company_name=None, dry_run=False):
     """Create a new prospect in stage 'Reunion' from a calendar meeting."""
     manager = MAILBOX_TO_MANAGER.get(employee_email, "")
-    name = domain.split(".")[0].capitalize()
+    name = company_name or domain.split(".")[0].capitalize()
     if event_summary:
         # Use event summary as context
         context = f"Reunion detectada automaticamente desde calendario: {event_summary}"
@@ -333,6 +339,15 @@ def main():
     # Load scan state
     state = load_scan_state()
 
+    # Load CRM companies for classification filtering
+    crm_companies = {}
+    if os.path.exists(COMPANIES_FULL_FILE):
+        with open(COMPANIES_FULL_FILE, "r", encoding="utf-8") as f:
+            crm_companies = json.load(f).get("companies", {})
+        print(f"CRM loaded: {len(crm_companies)} companies")
+    else:
+        print("WARNING: companies_full.json not found — CRM filter disabled")
+
     # Fetch all prospects and build domain index
     print("Fetching prospects from Airtable...")
     prospects = fetch_all_prospects()
@@ -347,6 +362,7 @@ def main():
     total_advanced = 0
     total_created = 0
     total_skipped = 0
+    total_filtered_crm = 0
 
     for mb in active_mailboxes:
         email = mb["email"]
@@ -436,9 +452,25 @@ def main():
                         # 3 external orgs but one is known → skip the unknowns
                         continue
 
+                    # Check CRM classification: only create prospects for
+                    # originacion companies (Capital Seekers) or unknown domains
+                    crm_entry = crm_companies.get(domain)
+                    if crm_entry:
+                        grp = crm_entry.get("enrichment", {}).get("grp", "")
+                        if grp and grp not in PROSPECT_ELIGIBLE_GROUPS:
+                            crm_name = crm_entry.get("name", domain)
+                            print(f"  ⊘ Skipped '{crm_name}' ({domain}) — CRM group: {grp} (not originacion)")
+                            total_filtered_crm += 1
+                            continue
+
                     prefix = "[DRY-RUN] " if args.dry_run else ""
+                    crm_name = crm_entry.get("name", domain.split(".")[0].capitalize()) if crm_entry else None
                     print(f"  {prefix}+ New prospect from domain '{domain}' — {summary}")
-                    ok = create_prospect_from_meeting(domain, email, summary, dry_run=args.dry_run)
+                    ok = create_prospect_from_meeting(
+                        domain, email, summary,
+                        company_name=crm_name,
+                        dry_run=args.dry_run,
+                    )
                     if ok:
                         total_created += 1
                         # Add to index so we don't create duplicates within this run
@@ -467,6 +499,7 @@ def main():
     print(f"Calendar scan complete:")
     print(f"  Events processed: {total_events}")
     print(f"  Events skipped (conferences): {total_skipped}")
+    print(f"  Domains skipped (not originacion): {total_filtered_crm}")
     print(f"  Prospects advanced to Reunion: {total_advanced}")
     print(f"  New prospects created: {total_created}")
     if args.dry_run:
