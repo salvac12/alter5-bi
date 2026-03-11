@@ -48,6 +48,29 @@ sys.path.insert(0, SCRIPT_DIR)
 
 from import_mailbox import get_data_paths
 
+# Load .env file if present (so we don't need `export` before running)
+def _load_dotenv():
+    # Walk up from PROJECT_DIR to find .env (handles worktrees)
+    d = PROJECT_DIR
+    candidates = []
+    for _ in range(6):
+        candidates.append(os.path.join(d, ".env"))
+        d = os.path.dirname(d)
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            with open(candidate) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, val = line.partition("=")
+                    key, val = key.strip(), val.strip().strip('"').strip("'")
+                    if key and key not in os.environ:
+                        os.environ[key] = val
+            break
+
+_load_dotenv()
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -66,7 +89,7 @@ except ImportError:
         SSL_CTX.verify_mode = ssl.CERT_NONE
 
 # Airtable config
-AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", "")
+AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT", os.environ.get("VITE_AIRTABLE_PAT", ""))
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "appVu3TvSZ1E4tj0J")
 VERIFIED_TABLE_NAME = "Verified-Companies"
 AIRTABLE_API = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{urllib.request.quote(VERIFIED_TABLE_NAME)}"
@@ -199,7 +222,7 @@ Responde SOLO con JSON valido, un objeto donde cada clave es el dominio de la em
 IMPORTANTE: Solo JSON puro, sin markdown ni explicaciones."""
 
     try:
-        api_key = os.environ.get("GEMINI_API_KEY", "")
+        api_key = os.environ.get("GEMINI_API_KEY", os.environ.get("VITE_GEMINI_API_KEY", ""))
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
 
         payload = json.dumps({
@@ -321,9 +344,9 @@ def main():
         return
 
     # Check required env vars
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("VITE_GEMINI_API_KEY")
     if not api_key:
-        print("ERROR: GEMINI_API_KEY environment variable not set")
+        print("ERROR: GEMINI_API_KEY / VITE_GEMINI_API_KEY environment variable not set")
         sys.exit(1)
 
     if not AIRTABLE_PAT and not dry_run:
