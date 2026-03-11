@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      fix_stuck:
+        description: 'Fix companies with stuck old dated_subjects'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -51,6 +56,12 @@ jobs:
             REENRICH_ARG="--reenrich"
           fi
           python scripts/scan_mailboxes.py $DAYS_ARG $REENRICH_ARG
+
+      - name: Fix stuck dated_subjects
+        if: ${{ github.event.inputs.fix_stuck == 'true' }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/fix_stuck_subjects.py
 
       - name: Sync Airtable opportunities
         if: ${{ env.AIRTABLE_PAT != '' }}
