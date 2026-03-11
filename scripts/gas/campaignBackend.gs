@@ -67,6 +67,8 @@ function doPost(e) {
       'scheduleFollowUp': handleScheduleFollowUp,
       'cancelFollowUp': handleCancelFollowUp,
       'sendTestEmail': handleSendTestEmail,
+      'createDrafts': handleCreateDrafts,
+      'sendDrafts': handleSendDrafts,
     };
 
     if (!handlers[action]) {
@@ -634,4 +636,169 @@ function handleSendTestEmail(payload) {
   } catch (err) {
     return { error: 'Failed to send test: ' + err.message };
   }
+}
+
+/**
+ * createDrafts — Create Gmail drafts for all pending recipients (instead of sending directly).
+ * Returns { drafts: N, campaignId }
+ */
+function handleCreateDrafts(payload) {
+  var campaignId = payload.campaignId;
+  if (!campaignId) return { error: 'Missing campaignId' };
+
+  var campSheet = getOrCreateSheet(SHEET_CAMPAIGNS, CAMPAIGN_HEADERS);
+  var campRow = findRowIndex(campSheet, 0, campaignId);
+  if (campRow === -1) return { error: 'Campaign not found' };
+
+  // Read campaign data
+  var campaigns = readAll(SHEET_CAMPAIGNS, CAMPAIGN_HEADERS);
+  var campaign = null;
+  for (var i = 0; i < campaigns.length; i++) {
+    if (campaigns[i].id === campaignId) { campaign = campaigns[i]; break; }
+  }
+  if (!campaign) return { error: 'Campaign not found' };
+
+  // Read recipients
+  var recSheet = getOrCreateSheet(SHEET_RECIPIENTS, RECIPIENT_HEADERS);
+  var allData = recSheet.getDataRange().getValues();
+  var hdr = allData[0];
+  var campaignIdCol = hdr.indexOf('campaignId');
+  var statusCol = hdr.indexOf('status');
+  var emailCol = hdr.indexOf('email');
+  var nameCol = hdr.indexOf('name');
+  var orgCol = hdr.indexOf('organization');
+  var variantCol = hdr.indexOf('variant');
+  var messageIdCol = hdr.indexOf('messageId');
+
+  var useAB = campaign.subjectB && campaign.bodyB;
+  var abPercent = Number(campaign.abTestPercent) || 50;
+  var draftCount = 0;
+  var errors = [];
+
+  for (var r = 1; r < allData.length; r++) {
+    if (String(allData[r][campaignIdCol]) !== campaignId) continue;
+    if (allData[r][statusCol] !== 'pending') continue;
+
+    var email = String(allData[r][emailCol]);
+    var recipientName = String(allData[r][nameCol]);
+    var org = String(allData[r][orgCol]);
+
+    // Assign A/B variant
+    var variant = 'A';
+    if (useAB) {
+      variant = (Math.random() * 100 < abPercent) ? 'A' : 'B';
+    }
+
+    var subject = (variant === 'B') ? campaign.subjectB : campaign.subjectA;
+    var body = (variant === 'B') ? campaign.bodyB : campaign.bodyA;
+
+    // Replace placeholders
+    subject = replacePlaceholders(subject, recipientName, org);
+    body = replacePlaceholders(body, recipientName, org);
+
+    try {
+      var draft = GmailApp.createDraft(email, subject, '', {
+        htmlBody: body,
+        from: campaign.senderEmail,
+        name: campaign.senderName,
+      });
+
+      // Save draft ID in messageId field, update status to draft_ready
+      recSheet.getRange(r + 1, messageIdCol + 1).setValue(draft.getId());
+      recSheet.getRange(r + 1, statusCol + 1).setValue('draft_ready');
+      recSheet.getRange(r + 1, variantCol + 1).setValue(variant);
+      draftCount++;
+
+    } catch (err) {
+      recSheet.getRange(r + 1, statusCol + 1).setValue('error');
+      errors.push({ email: email, error: err.message });
+    }
+  }
+
+  // Update campaign status
+  updateCell(campSheet, campRow, CAMPAIGN_HEADERS, 'status', 'drafts_created');
+
+  return { drafts: draftCount, errors: errors, campaignId: campaignId };
+}
+
+/**
+ * sendDrafts — Send all draft_ready Gmail drafts for a campaign.
+ * Returns { sent: N, errors: [] }
+ */
+function handleSendDrafts(payload) {
+  var campaignId = payload.campaignId;
+  if (!campaignId) return { error: 'Missing campaignId' };
+
+  var campSheet = getOrCreateSheet(SHEET_CAMPAIGNS, CAMPAIGN_HEADERS);
+  var campRow = findRowIndex(campSheet, 0, campaignId);
+  if (campRow === -1) return { error: 'Campaign not found' };
+
+  // Read campaign for counters
+  var campaigns = readAll(SHEET_CAMPAIGNS, CAMPAIGN_HEADERS);
+  var campaign = null;
+  for (var i = 0; i < campaigns.length; i++) {
+    if (campaigns[i].id === campaignId) { campaign = campaigns[i]; break; }
+  }
+  if (!campaign) return { error: 'Campaign not found' };
+
+  // Read recipients
+  var recSheet = getOrCreateSheet(SHEET_RECIPIENTS, RECIPIENT_HEADERS);
+  var allData = recSheet.getDataRange().getValues();
+  var hdr = allData[0];
+  var campaignIdCol = hdr.indexOf('campaignId');
+  var statusCol = hdr.indexOf('status');
+  var emailCol = hdr.indexOf('email');
+  var messageIdCol = hdr.indexOf('messageId');
+  var sentTimeCol = hdr.indexOf('sentTime');
+
+  var sentCount = 0;
+  var errors = [];
+
+  for (var r = 1; r < allData.length; r++) {
+    if (String(allData[r][campaignIdCol]) !== campaignId) continue;
+    if (allData[r][statusCol] !== 'draft_ready') continue;
+
+    var email = String(allData[r][emailCol]);
+    var draftId = String(allData[r][messageIdCol]);
+
+    try {
+      var draft = GmailApp.getDraft(draftId);
+      draft.send();
+
+      recSheet.getRange(r + 1, statusCol + 1).setValue('sent');
+      recSheet.getRange(r + 1, sentTimeCol + 1).setValue(now());
+      sentCount++;
+
+      // Rate limit: ~1 email per second
+      Utilities.sleep(1000);
+
+    } catch (err) {
+      recSheet.getRange(r + 1, statusCol + 1).setValue('error');
+      errors.push({ email: email, error: err.message });
+    }
+  }
+
+  // Update campaign counters and status
+  updateCell(campSheet, campRow, CAMPAIGN_HEADERS, 'startedTime', now());
+  updateCell(campSheet, campRow, CAMPAIGN_HEADERS, 'totalSent',
+    Number(campaign.totalSent || 0) + sentCount);
+
+  // Check if any draft_ready remain
+  var updatedData = recSheet.getDataRange().getValues();
+  var draftLeft = 0;
+  for (var r2 = 1; r2 < updatedData.length; r2++) {
+    if (String(updatedData[r2][campaignIdCol]) === campaignId &&
+        updatedData[r2][statusCol] === 'draft_ready') {
+      draftLeft++;
+    }
+  }
+
+  if (draftLeft === 0) {
+    updateCell(campSheet, campRow, CAMPAIGN_HEADERS, 'status', 'completed');
+    updateCell(campSheet, campRow, CAMPAIGN_HEADERS, 'completedTime', now());
+  } else {
+    updateCell(campSheet, campRow, CAMPAIGN_HEADERS, 'status', 'active');
+  }
+
+  return { sent: sentCount, errors: errors, draftLeft: draftLeft };
 }
