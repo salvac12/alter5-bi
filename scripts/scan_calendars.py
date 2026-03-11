@@ -17,9 +17,10 @@
     AIRTABLE_PAT                 — Personal Access Token
 
   Uso:
-    python scripts/scan_calendars.py              # scan desde last_scan
+    python scripts/scan_calendars.py              # scan desde last_scan + check docs
     python scripts/scan_calendars.py --dry-run    # log sin PATCH
     python scripts/scan_calendars.py --days 7     # override: ultimos 7 dias
+    python scripts/scan_calendars.py --check-docs # solo verificar docs (sin calendar scan)
 ===============================================================
 """
 
@@ -49,6 +50,12 @@ AIRTABLE_PAT = os.environ.get("AIRTABLE_PAT") or os.environ.get("VITE_AIRTABLE_P
 AIRTABLE_BASE_ID = "appVu3TvSZ1E4tj0J"
 PROSPECTS_TABLE = "BETA-Prospects"
 PROSPECTS_API = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{urllib.parse.quote(PROSPECTS_TABLE)}"
+
+# Airtable table IDs for documentation verification
+STAKEHOLDERS_TABLE_ID = "tbl47AWmhYAXerbWz"
+FINANCIALS_TABLE_ID = "tblYiuZOi2VGRXqgA"
+OPPORTUNITIES_TABLE_ID = "tblMA730dbXi0Qgqf"
+NDA_TABLE_ID = "tbl2igY01yIRU5fEJ"
 
 # SSL context
 try:
@@ -308,6 +315,239 @@ def create_prospect_from_meeting(domain, employee_email, event_summary, company_
 
 
 # ---------------------------------------------------------------------------
+# Documentation verification — check Airtable for uploaded docs
+# ---------------------------------------------------------------------------
+
+def fetch_all_records(table_id):
+    """Fetch all records from an Airtable table (with pagination)."""
+    records = []
+    offset = None
+    base_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{table_id}"
+    while True:
+        url = base_url + (f"?offset={offset}" if offset else "")
+        data = airtable_request(url)
+        if not data:
+            break
+        records.extend(data.get("records", []))
+        offset = data.get("offset")
+        if not offset:
+            break
+    return records
+
+
+def load_airtable_docs_index():
+    """Load Stakeholders, Financials, Opportunities, NDAs and build lookup indexes.
+
+    Returns a dict with:
+      companies_by_name: {lowercase_name: record}
+      companies_by_id: {record_id: record}
+      financials_by_company: {company_record_id: [records]}
+      opportunities_by_company: {company_record_id: [records]}
+      ndas_by_id: {record_id: record}
+    """
+    print("Loading Airtable documentation tables...")
+
+    # Stakeholders_Companies
+    companies = fetch_all_records(STAKEHOLDERS_TABLE_ID)
+    companies_by_name = {}
+    companies_by_id = {}
+    for r in companies:
+        f = r.get("fields", {})
+        name = (f.get("Company Name") or "").strip().lower()
+        if name:
+            companies_by_name[name] = r
+        companies_by_id[r["id"]] = r
+    print(f"  Stakeholders: {len(companies)} companies")
+
+    # Financials
+    financials = fetch_all_records(FINANCIALS_TABLE_ID)
+    financials_by_company = {}
+    for r in financials:
+        f = r.get("fields", {})
+        company_links = f.get("Company", [])
+        for cid in (company_links if isinstance(company_links, list) else []):
+            financials_by_company.setdefault(cid, []).append(r)
+    print(f"  Financials: {len(financials)} records")
+
+    # Opportunities
+    opportunities = fetch_all_records(OPPORTUNITIES_TABLE_ID)
+    opportunities_by_company = {}
+    for r in opportunities:
+        f = r.get("fields", {})
+        if f.get("Record Status") != "Active":
+            continue
+        seekers = f.get("Company Seeking Capital", [])
+        for cid in (seekers if isinstance(seekers, list) else []):
+            opportunities_by_company.setdefault(cid, []).append(r)
+    print(f"  Opportunities: {len(opportunities)} records")
+
+    return {
+        "companies_by_name": companies_by_name,
+        "companies_by_id": companies_by_id,
+        "financials_by_company": financials_by_company,
+        "opportunities_by_company": opportunities_by_company,
+    }
+
+
+def check_documentation_level(prospect, docs_index):
+    """Check Airtable documentation for a prospect.
+
+    Returns: ("full", details) | ("partial", details) | ("none", details)
+    """
+    pf = prospect.get("fields", {})
+    prospect_name = (pf.get("Prospect Name") or "").strip().lower()
+
+    # Find matching company in Stakeholders
+    company = docs_index["companies_by_name"].get(prospect_name)
+
+    # Also try matching by contact email domain
+    if not company:
+        contact_email = pf.get("Contact Email", "")
+        if contact_email and "@" in contact_email:
+            domain = contact_email.split("@")[1].lower().split(".")[0]
+            for name, rec in docs_index["companies_by_name"].items():
+                if domain in name or name in domain:
+                    company = rec
+                    break
+
+    # Also try partial name match
+    if not company and len(prospect_name) >= 4:
+        for name, rec in docs_index["companies_by_name"].items():
+            if prospect_name in name or name in prospect_name:
+                company = rec
+                break
+
+    if not company:
+        return "none", {"reason": "Company not found in Stakeholders"}
+
+    cf = company.get("fields", {})
+    company_id = company["id"]
+    company_name = cf.get("Company Name", "?")
+    checks = {}
+
+    # Check 1: NDA
+    nda_links = cf.get("Link: NDA", [])
+    nda_statuses = cf.get("NDA Status (from Link: NDA)", [])
+    has_nda = bool(nda_links) and any(
+        s in ("Active", "Signed") for s in (nda_statuses if isinstance(nda_statuses, list) else [])
+    )
+    checks["nda"] = has_nda
+
+    # Check 2: Company basic info (Legal Name + Tax ID)
+    has_legal = bool(cf.get("Company Legal Name"))
+    has_tax = bool(cf.get("Tax ID"))
+    checks["company_info"] = has_legal and has_tax
+
+    # Check 3: Financials
+    fin_records = docs_index["financials_by_company"].get(company_id, [])
+    has_financials = len(fin_records) > 0
+    checks["financials"] = has_financials
+
+    # Check 4: Opportunity with attachments or documentation folder
+    opp_records = docs_index["opportunities_by_company"].get(company_id, [])
+    has_opportunity = False
+    has_opp_docs = False
+    for opp in opp_records:
+        of = opp.get("fields", {})
+        has_opportunity = True
+        attachments = of.get("Attachments", [])
+        doc_folder = of.get("Documentation Folder LInk", "")
+        if attachments or doc_folder:
+            has_opp_docs = True
+            break
+    checks["opportunity"] = has_opportunity
+    checks["opp_docs"] = has_opp_docs
+
+    # Determine level
+    all_complete = has_nda and checks["company_info"] and has_financials and has_opp_docs
+    has_something = has_nda or checks["company_info"] or has_financials or has_opportunity
+
+    detail = {
+        "company": company_name,
+        "nda": has_nda,
+        "company_info": checks["company_info"],
+        "financials": has_financials,
+        "opportunity": has_opportunity,
+        "opp_docs": has_opp_docs,
+    }
+
+    if all_complete:
+        return "full", detail
+    elif has_something:
+        return "partial", detail
+    else:
+        return "none", detail
+
+
+def compute_stage_from_docs(doc_level, current_stage):
+    """Determine what stage a prospect should be based on documentation level.
+
+    Rules:
+      - "full" docs → "Listo para Term-Sheet"
+      - "partial" docs → "Documentacion Pendiente" (min)
+      - "none" docs → max "Reunion"
+    Never downgrades past certain thresholds (e.g. won't go from Reunion to Lead).
+    """
+    STAGE_ORDER = {
+        "Lead": 0,
+        "Interesado": 1,
+        "Reunion": 2,
+        "Documentacion Pendiente": 3,
+        "Listo para Term-Sheet": 4,
+    }
+    current_idx = STAGE_ORDER.get(current_stage, 0)
+
+    if doc_level == "full":
+        return "Listo para Term-Sheet"
+    elif doc_level == "partial":
+        # Downgrade from Term-Sheet if docs aren't full
+        if current_idx > STAGE_ORDER["Documentacion Pendiente"]:
+            return "Documentacion Pendiente"
+        # Advance from Reunion to Doc Pendiente (had meeting + has some docs)
+        if current_idx == STAGE_ORDER["Reunion"]:
+            return "Documentacion Pendiente"
+        # Don't advance Lead/Interesado just because docs exist (no meeting yet)
+        return current_stage
+    else:
+        # No docs — cap at Reunion
+        if current_idx > STAGE_ORDER["Reunion"]:
+            return "Reunion"  # downgrade: was past Reunion without any docs
+        return current_stage
+
+
+def review_all_prospect_stages(prospects, docs_index, dry_run=False):
+    """Review all prospects and adjust stages based on actual documentation."""
+    print(f"\n{'='*50}")
+    print("Reviewing prospect stages vs documentation...")
+    adjusted = 0
+
+    for prospect in prospects:
+        pf = prospect.get("fields", {})
+        name = pf.get("Prospect Name", "?")
+        current_stage = pf.get("Stage", "Lead")
+
+        doc_level, detail = check_documentation_level(prospect, docs_index)
+        correct_stage = compute_stage_from_docs(doc_level, current_stage)
+
+        if correct_stage != current_stage:
+            prefix = "[DRY-RUN] " if dry_run else ""
+            checks_str = " ".join(
+                f"{'✓' if v else '✗'}{k}" for k, v in detail.items() if k != "company"
+            )
+            print(f"  {prefix}⇄ {name}: {current_stage} → {correct_stage} (docs={doc_level}, {checks_str})")
+
+            if not dry_run:
+                url = f"{PROSPECTS_API}/{prospect['id']}"
+                airtable_request(url, method="PATCH", data={"fields": {"Stage": correct_stage}})
+            adjusted += 1
+
+    print(f"  Stages adjusted: {adjusted}")
+    if dry_run:
+        print("  (DRY RUN — no changes made)")
+    return adjusted
+
+
+# ---------------------------------------------------------------------------
 # Gemini smart filter — analyze email context for capital-seeking intent
 # ---------------------------------------------------------------------------
 _gemini_cache = {}  # domain -> bool (avoid re-asking for same domain across employees)
@@ -430,6 +670,7 @@ def main():
     parser = argparse.ArgumentParser(description="Scan Google Calendars → advance Prospects")
     parser.add_argument("--dry-run", action="store_true", help="Log matches without patching Airtable")
     parser.add_argument("--days", type=int, default=None, help="Override: scan last N days instead of since last_scan")
+    parser.add_argument("--check-docs", action="store_true", help="Review all prospect stages vs actual Airtable documentation")
     args = parser.parse_args()
 
     if not AIRTABLE_PAT:
@@ -616,6 +857,16 @@ def main():
     print(f"  New prospects created: {total_created}")
     if args.dry_run:
         print("  (DRY RUN — no changes made to Airtable)")
+
+    # --- Documentation verification pass ---
+    # Always run after calendar scan (or standalone with --check-docs)
+    if args.check_docs or True:  # always run for now
+        docs_index = load_airtable_docs_index()
+        # Re-fetch prospects to get latest stages (including those just advanced)
+        if total_advanced > 0 or total_created > 0:
+            print("\nRe-fetching prospects after calendar updates...")
+            prospects = fetch_all_prospects()
+        review_all_prospect_stages(prospects, docs_index, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
