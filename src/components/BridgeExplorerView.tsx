@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { fetchCandidateTargets, fetchAllBridgeTargets, upsertCandidateTarget } from '../utils/airtableCandidates';
 import { fetchSentDomains } from '../utils/campaignApi';
 import { callGemini } from '../utils/gemini';
-import { getSenders } from '../utils/senderConfig';
+// Sender is fixed — Leticia is the Bridge campaign owner
 
 const BRIDGE_API_URL = import.meta.env.VITE_BRIDGE_WEB_APP_URL || '';
 const BRIDGE_API_TOKEN = import.meta.env.VITE_BRIDGE_API_TOKEN || '';
@@ -136,7 +136,7 @@ function Toast({ msg, onClose }) {
 
 // ── Main Component ────────────────────────────────────────────────────
 
-export default function BridgeExplorerView({ allCompanies, campaignRef, previousTargets = {}, bridgeContacts = [], currentUser, onBack }) {
+export default function BridgeExplorerView({ allCompanies, campaignRef, previousTargets = {}, bridgeContacts = [], campaignMetrics = null, currentUser, onBack }) {
   // Data state
   const [trackingDomains, setTrackingDomains] = useState(new Set());
   const [allSentDomains, setAllSentDomains] = useState(new Set()); // domains from ALL Bridge targets (approved/sent)
@@ -176,12 +176,8 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   // Send wizard
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
-  // Step 2: subject
-  const [subjectMode, setSubjectMode] = useState('existing'); // 'existing' | 'new'
-  const [customSubject, setCustomSubject] = useState('');
-  // Step 3: sender
-  const [senders, setSenders] = useState([]);
-  const [selectedSender, setSelectedSender] = useState(null);
+  // Step 2: variant selection
+  const [selectedVariant, setSelectedVariant] = useState('A');
   // Step 3: wizard recipients (editable list)
   const [wizardRecipients, setWizardRecipients] = useState([]);
   // Step 3: action states
@@ -189,8 +185,12 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   const [testEmailLoading, setTestEmailLoading] = useState(false);
   const [preparingLoading, setPreparingLoading] = useState(false);
   const [preparedOk, setPreparedOk] = useState(false);
+  const [sentOk, setSentOk] = useState(false);
+  const [sendingDraftsLoading, setSendingDraftsLoading] = useState(false);
   const [launchResult, setLaunchResult] = useState(null);
+  const [sendResult, setSendResult] = useState(null);
   const [confirmLaunch, setConfirmLaunch] = useState(false);
+  const [confirmSendDrafts, setConfirmSendDrafts] = useState(false);
   const [wizardError, setWizardError] = useState('');
 
   const showToast = useCallback(msg => setToast(msg), []);
@@ -228,8 +228,6 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   // ── Load data on mount ─────────────────────────────────────────────
   useEffect(() => {
     loadData();
-    // Load senders for wizard
-    setSenders(getSenders());
   }, []);
 
   async function loadData() {
@@ -575,34 +573,32 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     const recipients = buildWizardRecipients();
     setWizardRecipients(recipients);
     setWizardStep(1);
-    setSubjectMode('existing');
-    setCustomSubject('');
-    setSelectedSender(senders[0] || null);
+    // Default to winner variant, or A if no clear winner
+    const mA = campaignMetrics?.A || {};
+    const mB = campaignMetrics?.B || {};
+    const defaultVariant = (mB.tasaApertura || 0) > (mA.tasaApertura || 0) ? 'B' : 'A';
+    setSelectedVariant(defaultVariant);
     setTestEmailSent(false);
     setPreparedOk(false);
+    setSentOk(false);
+    setSendingDraftsLoading(false);
     setLaunchResult(null);
+    setSendResult(null);
     setConfirmLaunch(false);
+    setConfirmSendDrafts(false);
     setWizardError('');
     setShowWizard(true);
   }
 
-  function getSubjectForWizard() {
-    if (subjectMode === 'new') return customSubject;
-    return customSubject || 'Bridge Debt Energy — Alter5';
-  }
-
-  async function bridgeGasSend(contacts) {
+  async function bridgeGasCall(action, extra = {}) {
     if (!BRIDGE_API_URL) throw new Error('VITE_BRIDGE_WEB_APP_URL no configurada');
-    const res = await fetch(BRIDGE_API_URL + '?action=sendFollowUpBatch', {
+    const res = await fetch(BRIDGE_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({
-        emails: contacts,
-        token: BRIDGE_API_TOKEN,
-      }),
+      body: JSON.stringify({ action, token: BRIDGE_API_TOKEN, ...extra }),
     });
     const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'Error del servidor Bridge GAS');
+    if (data.error) throw new Error(data.error);
     return data;
   }
 
@@ -614,14 +610,12 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     setTestEmailLoading(true);
     setWizardError('');
     try {
-      const subject = getSubjectForWizard();
-      await bridgeGasSend([{
-        email: 'salvador.carrillo@alter-5.com',
-        asunto: subject ? `[TEST] ${subject}` : '[TEST] Bridge Debt Energy',
-        cuerpoHtml: `<p>Email de prueba del wizard Bridge Explorer.</p><p>Asunto: ${subject || '(sin asunto)'}</p><p>Destinatarios: ${wizardRecipients.length}</p>`,
-      }]);
+      await bridgeGasCall('sendTestEmail', {
+        campaignId: campaignRef,
+        testEmail: 'salvador.carrillo@alter-5.com',
+      });
       setTestEmailSent(true);
-      showToast('Prueba enviada a salvador.carrillo@alter-5.com');
+      showToast(`Prueba enviada a salvador.carrillo@alter-5.com`);
     } catch (err) {
       setWizardError(`Error al enviar prueba: ${err.message}`);
     } finally {
@@ -641,17 +635,23 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     setPreparingLoading(true);
     setWizardError('');
     try {
-      const subject = getSubjectForWizard();
-      const emailPayload = wizardRecipients.map(r => ({
+      const recipients = wizardRecipients.map(r => ({
         email: r.email,
-        asunto: subject,
-        nombre: r.name || '',
-        apellido: r.lastName || '',
-        organizacion: r.organization || '',
-        cargo: r.role || '',
+        name: r.name || '',
+        lastName: r.lastName || '',
+        organization: r.organization || '',
       }));
 
-      const result = await bridgeGasSend(emailPayload);
+      // 1. Add recipients to campaign
+      await bridgeGasCall('addRecipients', {
+        campaignId: campaignRef,
+        recipients,
+      });
+
+      // 2. Create drafts in Gmail (instead of sending directly)
+      const draftResult = await bridgeGasCall('createDrafts', {
+        campaignId: campaignRef,
+      });
 
       // Mark all selected companies as 'sent' in CampaignTargets
       const markPromises = [...selectedForSend].map(async domain => {
@@ -682,15 +682,29 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
         return next;
       });
 
-      const sent = result.totalEnviados || wizardRecipients.length;
-      const errors = result.totalErrores || 0;
+      const drafts = draftResult.drafts || wizardRecipients.length;
       setPreparedOk(true);
-      setLaunchResult({ sent, errors: errors > 0 ? Array(errors).fill({ email: '?', error: 'error' }) : [] });
-      showToast(`✅ ${sent} emails enviados${errors > 0 ? `, ${errors} errores` : ''}`);
+      setLaunchResult({ drafts, errors: draftResult.errors || [] });
+      showToast(`✅ ${drafts} borradores creados en Gmail de Leticia`);
     } catch (err) {
       setWizardError(`Error al enviar: ${err.message}`);
     } finally {
       setPreparingLoading(false);
+    }
+  }
+
+  async function handleSendDrafts() {
+    setSendingDraftsLoading(true);
+    setWizardError('');
+    try {
+      const result = await bridgeGasCall('sendDrafts', { campaignId: campaignRef });
+      setSentOk(true);
+      setSendResult({ sent: result.sent || 0, errors: result.errors || [] });
+      showToast(`✅ ${result.sent || 0} emails enviados desde borradores`);
+    } catch (err) {
+      setWizardError(`Error al enviar borradores: ${err.message}`);
+    } finally {
+      setSendingDraftsLoading(false);
     }
   }
 
@@ -951,9 +965,6 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
   function SendWizard() {
     if (!showWizard) return null;
 
-    const subject = getSubjectForWizard();
-    const sender = selectedSender || senders[0] || { name: 'Leticia Menendez', email: 'leticia@alter-5.com' };
-
     return (
       <div style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000,
@@ -971,7 +982,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
           }}>
             <div>
               <div style={{ fontFamily: T.sans, fontWeight: 700, fontSize: 16, color: T.title }}>
-                Preparar envío
+                Añadir a la campaña Bridge
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 {[1, 2, 3].map(s => (
@@ -981,7 +992,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                     background: wizardStep === s ? T.primary : wizardStep > s ? T.emeraldBg : T.sidebar,
                     color: wizardStep === s ? T.white : wizardStep > s ? T.emerald : T.muted,
                   }}>
-                    {s === 1 ? '1. Empresas' : s === 2 ? '2. Asunto' : '3. Enviar'}
+                    {s === 1 ? '1. Candidatos' : s === 2 ? '2. Variante' : '3. Confirmar'}
                   </div>
                 ))}
               </div>
@@ -1043,73 +1054,124 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
               </div>
             )}
 
-            {/* Step 2: Subject */}
-            {wizardStep === 2 && (
-              <div>
-                <div style={{ fontFamily: T.sans, fontWeight: 600, fontSize: 14, color: T.title, marginBottom: 16 }}>
-                  Asunto del email
-                </div>
-                <input
-                  type="text"
-                  value={customSubject}
-                  onChange={e => setCustomSubject(e.target.value)}
-                  placeholder="Ej: Bridge Debt Energy — Financiación puente para renovables"
-                  style={{
-                    width: '100%', padding: '10px 12px', borderRadius: 7,
-                    border: `1px solid ${T.border}`, fontFamily: T.sans, fontSize: 13,
-                    color: T.text, outline: 'none', boxSizing: 'border-box',
-                  }}
-                />
-                <div style={{ fontSize: 11, color: T.muted, marginTop: 8 }}>
-                  El Bridge GAS usará la plantilla de la campaña. El asunto personaliza el subject del email.
-                </div>
-              </div>
-            )}
+            {/* Step 2: Variant selection */}
+            {wizardStep === 2 && (() => {
+              const mA = campaignMetrics?.A || {};
+              const mB = campaignMetrics?.B || {};
+              const aRate = mA.tasaApertura || 0;
+              const bRate = mB.tasaApertura || 0;
+              const hasData = (mA.enviados || 0) >= 3 && (mB.enviados || 0) >= 3;
+              const winner = hasData ? (aRate > bRate ? 'A' : bRate > aRate ? 'B' : null) : null;
+              const pct = (v) => `${(v * 100).toFixed(1)}%`;
 
-            {/* Step 3: Sender + launch */}
+              function VariantCard({ variant, metrics, isWinner }) {
+                const isSelected = selectedVariant === variant;
+                return (
+                  <div
+                    onClick={() => setSelectedVariant(variant)}
+                    style={{
+                      flex: 1, padding: '16px 18px', borderRadius: 10, cursor: 'pointer',
+                      border: `2px solid ${isSelected ? T.primary : T.border}`,
+                      background: isSelected ? T.primaryBg : T.white,
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <div style={{
+                        width: 18, height: 18, borderRadius: '50%',
+                        border: `2px solid ${isSelected ? T.primary : T.dim}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {isSelected && <div style={{ width: 10, height: 10, borderRadius: '50%', background: T.primary }} />}
+                      </div>
+                      <span style={{ fontFamily: T.sans, fontWeight: 700, fontSize: 15, color: T.title }}>
+                        Variante {variant}
+                      </span>
+                      {isWinner && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, color: T.emerald, background: T.emeraldBg,
+                          padding: '2px 8px', borderRadius: 999,
+                        }}>GANADORA</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                      {[
+                        { label: 'Apertura', value: pct(metrics.tasaApertura || 0) },
+                        { label: 'Clics', value: pct(metrics.tasaClics || 0) },
+                        { label: 'Respuestas', value: pct(metrics.tasaRespuesta || 0) },
+                      ].map(m => (
+                        <div key={m.label} style={{ textAlign: 'center' }}>
+                          <div style={{ fontFamily: T.sans, fontSize: 18, fontWeight: 700, color: T.title }}>{m.value}</div>
+                          <div style={{ fontFamily: T.sans, fontSize: 11, color: T.muted }}>{m.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 10, fontFamily: T.sans, fontSize: 11, color: T.dim, textAlign: 'center' }}>
+                      {metrics.enviados || 0} enviados · {metrics.abiertos || 0} abiertos · {metrics.respondidos || 0} respuestas
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div>
+                  <div style={{ fontFamily: T.sans, fontWeight: 600, fontSize: 14, color: T.title, marginBottom: 6 }}>
+                    Selecciona la variante del email
+                  </div>
+                  <div style={{ fontFamily: T.sans, fontSize: 12, color: T.muted, marginBottom: 16 }}>
+                    Los nuevos candidatos recibirán el mismo email (asunto + contenido + tracking) que la campaña original.
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <VariantCard variant="A" metrics={mA} isWinner={winner === 'A'} />
+                    <VariantCard variant="B" metrics={mB} isWinner={winner === 'B'} />
+                  </div>
+                  {!hasData && (
+                    <div style={{
+                      marginTop: 12, padding: '8px 12px', background: T.amberBg, borderRadius: 6,
+                      fontSize: 12, color: T.amber, fontFamily: T.sans,
+                    }}>
+                      Pocos datos A/B disponibles. Las métricas se actualizarán cuando haya más envíos.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Step 3: Confirm + send */}
             {wizardStep === 3 && (
               <div>
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontFamily: T.sans, fontWeight: 600, fontSize: 13, color: T.title, marginBottom: 8 }}>
-                    Remitente
-                  </div>
+                {/* Summary */}
+                <div style={{
+                  padding: '14px 16px', background: T.sidebar, borderRadius: 10, marginBottom: 20,
+                  fontFamily: T.sans, fontSize: 13, color: T.text,
+                }}>
+                  <div style={{ fontWeight: 600, color: T.title, marginBottom: 10, fontSize: 14 }}>Resumen del envío</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {senders.map(s => (
-                      <label key={s.email} style={{ display: 'flex', gap: 10, alignItems: 'center', cursor: 'pointer' }}>
-                        <input
-                          type="radio"
-                          checked={selectedSender?.email === s.email}
-                          onChange={() => setSelectedSender(s)}
-                          style={{ accentColor: T.primary }}
-                        />
-                        <span style={{ fontFamily: T.sans, fontSize: 13, color: T.text }}>
-                          {s.name} <span style={{ color: T.muted }}>({s.email})</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <div style={{
-                    marginTop: 10, padding: '8px 12px', background: T.amberBg,
-                    borderRadius: 6, fontSize: 12, color: T.amber, fontFamily: T.sans,
-                  }}>
-                    ⚠ El remitente real depende de la cuenta Gmail que autorizó el script GAS.
-                    Si el remitente seleccionado no es el propietario del script, el email puede enviarse
-                    "en nombre de" esa cuenta. Para enviar desde otra cuenta, contacta al administrador del script.
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: T.muted }}>Candidatos</span>
+                      <span style={{ fontWeight: 600 }}>{wizardRecipients.length} contactos en {selectedForSend.size} empresa{selectedForSend.size !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: T.muted }}>Variante</span>
+                      <span style={{ fontWeight: 600 }}>Variante {selectedVariant}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: T.muted }}>Remitente</span>
+                      <span style={{ fontWeight: 600 }}>Leticia Menéndez <span style={{ color: T.dim, fontWeight: 400 }}>(leticia@alter-5.com)</span></span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Summary */}
+                {/* Tracking badge */}
                 <div style={{
-                  padding: '12px 14px', background: T.sidebar, borderRadius: 8, marginBottom: 20,
-                  fontFamily: T.sans, fontSize: 13, color: T.text,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 14px', background: T.emeraldBg, borderRadius: 8, marginBottom: 20,
+                  border: `1px solid ${T.emerald}20`,
                 }}>
-                  <div style={{ fontWeight: 600, color: T.title, marginBottom: 8 }}>Resumen</div>
-                  <div>· {wizardRecipients.length} contactos en {selectedForSend.size} empresa{selectedForSend.size !== 1 ? 's' : ''}</div>
-                  {subject && <div>· Asunto: <em>{subject}</em></div>}
-                  <div>· Remitente: {sender.name}</div>
-                  <div style={{ color: T.muted, fontSize: 11, marginTop: 4 }}>
-                    Envío directo via Bridge GAS · {BRIDGE_API_URL ? 'Conectado' : '⚠ No configurado'}
-                  </div>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.emerald, flexShrink: 0 }} />
+                  <span style={{ fontFamily: T.sans, fontSize: 12, color: T.emerald, fontWeight: 500 }}>
+                    Tracking activo — las aperturas y clics se registrarán automáticamente en el dashboard
+                  </span>
                 </div>
 
                 {/* Error banner */}
@@ -1135,13 +1197,13 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                       opacity: !bridgeReady ? 0.5 : 1,
                     }}
                   >
-                    {testEmailLoading ? '⏳ Enviando prueba...' : testEmailSent ? '✅ Prueba enviada' : '📧 Enviar email de prueba'}
+                    {testEmailLoading ? '⏳ Enviando prueba...' : testEmailSent ? `✅ Prueba enviada (variante ${selectedVariant})` : `📧 Enviar prueba (variante ${selectedVariant})`}
                     {!testEmailLoading && !testEmailSent && (
                       <span style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>→ salvador.carrillo@alter-5.com</span>
                     )}
                   </button>
 
-                  {/* Send (combines prepare + launch) */}
+                  {/* Step 1: Create drafts */}
                   {!preparedOk ? (
                     !confirmLaunch ? (
                       <button
@@ -1149,22 +1211,23 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                         onClick={() => setConfirmLaunch(true)}
                         style={{
                           padding: '10px 16px', borderRadius: 8, border: 'none',
-                          background: T.emerald, color: T.white,
+                          background: 'linear-gradient(135deg, #1D4ED8, #059669)',
+                          color: T.white,
                           fontSize: 13, fontWeight: 600,
                           cursor: (preparingLoading || !bridgeReady || wizardRecipients.length === 0) ? 'not-allowed' : 'pointer',
                           fontFamily: T.sans, opacity: (!bridgeReady || wizardRecipients.length === 0) ? 0.5 : 1,
                         }}
                       >
-                        🚀 Enviar a {wizardRecipients.length} contacto{wizardRecipients.length !== 1 ? 's' : ''}
+                        Crear {wizardRecipients.length} borrador{wizardRecipients.length !== 1 ? 'es' : ''} en Gmail
                       </button>
                     ) : (
                       <div style={{
-                        padding: '14px', borderRadius: 8, border: `1.5px solid ${T.red}`,
-                        background: T.redBg,
+                        padding: '14px', borderRadius: 8, border: `1.5px solid ${T.primary}`,
+                        background: T.primaryBg,
                       }}>
-                        <div style={{ fontFamily: T.sans, fontSize: 13, color: T.red, fontWeight: 600, marginBottom: 10 }}>
-                          ¿Estás seguro? Se enviarán {wizardRecipients.length} emails desde {sender.email} via Bridge GAS.
-                          Esta acción no se puede deshacer.
+                        <div style={{ fontFamily: T.sans, fontSize: 13, color: T.primary, fontWeight: 600, marginBottom: 10 }}>
+                          Se crearán {wizardRecipients.length} borradores en Gmail de Leticia (variante {selectedVariant}).
+                          Podrás revisarlos antes de enviar.
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button
@@ -1172,10 +1235,10 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                             onClick={handlePrepare}
                             style={{
                               padding: '8px 16px', borderRadius: 7, border: 'none',
-                              background: T.red, color: T.white, fontSize: 13, fontWeight: 600,
+                              background: T.primary, color: T.white, fontSize: 13, fontWeight: 600,
                               cursor: preparingLoading ? 'not-allowed' : 'pointer', fontFamily: T.sans,
                             }}
-                          >{preparingLoading ? '⏳ Enviando...' : '🚀 Confirmar envío'}</button>
+                          >{preparingLoading ? '⏳ Creando borradores...' : 'Crear borradores'}</button>
                           <button
                             onClick={() => setConfirmLaunch(false)}
                             style={{
@@ -1187,19 +1250,87 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                         </div>
                       </div>
                     )
+                  ) : !sentOk ? (
+                    <>
+                      {/* Drafts created — show success + send button */}
+                      <div style={{
+                        padding: '12px 14px', borderRadius: 8,
+                        background: launchResult?.errors?.length ? T.amberBg : T.emeraldBg,
+                        border: `1px solid ${launchResult?.errors?.length ? T.amber : T.emerald}`,
+                      }}>
+                        <div style={{
+                          fontFamily: T.sans, fontSize: 13, fontWeight: 600,
+                          color: launchResult?.errors?.length ? T.amber : T.emerald,
+                        }}>
+                          {launchResult?.errors?.length
+                            ? `⚠ ${launchResult.drafts || 0} borradores creados, ${launchResult.errors.length} errores`
+                            : `✅ ${launchResult?.drafts || wizardRecipients.length} borradores creados en Gmail de Leticia`}
+                        </div>
+                        <div style={{ fontFamily: T.sans, fontSize: 12, color: T.muted, marginTop: 6 }}>
+                          Revisa los borradores en Gmail antes de confirmar el envío.
+                        </div>
+                      </div>
+
+                      {/* Send drafts button */}
+                      {!confirmSendDrafts ? (
+                        <button
+                          disabled={sendingDraftsLoading}
+                          onClick={() => setConfirmSendDrafts(true)}
+                          style={{
+                            padding: '10px 16px', borderRadius: 8, border: 'none',
+                            background: 'linear-gradient(135deg, #059669, #10B981)',
+                            color: T.white,
+                            fontSize: 13, fontWeight: 600,
+                            cursor: sendingDraftsLoading ? 'not-allowed' : 'pointer',
+                            fontFamily: T.sans,
+                          }}
+                        >
+                          Ejecutar envío de borradores
+                        </button>
+                      ) : (
+                        <div style={{
+                          padding: '14px', borderRadius: 8, border: `1.5px solid ${T.red}`,
+                          background: T.redBg,
+                        }}>
+                          <div style={{ fontFamily: T.sans, fontSize: 13, color: T.red, fontWeight: 600, marginBottom: 10 }}>
+                            ¿Confirmar envío? Se enviarán los borradores desde leticia@alter-5.com.
+                            Esta acción no se puede deshacer.
+                          </div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              disabled={sendingDraftsLoading}
+                              onClick={handleSendDrafts}
+                              style={{
+                                padding: '8px 16px', borderRadius: 7, border: 'none',
+                                background: T.red, color: T.white, fontSize: 13, fontWeight: 600,
+                                cursor: sendingDraftsLoading ? 'not-allowed' : 'pointer', fontFamily: T.sans,
+                              }}
+                            >{sendingDraftsLoading ? '⏳ Enviando...' : 'Confirmar envío'}</button>
+                            <button
+                              onClick={() => setConfirmSendDrafts(false)}
+                              style={{
+                                padding: '8px 16px', borderRadius: 7, border: `1px solid ${T.border}`,
+                                background: T.white, color: T.muted, fontSize: 13,
+                                cursor: 'pointer', fontFamily: T.sans,
+                              }}
+                            >Cancelar</button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div style={{
                       padding: '12px 14px', borderRadius: 8,
-                      background: launchResult?.errors?.length ? T.amberBg : T.emeraldBg,
-                      border: `1px solid ${launchResult?.errors?.length ? T.amber : T.emerald}`,
+                      background: sendResult?.errors?.length ? T.amberBg : T.emeraldBg,
+                      border: `1px solid ${sendResult?.errors?.length ? T.amber : T.emerald}`,
                     }}>
                       <div style={{
                         fontFamily: T.sans, fontSize: 13, fontWeight: 600,
-                        color: launchResult?.errors?.length ? T.amber : T.emerald,
+                        color: sendResult?.errors?.length ? T.amber : T.emerald,
                       }}>
-                        {launchResult?.errors?.length
-                          ? `⚠ ${launchResult.sent || 0} enviados, ${launchResult.errors.length} errores`
-                          : `✅ ${launchResult?.sent || wizardRecipients.length} emails enviados correctamente`}
+                        {sendResult?.errors?.length
+                          ? `⚠ ${sendResult.sent || 0} enviados, ${sendResult.errors.length} errores`
+                          : `✅ ${sendResult?.sent || 0} emails enviados correctamente`}
                       </div>
                     </div>
                   )}
@@ -1222,13 +1353,11 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
             >{wizardStep > 1 ? '← Volver' : 'Cancelar'}</button>
             {wizardStep < 3 && (
               <button
-                disabled={wizardStep === 2 && !customSubject.trim()}
                 onClick={() => setWizardStep(wizardStep + 1)}
                 style={{
                   padding: '8px 20px', borderRadius: 7, border: 'none',
                   background: T.primary, color: T.white, fontSize: 13, fontWeight: 600,
                   cursor: 'pointer', fontFamily: T.sans,
-                  opacity: (wizardStep === 2 && !customSubject.trim()) ? 0.5 : 1,
                 }}
               >Siguiente →</button>
             )}

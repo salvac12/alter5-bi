@@ -3051,6 +3051,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
         campaignRef={nextWaveRef || "Bridge_Q1_W2"}
         previousTargets={previousTargets}
         bridgeContacts={data?.contactos || []}
+        campaignMetrics={data?.metricas || null}
         currentUser="Salvador Carrillo"
         onBack={() => setShowExplorer(false)}
       />
@@ -3173,7 +3174,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = "0.9"}
           onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >+ Anadir proyecto</button>
+          >+ Buscar más candidatos</button>
         </div>
       </header>
 
