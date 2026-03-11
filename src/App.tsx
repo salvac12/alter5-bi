@@ -190,6 +190,8 @@ export default function App() {
   const [selProduct, setSelProduct] = useState("");
   const [selMarketRoles, setSelMarketRoles] = useState([]);
   const [selPipeline, setSelPipeline] = useState("");  // "" | "_any" | stage name
+  const [selSentiment, setSelSentiment] = useState<string[]>([]);
+  const [selTicket, setSelTicket] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
@@ -244,6 +246,22 @@ export default function App() {
         return matches.some(m => m.id === selProduct && m.score >= 15);
       });
     }
+    if (selSentiment.length) list = list.filter(c => selSentiment.includes(c.sentiment));
+    if (selTicket.length) {
+      list = list.filter(c => {
+        if (!c.ticketSize) return false;
+        const raw = c.ticketSize.replace(/[€M\s]/g, "").toLowerCase();
+        const nums = raw.match(/[\d.]+/g)?.map(Number) || [];
+        const maxVal = nums.length > 0 ? Math.max(...nums) : 0;
+        return selTicket.some(range => {
+          if (range === "<10M") return maxVal > 0 && maxVal <= 10;
+          if (range === "10-50M") return maxVal > 10 && maxVal <= 50;
+          if (range === "50-100M") return maxVal > 50 && maxVal <= 100;
+          if (range === ">100M") return maxVal > 100;
+          return false;
+        });
+      });
+    }
 
     // Cleanup mode filters
     if (cleanupMode && cleanupFilter === 'suspicious') {
@@ -263,7 +281,7 @@ export default function App() {
       }
       return m * ((a[sortBy] || 0) - (b[sortBy] || 0));
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, selSentiment, selTicket, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -560,7 +578,7 @@ export default function App() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
               Filtros
               {(() => {
-                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0);
+                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0) + selSentiment.length + selTicket.length;
                 return count > 0 ? (
                   <span style={{
                     background: showFilters ? "#3B82F6" : "#3B82F6",
@@ -598,7 +616,7 @@ export default function App() {
               boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
             }}>
               {/* Active filters summary + clear */}
-              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct) && (
+              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct || selSentiment.length > 0 || selTicket.length > 0) && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid #F1F5F9" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
                     <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>Activos:</span>
@@ -632,9 +650,21 @@ export default function App() {
                         {PRODUCTS.find(p => p.id === selProduct)?.name || selProduct} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
                       </span>
                     )}
+                    {selSentiment.map(s => (
+                      <span key={s} onClick={() => { setSelSentiment(prev => prev.filter(x => x !== s)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#D1FAE5", color: "#065F46", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {s.replace(/_/g, " ")} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
+                    {selTicket.map(t => (
+                      <span key={t} onClick={() => { setSelTicket(prev => prev.filter(x => x !== t)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#EDE9FE", color: "#5B21B6", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {t} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
                   </div>
                   <button
-                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setPage(0); }}
+                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setSelSentiment([]); setSelTicket([]); setPage(0); }}
                     style={{ fontSize: 11, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap", fontFamily: "'DM Sans', sans-serif" }}
                   >Limpiar todo</button>
                 </div>
@@ -720,6 +750,71 @@ export default function App() {
                     );
                   })}
                 </FilterRow>
+
+                {/* Sentimiento inversor */}
+                {(() => {
+                  const sentimentOptions = [
+                    { id: "muy_interesado", label: "Muy interesado", color: "#10B981" },
+                    { id: "interesado", label: "Interesado", color: "#3B82F6" },
+                    { id: "tibio", label: "Tibio", color: "#F59E0B" },
+                    { id: "solo_info", label: "Solo info", color: "#6B7F94" },
+                    { id: "no_interesado", label: "No interesado", color: "#EF4444" },
+                  ];
+                  const totalWithSentiment = companies.filter(c => c.sentiment).length;
+                  if (totalWithSentiment === 0) return null;
+                  return (
+                    <FilterRow label="Sentimiento">
+                      {sentimentOptions.map(s => {
+                        const active = selSentiment.includes(s.id);
+                        const count = companies.filter(c => c.sentiment === s.id).length;
+                        if (count === 0) return null;
+                        return (
+                          <FilterPill key={s.id} active={active} color={s.color}
+                            onClick={() => { setSelSentiment(prev => prev.includes(s.id) ? prev.filter(x => x !== s.id) : [...prev, s.id]); setPage(0); }}>
+                            {s.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                          </FilterPill>
+                        );
+                      })}
+                    </FilterRow>
+                  );
+                })()}
+
+                {/* Ticket Size */}
+                {(() => {
+                  const totalWithTicket = companies.filter(c => c.ticketSize).length;
+                  if (totalWithTicket === 0) return null;
+                  const ticketRanges = [
+                    { id: "<10M", label: "<10M", color: "#8B5CF6" },
+                    { id: "10-50M", label: "10-50M", color: "#8B5CF6" },
+                    { id: "50-100M", label: "50-100M", color: "#8B5CF6" },
+                    { id: ">100M", label: ">100M", color: "#8B5CF6" },
+                  ];
+                  return (
+                    <FilterRow label="Ticket Size">
+                      {ticketRanges.map(t => {
+                        const active = selTicket.includes(t.id);
+                        const count = companies.filter(c => {
+                          if (!c.ticketSize) return false;
+                          const raw = c.ticketSize.replace(/[€M\s]/g, "").toLowerCase();
+                          const nums = raw.match(/[\d.]+/g)?.map(Number) || [];
+                          const maxVal = nums.length > 0 ? Math.max(...nums) : 0;
+                          if (t.id === "<10M") return maxVal > 0 && maxVal <= 10;
+                          if (t.id === "10-50M") return maxVal > 10 && maxVal <= 50;
+                          if (t.id === "50-100M") return maxVal > 50 && maxVal <= 100;
+                          if (t.id === ">100M") return maxVal > 100;
+                          return false;
+                        }).length;
+                        if (count === 0) return null;
+                        return (
+                          <FilterPill key={t.id} active={active} color={t.color}
+                            onClick={() => { setSelTicket(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]); setPage(0); }}>
+                            {t.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                          </FilterPill>
+                        );
+                      })}
+                    </FilterRow>
+                  );
+                })()}
               </div>
             </div>
           )}

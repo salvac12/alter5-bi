@@ -189,6 +189,15 @@ export function parseCompanies() {
       // Employee / revenue from enrichment
       employeeCount: enrichment.emp_count || null,
       estimatedRevenue: enrichment.revenue_eur || null,
+      // Investor preferences
+      sentiment: enrichment.sentiment || null,
+      investorPhase: enrichment.inv_phase || null,
+      ticketSize: enrichment.ticket_size || null,
+      assetTypes: enrichment.asset_types || [],
+      investmentCriteria: enrichment.inv_criteria || null,
+      nextAction: enrichment.next_action || null,
+      dealsMentioned: enrichment.deals_mentioned || [],
+      investorSubtype: enrichment.inv_subtipo || null,
       // Airtable pipeline
       opportunity,
     };

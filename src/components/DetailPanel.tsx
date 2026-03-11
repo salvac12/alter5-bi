@@ -1125,6 +1125,145 @@ FORMATO (JSON valido, sin markdown):
 
         </div>
 
+        {/* ═══ Investor Preferences Section ═══ */}
+        {(c.role === "Inversión" || c.sentiment || c.investorPhase || c.ticketSize || (c.assetTypes && c.assetTypes.length > 0)) && (
+          <div style={{
+            background: "#132238", borderRadius: 12, padding: 18,
+            marginBottom: 20,
+            border: "1px solid #1B3A5C",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{ fontSize: 16 }}>{"\uD83D\uDCCA"}</span>
+              <DarkSectionTitle style={{ marginBottom: 0 }}>
+                Preferencias de inversion
+              </DarkSectionTitle>
+            </div>
+
+            {/* Sentiment + Phase + Ticket */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {c.sentiment && (() => {
+                const sentimentConfig: Record<string, { label: string; bg: string; color: string }> = {
+                  muy_interesado: { label: "Muy interesado", bg: "#10B98125", color: "#10B981" },
+                  interesado: { label: "Interesado", bg: "#3B82F625", color: "#3B82F6" },
+                  tibio: { label: "Tibio", bg: "#F59E0B25", color: "#F59E0B" },
+                  solo_info: { label: "Solo info", bg: "#6B7F9425", color: "#6B7F94" },
+                  no_interesado: { label: "No interesado", bg: "#EF444425", color: "#EF4444" },
+                };
+                const cfg = sentimentConfig[c.sentiment] || { label: c.sentiment, bg: "#6B7F9425", color: "#6B7F94" };
+                return (
+                  <span style={{
+                    padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                    background: cfg.bg, color: cfg.color,
+                    border: `1px solid ${cfg.color}40`,
+                  }}>
+                    {cfg.label}
+                  </span>
+                );
+              })()}
+              {c.investorPhase && (
+                <span style={{
+                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: "#0A1628", color: "#CBD5E1",
+                  border: "1px solid #1B3A5C",
+                }}>
+                  {c.investorPhase}
+                </span>
+              )}
+              {c.ticketSize && (
+                <span style={{
+                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: "#0A1628", color: "#8B5CF6",
+                  border: "1px solid #8B5CF640",
+                }}>
+                  {c.ticketSize}
+                </span>
+              )}
+              {c.investorSubtype && (
+                <span style={{
+                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: "#0A1628", color: "#94A3B8",
+                  border: "1px solid #1B3A5C",
+                }}>
+                  {c.investorSubtype}
+                </span>
+              )}
+            </div>
+
+            {/* Asset Types */}
+            {c.assetTypes && c.assetTypes.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+                  Tipo de activo
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {c.assetTypes.map((at: string) => (
+                    <span key={at} style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                      background: "#3B82F615", color: "#60A5FA",
+                      border: "1px solid #3B82F630",
+                    }}>
+                      {at}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Deals Mentioned */}
+            {c.dealsMentioned && c.dealsMentioned.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+                  Deals mencionados
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {c.dealsMentioned.map((d: string) => (
+                    <span key={d} style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                      background: "#F59E0B15", color: "#FBBF24",
+                      border: "1px solid #F59E0B30",
+                    }}>
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Investment Criteria */}
+            {c.investmentCriteria && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+                  Criterios de inversion
+                </div>
+                <p style={{
+                  fontSize: 12, color: "#CBD5E1", lineHeight: 1.6, margin: 0,
+                  background: "#0A1628", borderRadius: 8, padding: "10px 12px",
+                  border: "1px solid #1B3A5C",
+                }}>
+                  {c.investmentCriteria}
+                </p>
+              </div>
+            )}
+
+            {/* Next Action */}
+            {c.nextAction && (
+              <div>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+                  Siguiente accion
+                </div>
+                <div style={{
+                  fontSize: 12, color: "#10B981", lineHeight: 1.6,
+                  background: "#10B98110", borderRadius: 8, padding: "10px 12px",
+                  border: "1px solid #10B98130",
+                  fontWeight: 500,
+                }}>
+                  {c.nextAction}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ═══ Verification Section ═══ */}
         <div style={{
           background: "#132238", borderRadius: 12, padding: 18,
