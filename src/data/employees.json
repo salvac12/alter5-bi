@@ -21,19 +21,19 @@
     "id": "javier_ruiz",
     "name": "Javier Ruiz",
     "importedAt": "2026-03-10T09:20:19.188917",
-    "companiesCount": 1212
+    "companiesCount": 1220
   },
   {
     "id": "leticia_menéndez",
     "name": "Leticia Menéndez",
     "importedAt": "2026-03-10T09:20:19.188921",
-    "companiesCount": 659
+    "companiesCount": 661
   },
   {
     "id": "miguel_solana",
     "name": "Miguel Solana",
     "importedAt": "2026-03-10T09:20:19.188925",
-    "companiesCount": 2509
+    "companiesCount": 2514
   },
   {
     "id": "rafael_nevado",
@@ -45,6 +45,6 @@
     "id": "salvador_carrillo",
     "name": "Salvador Carrillo",
     "importedAt": "2026-03-10T09:20:19.188932",
-    "companiesCount": 2228
+    "companiesCount": 2235
   }
 ]
