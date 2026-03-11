@@ -625,7 +625,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
         const result = await bridgeGasCall('createCampaign', {
           name: campaignRef,
           type: 'mass',
-          senderEmail: 'leticia@alter-5.com',
+          senderEmail: 'leticia.menendez@alter-5.com',
           senderName: 'Leticia Menéndez',
           subjectA: 'Bridge Debt Energy Program — Financiación puente para proyectos renovables utility-scale',
           bodyA: BRIDGE_EMAIL_TEMPLATE,
@@ -1217,7 +1217,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: T.muted }}>Remitente</span>
-                      <span style={{ fontWeight: 600 }}>Leticia Menéndez <span style={{ color: T.dim, fontWeight: 400 }}>(leticia@alter-5.com)</span></span>
+                      <span style={{ fontWeight: 600 }}>Leticia Menéndez <span style={{ color: T.dim, fontWeight: 400 }}>(leticia.menendez@alter-5.com)</span></span>
                     </div>
                   </div>
                 </div>
@@ -1360,7 +1360,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                           background: T.redBg,
                         }}>
                           <div style={{ fontFamily: T.sans, fontSize: 13, color: T.red, fontWeight: 600, marginBottom: 10 }}>
-                            ¿Confirmar envío? Se enviarán los borradores desde leticia@alter-5.com.
+                            ¿Confirmar envío? Se enviarán los borradores desde leticia.menendez@alter-5.com.
                             Esta acción no se puede deshacer.
                           </div>
                           <div style={{ display: 'flex', gap: 8 }}>
