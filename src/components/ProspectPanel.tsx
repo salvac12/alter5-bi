@@ -581,18 +581,36 @@ export default function ProspectPanel({
           <DarkFormField label={`Contactos (${contacts.length})`}>
             {contacts.map((c, idx) => (
               <div key={idx} style={{
-                display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto',
+                display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto',
                 gap: 8, marginBottom: 8, alignItems: 'start',
               }}>
                 <input
                   type="text"
-                  value={c.name}
+                  value={c.nombre || c.name?.split(' ')[0] || ''}
                   onChange={(e) => {
                     const updated = [...contacts];
-                    updated[idx] = { ...updated[idx], name: e.target.value };
+                    const nombre = e.target.value;
+                    const apellido = updated[idx].apellido || '';
+                    updated[idx] = { ...updated[idx], nombre, name: `${nombre} ${apellido}`.trim() };
                     setContacts(updated);
                   }}
                   placeholder="Nombre"
+                  disabled={loading}
+                  style={{ ...darkInputStyle(loading), fontSize: 13 }}
+                  onFocus={darkFocus}
+                  onBlur={darkBlur}
+                />
+                <input
+                  type="text"
+                  value={c.apellido || c.name?.split(' ').slice(1).join(' ') || ''}
+                  onChange={(e) => {
+                    const updated = [...contacts];
+                    const apellido = e.target.value;
+                    const nombre = updated[idx].nombre || '';
+                    updated[idx] = { ...updated[idx], apellido, name: `${nombre} ${apellido}`.trim() };
+                    setContacts(updated);
+                  }}
+                  placeholder="Apellido"
                   disabled={loading}
                   style={{ ...darkInputStyle(loading), fontSize: 13 }}
                   onFocus={darkFocus}
@@ -644,7 +662,7 @@ export default function ProspectPanel({
               </div>
             ))}
             <button
-              onClick={() => setContacts([...contacts, { name: '', email: '', role: '' }])}
+              onClick={() => setContacts([...contacts, { name: '', email: '', role: '', nombre: '', apellido: '' }])}
               disabled={loading}
               style={{
                 padding: '6px 14px', fontSize: 12, fontWeight: 600,

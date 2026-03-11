@@ -244,19 +244,37 @@ def merge_company(existing, new_data, employee_id):
     all_first = min(valid_firsts) if valid_firsts else ""
     all_last = max(valid_lasts) if valid_lasts else ""
 
-    # Merge unique contacts (preserve email if available, prefer non-empty over empty)
-    seen_names = {}  # name -> index in all_contacts
+    # Merge unique contacts by email (preserve nombre/apellido if available)
+    seen_emails = {}  # email -> index in all_contacts
     all_contacts = []
     for s in existing["sources"].values():
         for c in s.get("contacts", []):
-            if c["name"] not in seen_names:
-                seen_names[c["name"]] = len(all_contacts)
-                all_contacts.append({"name": c["name"], "email": c.get("email", ""), "role": c.get("role", "")})
+            email = c.get("email", "")
+            key = email or c["name"]  # fallback to name if no email
+            if key not in seen_emails:
+                seen_emails[key] = len(all_contacts)
+                entry = {"name": c["name"], "email": email, "role": c.get("role", "")}
+                # Preserve nombre/apellido fields
+                if c.get("nombre"):
+                    entry["nombre"] = c["nombre"]
+                if c.get("apellido"):
+                    entry["apellido"] = c["apellido"]
+                if c.get("_system"):
+                    entry["_system"] = c["_system"]
+                if c.get("_name_source"):
+                    entry["_name_source"] = c["_name_source"]
+                if c.get("_name_confidence"):
+                    entry["_name_confidence"] = c["_name_confidence"]
+                all_contacts.append(entry)
             else:
-                # Update email if current entry is empty and this one has a value
-                idx = seen_names[c["name"]]
-                if not all_contacts[idx].get("email") and c.get("email"):
-                    all_contacts[idx]["email"] = c["email"]
+                idx = seen_emails[key]
+                # Update fields if current entry is missing them
+                if not all_contacts[idx].get("role") and c.get("role"):
+                    all_contacts[idx]["role"] = c["role"]
+                if not all_contacts[idx].get("nombre") and c.get("nombre"):
+                    all_contacts[idx]["nombre"] = c["nombre"]
+                if not all_contacts[idx].get("apellido") and c.get("apellido"):
+                    all_contacts[idx]["apellido"] = c["apellido"]
 
     # Merge timelines (sum emails for same quarter, preserve summaries)
     existing_summaries = {t["quarter"]: t["summary"] for t in existing.get("timeline", []) if t.get("summary")}
@@ -320,7 +338,7 @@ def export_to_compact(all_companies):
             dated_subjects = c.get("dated_subjects", [])
 
             details[str(i)] = [
-                [[ct["name"], ct.get("role", ""), ct.get("email", "")] for ct in contacts[:5]],
+                [[ct["name"], ct.get("role", ""), ct.get("email", ""), ct.get("nombre", ""), ct.get("apellido", "")] for ct in contacts[:5]],
                 [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
                 context[:500],
                 source_breakdown,
