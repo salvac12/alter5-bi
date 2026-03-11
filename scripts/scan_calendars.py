@@ -81,6 +81,12 @@ TOOL_DOMAINS = {
     "teams.microsoft.com", "resource.calendar.google.com",
 }
 
+# ── Dominios excluidos (no son clientes potenciales) ──────────────
+# Añadir aqui dominios que aparecen en reuniones pero no son prospects
+EXCLUDED_DOMAINS = {
+    "unir.net",            # Universidad UNIR (practicas)
+}
+
 # Stages that can be advanced to "Reunion"
 ADVANCEABLE_STAGES = {"Lead", "Interesado"}
 
@@ -155,7 +161,7 @@ def extract_external_domains(event):
         if "@" not in email:
             continue
         domain = email.split("@")[1].lower()
-        if domain in INTERNAL_DOMAINS or domain in PERSONAL_DOMAINS or domain in TOOL_DOMAINS:
+        if domain in INTERNAL_DOMAINS or domain in PERSONAL_DOMAINS or domain in TOOL_DOMAINS or domain in EXCLUDED_DOMAINS:
             continue
         domains.add(domain)
     return domains
