@@ -48,6 +48,8 @@ const POST_ACTIONS = new Set([
   'generateFollowUp',
   'improveMessage',
   'sendTestEmail',
+  'createDrafts',
+  'sendDrafts',
 ]);
 
 const ALL_ACTIONS = new Set([...GET_ACTIONS, ...POST_ACTIONS]);
