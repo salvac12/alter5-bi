@@ -86,6 +86,7 @@ TOOL_DOMAINS = {
 # Añadir aqui dominios que aparecen en reuniones pero no son prospects
 EXCLUDED_DOMAINS = {
     "unir.net",            # Universidad UNIR (practicas)
+    "cecamagan.com",       # CECA MAGÁN Abogados (asesor legal de Alter5)
 }
 
 # Stages that can be advanced to "Reunion"
