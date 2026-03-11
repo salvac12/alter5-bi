@@ -495,14 +495,16 @@ export default function CompanyTable({
                     {c.nContacts}
                   </td>
 
-                  {/* Employee count (verified > enrichment) */}
+                  {/* Employee count (max of verified vs enrichment) */}
                   <td style={{
                     padding: "10px 12px", fontSize: 13,
                     fontVariantNumeric: "tabular-nums", color: "#64748B",
                   }}>
                     {(() => {
                       const v = verifiedCompanies?.get?.(c.domain);
-                      const emp = v?.employeeCount || c.employeeCount;
+                      const a = v?.employeeCount || 0;
+                      const b = c.employeeCount || 0;
+                      const emp = Math.max(a, b) || null;
                       return emp ? emp.toLocaleString() : "—";
                     })()}
                   </td>

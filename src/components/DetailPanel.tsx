@@ -1207,13 +1207,16 @@ FORMATO (JSON valido, sin markdown):
             </div>
           )}
 
-          {/* Employee count & Revenue (priority: manual > verified > enrichment) */}
+          {/* Employee count & Revenue (priority: manual > max(verified, enrichment)) */}
           {(() => {
             const manualEmp = manualData.employeesCount ? Number(manualData.employeesCount) : null;
-            const empCount = manualEmp || verifiedRecord?.employeeCount || company.employeeCount;
-            const empSource = manualEmp ? "manual" : verifiedRecord?.employeeCountSource || null;
-            const manualRev = manualData.revenue ? null : null; // revenue manual is free-text, skip
-            const revAmount = verifiedRecord?.estimatedRevenueEur || company.estimatedRevenue;
+            const airtableEmp = verifiedRecord?.employeeCount || 0;
+            const enrichEmp = company.employeeCount || 0;
+            const bestEmp = Math.max(airtableEmp, enrichEmp) || null;
+            const empCount = manualEmp || bestEmp;
+            const empSource = manualEmp ? "manual"
+              : (airtableEmp >= enrichEmp ? verifiedRecord?.employeeCountSource : "enrichment") || null;
+            const revAmount = Math.max(verifiedRecord?.estimatedRevenueEur || 0, company.estimatedRevenue || 0) || null;
             const revSource = verifiedRecord?.revenueSource || null;
             if ((!empCount && !revAmount) || verificationResult) return null;
             return (
