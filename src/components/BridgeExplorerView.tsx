@@ -93,6 +93,31 @@ function cleanContacts(contacts) {
     .map(ct => ({ ...ct, email: ct.email.toLowerCase(), name: normalizeName(ct.name) }));
 }
 
+// ── Bridge email templates (A/B variants) ───────────────────────────
+const BRIDGE_EMAIL_TEMPLATE = `<p>Estimado/a {{nombre}},</p>
+<p>Le escribo en relación con el <strong>Bridge Debt Energy Program</strong> de Alter5.</p>
+<p>Ofrecemos financiación puente para proyectos de energía renovable utility-scale con las siguientes condiciones:</p>
+<ul>
+  <li>Préstamo bullet a 18-24 meses</li>
+  <li>Sin garantía corporativa</li>
+  <li>Ticket desde 2M EUR</li>
+  <li>Respaldado por garantías InvestEU/EIF</li>
+</ul>
+<p>Si {{empresa}} tiene proyectos en fase de desarrollo o construcción que necesiten financiación puente, estaré encantada de compartir más detalles.</p>
+<p>¿Le vendría bien una llamada breve esta semana?</p>
+<p>Un saludo,<br/>Leticia Menéndez<br/>Alter5</p>`;
+
+const BRIDGE_EMAIL_TEMPLATE_B = `<p>Hola {{nombre}},</p>
+<p>Desde Alter5 hemos lanzado un programa de <strong>financiación puente</strong> específico para proyectos renovables utility-scale.</p>
+<p>Las condiciones principales:</p>
+<ul>
+  <li>18-24 meses, estructura bullet</li>
+  <li>Desde 2M EUR, sin garantía corporativa</li>
+  <li>Garantías InvestEU/EIF</li>
+</ul>
+<p>Creo que podría ser interesante para {{empresa}}. ¿Tiene unos minutos para una llamada esta semana?</p>
+<p>Quedo a su disposición,<br/>Leticia Menéndez<br/>Alter5</p>`;
+
 function explorerScore(c) {
   let score = 0;
   const enrichment = c.detail?.enrichment || {};
@@ -192,6 +217,9 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   const [confirmLaunch, setConfirmLaunch] = useState(false);
   const [confirmSendDrafts, setConfirmSendDrafts] = useState(false);
   const [wizardError, setWizardError] = useState('');
+  // Real GAS campaign ID (created on wizard open)
+  const [gasCampaignId, setGasCampaignId] = useState<string | null>(null);
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
 
   const showToast = useCallback(msg => setToast(msg), []);
 
@@ -569,7 +597,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     return list;
   }
 
-  function openWizard() {
+  async function openWizard() {
     const recipients = buildWizardRecipients();
     setWizardRecipients(recipients);
     setWizardStep(1);
@@ -587,7 +615,32 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     setConfirmLaunch(false);
     setConfirmSendDrafts(false);
     setWizardError('');
+    setGasCampaignId(null);
     setShowWizard(true);
+
+    // Create the campaign in GAS backend so sendTestEmail/createDrafts work
+    if (bridgeReady) {
+      setCreatingCampaign(true);
+      try {
+        const result = await bridgeGasCall('createCampaign', {
+          name: campaignRef,
+          type: 'mass',
+          senderEmail: 'leticia@alter-5.com',
+          senderName: 'Leticia Menéndez',
+          subjectA: 'Bridge Debt Energy Program — Financiación puente para proyectos renovables utility-scale',
+          bodyA: BRIDGE_EMAIL_TEMPLATE,
+          subjectB: 'Financiación puente para proyectos renovables — Bridge Debt Energy Program',
+          bodyB: BRIDGE_EMAIL_TEMPLATE_B,
+          abTestPercent: 50,
+          recipients: [],
+        });
+        setGasCampaignId(result.id);
+      } catch (err) {
+        setWizardError(`Error al crear campaña: ${err.message}`);
+      } finally {
+        setCreatingCampaign(false);
+      }
+    }
   }
 
   async function bridgeGasCall(action, extra = {}) {
@@ -613,8 +666,9 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     setTestEmailLoading(true);
     setWizardError('');
     try {
+      if (!gasCampaignId) throw new Error('Campaña no creada aún. Espera un momento.');
       await bridgeGasCall('sendTestEmail', {
-        campaignId: campaignRef,
+        campaignId: gasCampaignId,
         testEmail: 'salvador.carrillo@alter-5.com',
       });
       setTestEmailSent(true);
@@ -645,15 +699,17 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
         organization: r.organization || '',
       }));
 
+      if (!gasCampaignId) throw new Error('Campaña no creada aún. Espera un momento.');
+
       // 1. Add recipients to campaign
       await bridgeGasCall('addRecipients', {
-        campaignId: campaignRef,
+        campaignId: gasCampaignId,
         recipients,
       });
 
       // 2. Create drafts in Gmail (instead of sending directly)
       const draftResult = await bridgeGasCall('createDrafts', {
-        campaignId: campaignRef,
+        campaignId: gasCampaignId,
       });
 
       // Mark all selected companies as 'sent' in CampaignTargets
@@ -700,7 +756,8 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     setSendingDraftsLoading(true);
     setWizardError('');
     try {
-      const result = await bridgeGasCall('sendDrafts', { campaignId: campaignRef });
+      if (!gasCampaignId) throw new Error('Campaña no creada aún.');
+      const result = await bridgeGasCall('sendDrafts', { campaignId: gasCampaignId });
       setSentOk(true);
       setSendResult({ sent: result.sent || 0, errors: result.errors || [] });
       showToast(`✅ ${result.sent || 0} emails enviados desde borradores`);
@@ -1185,19 +1242,26 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                   }}>{wizardError}</div>
                 )}
 
+                {/* Campaign creation status */}
+                {creatingCampaign && (
+                  <div style={{ padding: '8px 12px', borderRadius: 8, background: T.blueBg, border: `1px solid ${T.primary}`, fontFamily: T.sans, fontSize: 12, color: T.primary }}>
+                    ⏳ Creando campaña en backend...
+                  </div>
+                )}
+
                 {/* Action buttons */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {/* Test email */}
                   <button
-                    disabled={testEmailLoading || !bridgeReady}
+                    disabled={testEmailLoading || !bridgeReady || !gasCampaignId}
                     onClick={handleTestEmail}
                     style={{
                       padding: '10px 16px', borderRadius: 8, border: `1px solid ${T.border}`,
                       background: testEmailSent ? T.emeraldBg : T.white,
                       color: testEmailSent ? T.emerald : T.text,
-                      fontSize: 13, fontWeight: 600, cursor: testEmailLoading ? 'not-allowed' : 'pointer',
+                      fontSize: 13, fontWeight: 600, cursor: (testEmailLoading || !gasCampaignId) ? 'not-allowed' : 'pointer',
                       fontFamily: T.sans, display: 'flex', alignItems: 'center', gap: 8,
-                      opacity: !bridgeReady ? 0.5 : 1,
+                      opacity: (!bridgeReady || !gasCampaignId) ? 0.5 : 1,
                     }}
                   >
                     {testEmailLoading ? '⏳ Enviando prueba...' : testEmailSent ? `✅ Prueba enviada (variante ${selectedVariant})` : `📧 Enviar prueba (variante ${selectedVariant})`}
@@ -1210,15 +1274,15 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                   {!preparedOk ? (
                     !confirmLaunch ? (
                       <button
-                        disabled={preparingLoading || !bridgeReady || wizardRecipients.length === 0}
+                        disabled={preparingLoading || !bridgeReady || !gasCampaignId || wizardRecipients.length === 0}
                         onClick={() => setConfirmLaunch(true)}
                         style={{
                           padding: '10px 16px', borderRadius: 8, border: 'none',
                           background: 'linear-gradient(135deg, #1D4ED8, #059669)',
                           color: T.white,
                           fontSize: 13, fontWeight: 600,
-                          cursor: (preparingLoading || !bridgeReady || wizardRecipients.length === 0) ? 'not-allowed' : 'pointer',
-                          fontFamily: T.sans, opacity: (!bridgeReady || wizardRecipients.length === 0) ? 0.5 : 1,
+                          cursor: (preparingLoading || !gasCampaignId || wizardRecipients.length === 0) ? 'not-allowed' : 'pointer',
+                          fontFamily: T.sans, opacity: (!bridgeReady || !gasCampaignId || wizardRecipients.length === 0) ? 0.5 : 1,
                         }}
                       >
                         Crear {wizardRecipients.length} borrador{wizardRecipients.length !== 1 ? 'es' : ''} en Gmail
