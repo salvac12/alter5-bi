@@ -73,7 +73,7 @@ export function parseCompanies() {
 
     const det = rawData.d[String(i)];
     const detail = det ? {
-      contacts: det[0].map(c => ({ name: c[0], role: c[1], email: c[2] || "" })),
+      contacts: det[0].map(c => ({ name: c[0], role: c[1], email: c[2] || "", nombre: c[3] || "", apellido: c[4] || "" })),
       timeline: det[1].map(t => ({ quarter: t[0], emails: t[1], summary: t[2] || "" })),
       context: det[2],
       sources: det[3] ? det[3].map(s => ({ employee: s[0], interactions: s[1] })) : [],

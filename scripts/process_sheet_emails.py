@@ -916,13 +916,31 @@ def group_emails_by_company(pending_emails):
         if thread_date and thread_date > emp["lastDate"]:
             emp["lastDate"] = thread_date
 
-        # Track contacts
+        # Track contacts (parse nombre/apellido deterministically when possible)
         if from_email and from_email not in co["contacts"]:
-            co["contacts"][from_email] = {
-                "name": from_name or from_email.split("@")[0],
+            display_name = from_name or from_email.split("@")[0]
+            contact = {
+                "name": display_name,
                 "email": from_email,
                 "domain": domain,
             }
+            # Deterministic nombre/apellido parsing
+            import re as _re
+            _parseable_re = _re.compile(r"^([a-záéíóúñü]+)[._-]([a-záéíóúñü]+)$", _re.IGNORECASE)
+            if " " in display_name.strip() and len(display_name.strip().split()) >= 2:
+                parts = display_name.strip().split()
+                contact["nombre"] = parts[0]
+                contact["apellido"] = " ".join(parts[1:])
+            else:
+                m = _parseable_re.match(display_name)
+                if not m:
+                    local = from_email.split("@")[0]
+                    m = _parseable_re.match(local)
+                if m and len(m.group(1)) > 1 and len(m.group(2)) > 1:
+                    contact["nombre"] = m.group(1).title()
+                    contact["apellido"] = m.group(2).title()
+                    contact["name"] = f"{contact['nombre']} {contact['apellido']}"
+            co["contacts"][from_email] = contact
 
         # Track subjects for classification and product matching
         if subject and len(co["subjects"]) < 20:

@@ -1717,7 +1717,7 @@ FORMATO (JSON valido, sin markdown):
                             color: "#FFFFFF",
                             flex: 1,
                             lineHeight: 1.3,
-                          }}>{ct.name}</span>
+                          }}>{ct.nombre ? <>{ct.nombre} <span style={{ fontWeight: 400 }}>{ct.apellido}</span></> : ct.name}</span>
                           <span style={{
                             fontSize: 9,
                             fontWeight: 700,
@@ -1767,8 +1767,11 @@ FORMATO (JSON valido, sin markdown):
                     <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
                       <input
                         type="text"
-                        value={ct.name}
-                        onChange={(e) => handleUpdateContact(i, 'name', e.target.value)}
+                        value={ct.nombre || ct.name?.split(' ')[0] || ''}
+                        onChange={(e) => {
+                          handleUpdateContact(i, 'nombre', e.target.value);
+                          handleUpdateContact(i, 'name', `${e.target.value} ${ct.apellido || ''}`.trim());
+                        }}
                         placeholder="Nombre"
                         style={{
                           flex: 1,
@@ -1780,6 +1783,27 @@ FORMATO (JSON valido, sin markdown):
                           fontSize: 13,
                           fontFamily: "inherit",
                           fontWeight: 600,
+                          outline: "none",
+                        }}
+                      />
+                      <input
+                        type="text"
+                        value={ct.apellido || ct.name?.split(' ').slice(1).join(' ') || ''}
+                        onChange={(e) => {
+                          handleUpdateContact(i, 'apellido', e.target.value);
+                          handleUpdateContact(i, 'name', `${ct.nombre || ''} ${e.target.value}`.trim());
+                        }}
+                        placeholder="Apellido"
+                        style={{
+                          flex: 1,
+                          background: "#132238",
+                          border: "1px solid #2A4A6C",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#FFFFFF",
+                          fontSize: 13,
+                          fontFamily: "inherit",
+                          fontWeight: 400,
                           outline: "none",
                         }}
                       />
