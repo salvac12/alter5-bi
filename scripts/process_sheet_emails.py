@@ -1191,6 +1191,17 @@ def process_pipeline(reprocess=False):
                     # Add classification metadata for tracking re-classification triggers
                     enr["_classified_at"] = datetime.utcnow().isoformat()
                     enr["_email_count"] = all_companies[domain].get("interactions", 0)
+                    # Preserve fields from other scripts that Gemini doesn't produce
+                    existing_enrichment = all_companies[domain].get("enrichment") or {}
+                    PRESERVE_KEYS = [
+                        "emp_count", "emp_source", "revenue_eur", "rev_source",
+                        "sentiment", "inv_phase", "ticket_size", "asset_types",
+                        "inv_criteria", "next_action", "deals_mentioned",
+                        "inv_subtipo", "_inv_source", "_inv_updated_at",
+                    ]
+                    for key in PRESERVE_KEYS:
+                        if key in existing_enrichment and key not in enr:
+                            enr[key] = existing_enrichment[key]
                     all_companies[domain]["enrichment"] = enr
 
             if is_new:
