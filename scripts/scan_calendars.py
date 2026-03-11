@@ -100,6 +100,10 @@ MAX_EXTERNAL_DOMAINS = 3
 # Domains not in CRM are also allowed (unknown company with a real meeting)
 PROSPECT_ELIGIBLE_GROUPS = {"Capital Seeker"}
 
+# Gemini config for smart CRM filter (analyzes email context)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = "gemini-2.5-flash"
+
 # Map mailbox email -> Airtable "Deal Manager" singleSelect name
 MAILBOX_TO_MANAGER = {
     "salvador.carrillo@alter-5.com": "Salvador Carrillo",
@@ -303,6 +307,106 @@ def create_prospect_from_meeting(domain, employee_email, event_summary, company_
 
 
 # ---------------------------------------------------------------------------
+# Gemini smart filter — analyze email context for capital-seeking intent
+# ---------------------------------------------------------------------------
+_gemini_cache = {}  # domain -> bool (avoid re-asking for same domain across employees)
+
+
+def ask_gemini_is_capital_seeker(domain, crm_entry, event_summary):
+    """Ask Gemini if this company is seeking financing based on email context.
+
+    Returns True if the company (or a related party) is seeking debt/equity,
+    False otherwise. Returns None if Gemini is unavailable.
+    """
+    if domain in _gemini_cache:
+        return _gemini_cache[domain]
+
+    if not GEMINI_API_KEY:
+        return None
+
+    company_name = crm_entry.get("name", domain)
+    context = crm_entry.get("context", "")
+    grp = crm_entry.get("enrichment", {}).get("grp", "")
+    tp = crm_entry.get("enrichment", {}).get("tp", "")
+
+    # Collect recent subjects
+    dated_subjects = crm_entry.get("dated_subjects", [])
+    subjects = []
+    for ds in dated_subjects[-15:]:
+        if isinstance(ds, list) and len(ds) >= 2:
+            subjects.append(f"[{ds[0]}] {ds[1]}")
+        elif isinstance(ds, str):
+            subjects.append(ds)
+    if not subjects:
+        subjects = crm_entry.get("subjects", [])[-15:]
+
+    subjects_text = "\n".join(subjects) if subjects else "(sin emails)"
+
+    prompt = f"""Alter5 es una empresa de financiación de energías renovables (deuda y equity).
+Analiza si la empresa "{company_name}" ({domain}) está buscando financiación o representa una oportunidad de negocio para Alter5 donde alguien necesita capital (deuda o equity).
+
+Clasificación actual en CRM: grupo={grp}, tipo={tp}
+Contexto CRM: {context[:500]}
+Titulo reunion reciente: {event_summary}
+
+Últimos emails intercambiados:
+{subjects_text}
+
+IMPORTANTE: Responde SOLO con un JSON:
+{{"is_prospect": true/false, "reason": "explicacion breve en español"}}
+
+Criterios para is_prospect=true:
+- La empresa busca financiación directamente (deuda, equity, project finance)
+- La empresa tiene participadas/proyectos que necesitan financiación
+- La reunión trata sobre una operación donde alguien necesita capital
+- Es un intermediario presentando un deal que necesita financiación
+
+Criterios para is_prospect=false:
+- Solo presta servicios (legal, consultoría, rating) sin deal concreto
+- Es un banco/inversor buscando invertir (no buscan capital, lo ofrecen)
+- La relación es puramente networking sin operación concreta"""
+
+    try:
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+        payload = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.1},
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            api_url, data=payload, method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        text = ""
+        for part in data.get("candidates", [{}])[0].get("content", {}).get("parts", []):
+            if "text" in part:
+                text += part["text"]
+        text = text.strip()
+
+        # Clean markdown fences
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1]
+            if text.endswith("```"):
+                text = text.rsplit("```", 1)[0]
+            text = text.strip()
+
+        result = json.loads(text)
+        is_prospect = result.get("is_prospect", False)
+        reason = result.get("reason", "")
+        _gemini_cache[domain] = is_prospect
+        print(f"    Gemini: {'YES' if is_prospect else 'NO'} — {reason}")
+        return is_prospect
+
+    except Exception as e:
+        print(f"    Gemini error: {e}")
+        _gemini_cache[domain] = False
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Scan state
 # ---------------------------------------------------------------------------
 def load_scan_state():
@@ -458,10 +562,17 @@ def main():
                     if crm_entry:
                         grp = crm_entry.get("enrichment", {}).get("grp", "")
                         if grp and grp not in PROSPECT_ELIGIBLE_GROUPS:
+                            # Not a Capital Seeker by CRM — ask Gemini if the
+                            # email context reveals a capital-seeking intent
                             crm_name = crm_entry.get("name", domain)
-                            print(f"  ⊘ Skipped '{crm_name}' ({domain}) — CRM group: {grp} (not originacion)")
-                            total_filtered_crm += 1
-                            continue
+                            gemini_result = ask_gemini_is_capital_seeker(
+                                domain, crm_entry, summary,
+                            )
+                            if not gemini_result:
+                                print(f"  ⊘ Skipped '{crm_name}' ({domain}) — CRM: {grp}, Gemini: no capital intent")
+                                total_filtered_crm += 1
+                                continue
+                            print(f"  ✓ '{crm_name}' ({domain}) — CRM: {grp}, but Gemini detected capital intent")
 
                     prefix = "[DRY-RUN] " if args.dry_run else ""
                     crm_name = crm_entry.get("name", domain.split(".")[0].capitalize()) if crm_entry else None

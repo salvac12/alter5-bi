@@ -41,6 +41,7 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           AIRTABLE_PAT: ${{ secrets.AIRTABLE_PAT }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           DAYS_ARG=""
           if [ -n "${{ github.event.inputs.days }}" ]; then
