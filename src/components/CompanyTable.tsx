@@ -32,6 +32,7 @@ const COLUMNS = [
   { key: null,           label: "Estado",      sortable: false },
   { key: "interactions", label: "Emails",      sortable: true },
   { key: "nContacts",    label: "Cont.",       sortable: true },
+  { key: "employeeCount", label: "Empl.",      sortable: true },
   { key: "monthsAgo",   label: "Ultimo",       sortable: true },
   { key: "score",        label: "Score",       sortable: true },
 ];
@@ -492,6 +493,14 @@ export default function CompanyTable({
                     fontVariantNumeric: "tabular-nums", color: "#64748B",
                   }}>
                     {c.nContacts}
+                  </td>
+
+                  {/* Employee count */}
+                  <td style={{
+                    padding: "10px 12px", fontSize: 13,
+                    fontVariantNumeric: "tabular-nums", color: "#64748B",
+                  }}>
+                    {c.employeeCount ? c.employeeCount.toLocaleString() : "—"}
                   </td>
 
                   {/* Last date */}

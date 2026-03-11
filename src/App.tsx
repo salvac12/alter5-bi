@@ -261,7 +261,7 @@ export default function App() {
         const bMatch = getBestProductMatch(productMatches, b.idx);
         return m * ((aMatch?.score || 0) - (bMatch?.score || 0));
       }
-      return m * (a[sortBy] - b[sortBy]);
+      return m * ((a[sortBy] || 0) - (b[sortBy] || 0));
     });
   }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
 

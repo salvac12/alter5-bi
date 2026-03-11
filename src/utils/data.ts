@@ -186,6 +186,9 @@ export function parseCompanies() {
       marketRoles,
       productosIA,
       senales,
+      // Employee / revenue from enrichment
+      employeeCount: enrichment.emp_count || null,
+      estimatedRevenue: enrichment.revenue_eur || null,
       // Airtable pipeline
       opportunity,
     };
