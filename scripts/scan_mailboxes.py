@@ -355,7 +355,7 @@ def apply_to_companies(grouped, all_companies):
                 "contacts": contacts_list[:5],
                 "timeline": [],
                 "subjects": data["subjects"][:20],
-                "dated_subjects": sorted(data.get("dated_subjects", []), key=lambda x: x[0])[:30],
+                "dated_subjects": sorted(data.get("dated_subjects", []), key=lambda x: x[0])[-30:],
                 "snippets": data["snippets"][:10],
             }
 

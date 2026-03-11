@@ -142,7 +142,7 @@ def read_excel(filepath):
         if raw.get("snippets"):
             company["snippets"] = raw["snippets"][:15]
         if raw.get("dated_subjects"):
-            company["dated_subjects"] = sorted(raw["dated_subjects"], key=lambda x: x[0])[:30]
+            company["dated_subjects"] = sorted(raw["dated_subjects"], key=lambda x: x[0])[-30:]
 
         # Read extra columns as enrichment seed
         seed = {}
@@ -231,7 +231,7 @@ def merge_company(existing, new_data, employee_id):
         if ds[1] not in seen_ds:
             old_ds.append(ds)
             seen_ds.add(ds[1])
-    existing["dated_subjects"] = sorted(old_ds, key=lambda x: x[0])[:30]
+    existing["dated_subjects"] = sorted(old_ds, key=lambda x: x[0])[-30:]
 
     old_snippets = existing.get("snippets", [])
     new_snippets = new_data.get("snippets", [])

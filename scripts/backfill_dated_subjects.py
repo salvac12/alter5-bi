@@ -149,7 +149,7 @@ def main():
     for domain, company in all_companies.items():
         # Merge dated_subjects (replace with fresh data that includes extracts)
         if domain in all_dated:
-            company["dated_subjects"] = all_dated[domain][:30]
+            company["dated_subjects"] = all_dated[domain][-30:]
             ds_updated += 1
 
         # Merge quarterly summaries into timeline

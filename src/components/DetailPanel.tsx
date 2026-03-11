@@ -628,7 +628,7 @@ FORMATO (JSON valido, sin markdown):
                 }}>Resumen de la relacion</div>
                 {det.datedSubjects?.length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {[...det.datedSubjects].reverse().map((ds, i) => {
+                    {[...det.datedSubjects].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((ds, i) => {
                       const isExpanded = expandedSubject === i;
                       const hasExtract = !!ds.extract;
                       return (
