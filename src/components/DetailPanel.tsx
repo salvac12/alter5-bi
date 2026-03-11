@@ -1207,55 +1207,59 @@ FORMATO (JSON valido, sin markdown):
             </div>
           )}
 
-          {/* Employee count & Revenue from verification */}
-          {(verifiedRecord?.employeeCount || verifiedRecord?.estimatedRevenueEur || company.employeeCount || company.estimatedRevenue) && !verificationResult && (
-            <div style={{
-              display: "flex", gap: 10, marginBottom: 10,
-            }}>
-              {(verifiedRecord?.employeeCount || company.employeeCount) && (
-                <div style={{
-                  flex: 1, padding: "10px 12px", borderRadius: 8,
-                  background: "#0A1628", border: "1px solid #1B3A5C",
-                }}>
-                  <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
-                    Empleados
-                  </div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#E2E8F0" }}>
-                    {(verifiedRecord?.employeeCount || company.employeeCount).toLocaleString()}
-                  </div>
-                  {(verifiedRecord?.employeeCountSource) && (
-                    <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>
-                      Fuente: {verifiedRecord.employeeCountSource}
+          {/* Employee count & Revenue (priority: manual > verified > enrichment) */}
+          {(() => {
+            const manualEmp = manualData.employeesCount ? Number(manualData.employeesCount) : null;
+            const empCount = manualEmp || verifiedRecord?.employeeCount || company.employeeCount;
+            const empSource = manualEmp ? "manual" : verifiedRecord?.employeeCountSource || null;
+            const manualRev = manualData.revenue ? null : null; // revenue manual is free-text, skip
+            const revAmount = verifiedRecord?.estimatedRevenueEur || company.estimatedRevenue;
+            const revSource = verifiedRecord?.revenueSource || null;
+            if ((!empCount && !revAmount) || verificationResult) return null;
+            return (
+              <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                {empCount && (
+                  <div style={{
+                    flex: 1, padding: "10px 12px", borderRadius: 8,
+                    background: "#0A1628", border: "1px solid #1B3A5C",
+                  }}>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
+                      Empleados
                     </div>
-                  )}
-                </div>
-              )}
-              {(verifiedRecord?.estimatedRevenueEur || company.estimatedRevenue) && (
-                <div style={{
-                  flex: 1, padding: "10px 12px", borderRadius: 8,
-                  background: "#0A1628", border: "1px solid #1B3A5C",
-                }}>
-                  <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
-                    Facturacion
-                  </div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#E2E8F0" }}>
-                    {(() => {
-                      const rev = verifiedRecord?.estimatedRevenueEur || company.estimatedRevenue;
-                      if (rev >= 1e9) return `${(rev / 1e9).toFixed(1)}B €`;
-                      if (rev >= 1e6) return `${(rev / 1e6).toFixed(1)}M €`;
-                      if (rev >= 1e3) return `${(rev / 1e3).toFixed(0)}K €`;
-                      return `${rev.toLocaleString()} €`;
-                    })()}
-                  </div>
-                  {(verifiedRecord?.revenueSource) && (
-                    <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>
-                      Fuente: {verifiedRecord.revenueSource}
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#E2E8F0" }}>
+                      {empCount.toLocaleString()}
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                    {empSource && (
+                      <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>
+                        Fuente: {empSource}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {revAmount && (
+                  <div style={{
+                    flex: 1, padding: "10px 12px", borderRadius: 8,
+                    background: "#0A1628", border: "1px solid #1B3A5C",
+                  }}>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
+                      Facturacion
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#E2E8F0" }}>
+                      {revAmount >= 1e9 ? `${(revAmount / 1e9).toFixed(1)}B €` :
+                       revAmount >= 1e6 ? `${(revAmount / 1e6).toFixed(1)}M €` :
+                       revAmount >= 1e3 ? `${(revAmount / 1e3).toFixed(0)}K €` :
+                       `${revAmount.toLocaleString()} €`}
+                    </div>
+                    {revSource && (
+                      <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>
+                        Fuente: {revSource}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Verification error */}
           {verificationError && (

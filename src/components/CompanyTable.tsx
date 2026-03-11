@@ -495,12 +495,16 @@ export default function CompanyTable({
                     {c.nContacts}
                   </td>
 
-                  {/* Employee count */}
+                  {/* Employee count (verified > enrichment) */}
                   <td style={{
                     padding: "10px 12px", fontSize: 13,
                     fontVariantNumeric: "tabular-nums", color: "#64748B",
                   }}>
-                    {c.employeeCount ? c.employeeCount.toLocaleString() : "—"}
+                    {(() => {
+                      const v = verifiedCompanies?.get?.(c.domain);
+                      const emp = v?.employeeCount || c.employeeCount;
+                      return emp ? emp.toLocaleString() : "—";
+                    })()}
                   </td>
 
                   {/* Last date */}
