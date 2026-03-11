@@ -165,22 +165,38 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
         return prev;
       };
 
+      // Build domain→CRM company lookup for resolving real names
+      const crmByDomain = new Map<string, any>();
+      for (const c of companies) {
+        if (c.domain && !isInternalDomain(c.domain)) {
+          crmByDomain.set(c.domain.toLowerCase(), c);
+        }
+      }
+
+      /** Resolve a domain to a real company name from CRM, falling back to domainToName */
+      const nameFromDomain = (domain: string): string => {
+        const crm = crmByDomain.get(domain.toLowerCase());
+        if (crm) return crm.name;
+        return domainToName(domain);
+      };
+
       for (const p of active) {
         let name = (p.name || '').trim();
 
         // If name is an email address → extract company name from domain
         if (name.includes('@')) {
           const domain = domainFromEmail(name);
-          name = domain ? domainToName(domain) : name;
+          name = domain && !isInternalDomain(domain) ? nameFromDomain(domain) : name;
         }
         // If name looks like a bare domain (e.g. "alfanar.com")
         else if (isDomainLike(name)) {
-          name = domainToName(name);
+          const domain = name.toLowerCase();
+          name = !isInternalDomain(domain) ? nameFromDomain(domain) : domainToName(domain);
         }
         // If name is empty/too short, fallback to contactEmail domain
         else if (name.length < 2 && p.contactEmail) {
           const domain = domainFromEmail(p.contactEmail);
-          if (domain) name = domainToName(domain);
+          if (domain && !isInternalDomain(domain)) name = nameFromDomain(domain);
         }
 
         p.name = name;
@@ -221,14 +237,18 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       const byName = new Map<string, any>();
       const byDomain = new Map<string, any>();
 
+      // Spaceless key catches "dunascapital" vs "dunas capital"
+      const spacelessKey = (nk: string): string => nk.replace(/\s/g, '');
+
       for (const p of active) {
         const nk = normalizeName(p.name);
         if (!nk) continue;
+        const sk = spacelessKey(nk);
 
-        // Check if this prospect matches an existing one by domain
+        // Check if this prospect matches an existing one by domain, name, or spaceless name
         const pDomain = p.contactEmail ? domainFromEmail(p.contactEmail) : '';
         const domainMatch = pDomain ? byDomain.get(pDomain) : undefined;
-        const nameMatch = byName.get(nk);
+        const nameMatch = byName.get(nk) || byName.get(sk);
         const existing = domainMatch || nameMatch;
 
         if (existing) {
@@ -243,17 +263,21 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
               }
             }
           }
-          // Update maps to point to winner
+          // Update maps to point to winner (both normal and spaceless keys)
           const winnerNk = normalizeName(winner.name);
           const existingNk = normalizeName(existing.name);
           byName.set(nk, winner);
+          byName.set(sk, winner);
           byName.set(winnerNk, winner);
+          byName.set(spacelessKey(winnerNk), winner);
           byName.set(existingNk, winner);
+          byName.set(spacelessKey(existingNk), winner);
           if (pDomain) byDomain.set(pDomain, winner);
           const eDomain = existing.contactEmail ? domainFromEmail(existing.contactEmail) : '';
           if (eDomain) byDomain.set(eDomain, winner);
         } else {
           byName.set(nk, p);
+          byName.set(sk, p);
           if (pDomain) byDomain.set(pDomain, p);
         }
       }
