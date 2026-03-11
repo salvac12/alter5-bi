@@ -3,13 +3,15 @@
  *
  * Manages campaigns, recipients, follow-ups using Google Sheets as DB.
  * Called via POST from /api/campaign-proxy (Vercel serverless).
+ * Called via GET from BridgeCampaignView (dashboard + pipeline).
  *
  * Sheets (auto-created on first request):
  *   - Campaigns: campaign metadata
  *   - Recipients: per-campaign recipients with status tracking
  *   - FollowUps: scheduled 1-a-1 follow-ups
  *
- * Security: every request must include `token` matching Script Property API_TOKEN.
+ * Security: POST requests must include `token` matching Script Property API_TOKEN.
+ *           GET requests (dashboard, pipeline) are public (read-only data).
  */
 
 // ── Config ────────────────────────────────────────────────────────────
@@ -39,7 +41,7 @@ var FOLLOWUP_HEADERS = [
   'draftHtml', 'sentTime', 'createdTime', 'cancelledTime'
 ];
 
-// ── Entry point ───────────────────────────────────────────────────────
+// ── Entry points ──────────────────────────────────────────────────────
 
 function doPost(e) {
   try {
@@ -83,8 +85,30 @@ function doPost(e) {
   }
 }
 
-function doGet() {
-  return jsonResponse({ status: 'ok', message: 'Campaign Backend is running. Use POST.' });
+/**
+ * doGet — Route GET requests by ?action= query parameter.
+ * Supports: dashboard, pipeline. Default: status check.
+ */
+function doGet(e) {
+  try {
+    var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : '';
+
+    if (action === 'dashboard') {
+      var result = handleDashboard();
+      return jsonResponse(result);
+    }
+
+    if (action === 'pipeline') {
+      var result = handlePipeline();
+      return jsonResponse(result);
+    }
+
+    // Default: health check
+    return jsonResponse({ status: 'ok', message: 'Campaign Backend is running. Use POST for actions or GET ?action=dashboard.' });
+
+  } catch (err) {
+    return jsonResponse({ error: err.message, stack: err.stack }, 500);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -182,21 +206,47 @@ function appendRow(sheet, headers, obj) {
   sheet.appendRow(row);
 }
 
+/** Map recipient status to Spanish estado for BridgeCampaignView */
+function mapStatus(status, openCount, clickCount) {
+  if (status === 'error') return 'Error';
+  if (status === 'replied') return 'Respondido';
+  if (Number(clickCount) > 0) return 'Clic';
+  if (Number(openCount) > 0) return 'Abierto';
+  if (status === 'sent' || status === 'draft_ready') return 'Enviado';
+  if (status === 'pending') return '';
+  return status || '';
+}
+
 // ── Action handlers ──────────────────────────────────────────────────
 
 /**
- * dashboard — Returns unique contacts from Recipients sheet + legacy Tracking sheet.
- * Used by fetchSentDomains() to know which domains have been contacted.
+ * dashboard — Returns contacts + metrics for BridgeCampaignView.
  *
- * Legacy: reads "Tracking" tab from the original Campaign Dashboard spreadsheet
- * (ID stored in Script Property LEGACY_SHEET_ID). Columns: A=Email, B=Nombre,
- * C=Apellido, D=Organizacion, G=Estado.
+ * BridgeCampaignView expects:
+ *   { contactos: [{ email, nombre, apellido, organizacion, grupo, variante,
+ *                    estado, fechaEnvio, primeraApertura, numAperturas,
+ *                    primerClic, numClics, respondido }],
+ *     metricas: { total, errores,
+ *                 A: { enviados, abiertos, clics, respondidos, tasaApertura, tasaClics, tasaRespuesta },
+ *                 B: { ... },
+ *                 Final: { total, enviados, pendientes, abiertos, clics, respondidos } },
+ *     contactosRastreados: N,
+ *     actualizado: ISO }
+ *
+ * Data sources:
+ *   1) Recipients sheet (this backend's campaigns) — full tracking data
+ *   2) Legacy Campaign Dashboard Tracking sheet (LEGACY_SHEET_ID) — basic contact info
  */
 function handleDashboard() {
   var seen = {};
   var contactos = [];
+  var legacyContactos = [];
 
   // 1) Read from legacy Campaign Dashboard Tracking sheet (if configured)
+  // Legacy columns: A=Email, B=Nombre, C=Apellido, D=Organizacion,
+  //                 E=Grupo, F=Variante, G=Estado, H=FechaEnvio,
+  //                 I=PrimeraApertura, J=NumAperturas, K=PrimerClic,
+  //                 L=NumClics, M=Respondido
   var legacyId = PropertiesService.getScriptProperties().getProperty('LEGACY_SHEET_ID');
   if (legacyId) {
     try {
@@ -204,16 +254,36 @@ function handleDashboard() {
       var trackingSheet = legacySs.getSheetByName('Tracking');
       if (trackingSheet) {
         var data = trackingSheet.getDataRange().getValues();
+        // Read header row to find columns dynamically
+        var hdr = data[0];
+        var colMap = {};
+        for (var h = 0; h < hdr.length; h++) {
+          colMap[String(hdr[h]).toLowerCase().trim()] = h;
+        }
         for (var i = 1; i < data.length; i++) {
-          var email = String(data[i][0] || '').toLowerCase().trim(); // Col A = Email
-          var estado = String(data[i][6] || '');                     // Col G = Estado
+          var email = String(data[i][0] || '').toLowerCase().trim();
           if (!email || seen[email]) continue;
-          if (estado === 'Error') continue; // skip errors
+          var estado = String(data[i][colMap['estado'] !== undefined ? colMap['estado'] : 6] || '');
+          if (estado === 'Error') continue;
           seen[email] = true;
-          contactos.push({
+
+          var numAperturas = Number(data[i][colMap['numaperturas'] !== undefined ? colMap['numaperturas'] : 9]) || 0;
+          var numClics = Number(data[i][colMap['numclics'] !== undefined ? colMap['numclics'] : 11]) || 0;
+
+          legacyContactos.push({
             email: email,
-            name: String(data[i][1] || ''),          // Col B = Nombre
-            organization: String(data[i][3] || ''),   // Col D = Organizacion
+            nombre: String(data[i][1] || ''),
+            apellido: String(data[i][2] || ''),
+            organizacion: String(data[i][3] || ''),
+            grupo: String(data[i][colMap['grupo'] !== undefined ? colMap['grupo'] : 4] || ''),
+            variante: String(data[i][colMap['variante'] !== undefined ? colMap['variante'] : 5] || ''),
+            estado: estado,
+            fechaEnvio: data[i][colMap['fechaenvio'] !== undefined ? colMap['fechaenvio'] : 7] ? String(data[i][colMap['fechaenvio'] !== undefined ? colMap['fechaenvio'] : 7]) : null,
+            primeraApertura: data[i][colMap['primeraapertura'] !== undefined ? colMap['primeraapertura'] : 8] ? String(data[i][colMap['primeraapertura'] !== undefined ? colMap['primeraapertura'] : 8]) : null,
+            numAperturas: numAperturas,
+            primerClic: data[i][colMap['primerclic'] !== undefined ? colMap['primerclic'] : 10] ? String(data[i][colMap['primerclic'] !== undefined ? colMap['primerclic'] : 10]) : null,
+            numClics: numClics,
+            respondido: String(data[i][colMap['respondido'] !== undefined ? colMap['respondido'] : 12] || 'No'),
           });
         }
       }
@@ -224,20 +294,126 @@ function handleDashboard() {
 
   // 2) Read from new Recipients sheet (this backend's campaigns)
   var recipients = readAll(SHEET_RECIPIENTS, RECIPIENT_HEADERS);
+
+  // Group recipients by campaignId to determine grupo
+  var campaignNames = {};
+  try {
+    var campaigns = readAll(SHEET_CAMPAIGNS, CAMPAIGN_HEADERS);
+    for (var c = 0; c < campaigns.length; c++) {
+      campaignNames[campaigns[c].id] = campaigns[c].name || '';
+    }
+  } catch (e) { /* ignore */ }
+
+  // Count sent per variant for metrics
+  var varA = { enviados: 0, abiertos: 0, clics: 0, respondidos: 0 };
+  var varB = { enviados: 0, abiertos: 0, clics: 0, respondidos: 0 };
+  var finalGroup = { total: 0, enviados: 0, pendientes: 0, abiertos: 0, clics: 0, respondidos: 0 };
+  var totalErrors = 0;
+  var rastreados = 0;
+
   for (var j = 0; j < recipients.length; j++) {
     var r = recipients[j];
-    if (r.status === 'pending') continue;
-    var rEmail = String(r.email).toLowerCase();
-    if (!rEmail || seen[rEmail]) continue;
+    var rEmail = String(r.email).toLowerCase().trim();
+    if (!rEmail) continue;
+
+    var openCount = Number(r.openCount) || 0;
+    var clickCount = Number(r.clickCount) || 0;
+    var isReplied = (r.status === 'replied');
+    var isSent = (r.status === 'sent' || r.status === 'replied');
+    var isError = (r.status === 'error');
+    var isPending = (r.status === 'pending');
+    var variant = String(r.variant || '');
+    var estado = mapStatus(r.status, openCount, clickCount);
+    var respondido = isReplied ? 'Sí' : 'No';
+
+    // Track metrics per variant
+    if (variant === 'A' || variant === 'B') {
+      var bucket = (variant === 'A') ? varA : varB;
+      if (isSent || isError) bucket.enviados++;
+      if (openCount > 0) bucket.abiertos++;
+      if (clickCount > 0) bucket.clics++;
+      if (isReplied) bucket.respondidos++;
+    } else if (isPending) {
+      finalGroup.total++;
+      finalGroup.pendientes++;
+    }
+
+    if (isError) totalErrors++;
+    if (isSent && (openCount > 0 || clickCount > 0 || isReplied)) rastreados++;
+
+    // Skip if already seen from legacy
+    if (seen[rEmail]) continue;
     seen[rEmail] = true;
+
     contactos.push({
       email: rEmail,
-      name: r.name || '',
-      organization: r.organization || '',
+      nombre: String(r.name || ''),
+      apellido: String(r.lastName || ''),
+      organizacion: String(r.organization || ''),
+      grupo: campaignNames[r.campaignId] || '',
+      variante: variant || '-',
+      estado: estado,
+      fechaEnvio: r.sentTime ? String(r.sentTime) : null,
+      primeraApertura: r.openedTime ? String(r.openedTime) : null,
+      numAperturas: openCount,
+      primerClic: null, // Not tracked in Recipients sheet
+      numClics: clickCount,
+      respondido: respondido,
     });
   }
 
-  return { contactos: contactos };
+  // Merge legacy + new contacts (legacy first, then new)
+  var allContactos = legacyContactos.concat(contactos);
+
+  // Also count legacy contacts in metrics
+  for (var k = 0; k < legacyContactos.length; k++) {
+    var lc = legacyContactos[k];
+    var lv = String(lc.variante || '');
+    if (lv === 'A' || lv === 'B') {
+      var lBucket = (lv === 'A') ? varA : varB;
+      if (lc.estado && lc.estado !== 'Error') lBucket.enviados++;
+      if ((lc.numAperturas || 0) > 0) lBucket.abiertos++;
+      if ((lc.numClics || 0) > 0) lBucket.clics++;
+      if (lc.respondido === 'Sí' || lc.respondido === 'Si' || lc.estado === 'Respondido') lBucket.respondidos++;
+    }
+    if (lc.estado && lc.estado.indexOf('Error') === 0) totalErrors++;
+    if ((lc.numAperturas || 0) > 0 || (lc.numClics || 0) > 0 ||
+        lc.respondido === 'Sí' || lc.respondido === 'Si' || lc.estado === 'Respondido') {
+      rastreados++;
+    }
+  }
+
+  // Calculate rates
+  function calcRates(bucket) {
+    var total = bucket.enviados || 1;
+    bucket.tasaApertura = Math.round((bucket.abiertos / total) * 10000) / 10000;
+    bucket.tasaClics = Math.round((bucket.clics / total) * 10000) / 10000;
+    bucket.tasaRespuesta = Math.round((bucket.respondidos / total) * 10000) / 10000;
+    return bucket;
+  }
+
+  var metricas = {
+    total: allContactos.length,
+    errores: totalErrors,
+    A: calcRates(varA),
+    B: calcRates(varB),
+    Final: finalGroup,
+  };
+
+  return {
+    actualizado: now(),
+    metricas: metricas,
+    contactos: allContactos,
+    contactosRastreados: rastreados,
+  };
+}
+
+/**
+ * pipeline — Stub for BridgeCampaignView pipeline tab.
+ * Returns empty array so the view doesn't break.
+ */
+function handlePipeline() {
+  return { success: true, pipeline: [] };
 }
 
 /**
@@ -458,6 +634,7 @@ function sendWithFallback(email, subject, body, senderEmail, senderName) {
     GmailApp.sendEmail(email, subject, '', emailOptions(body, senderEmail, senderName));
   } catch (err) {
     if (String(err.message).indexOf('Invalid argument') !== -1 && senderEmail) {
+      // Fallback: send without 'from' alias
       GmailApp.sendEmail(email, subject, '', emailOptions(body, '', senderName));
     } else {
       throw err;
@@ -470,6 +647,7 @@ function createDraftWithFallback(email, subject, body, senderEmail, senderName) 
     return GmailApp.createDraft(email, subject, '', emailOptions(body, senderEmail, senderName));
   } catch (err) {
     if (String(err.message).indexOf('Invalid argument') !== -1 && senderEmail) {
+      // Fallback: create draft without 'from' alias
       return GmailApp.createDraft(email, subject, '', emailOptions(body, '', senderName));
     } else {
       throw err;
