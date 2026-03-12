@@ -833,8 +833,23 @@ Responde SOLO con JSON:
         summary = result.get("summary", "")
         steps = result.get("suggested_next_steps", [])
 
+        # Gemini sometimes returns summary as a dict instead of string —
+        # convert to readable text so Airtable multilineText accepts it
+        if isinstance(summary, dict):
+            lines = []
+            for k, v in summary.items():
+                label = k.upper().lstrip("0123456789._- ")
+                if isinstance(v, list):
+                    v = "\n".join(f"• {item}" for item in v)
+                lines.append(f"{label}: {v}")
+            summary = "\n\n".join(lines)
+            result["summary"] = summary
+        if isinstance(steps, dict):
+            steps = list(steps.values()) if steps else []
+            result["suggested_next_steps"] = steps
+
         _gemini_cache[domain] = result
-        preview = summary[:80] + "..." if len(summary) > 80 else summary
+        preview = summary[:80] + "..." if len(str(summary)) > 80 else str(summary)
         print(f"    Gemini: {'PROSPECT' if is_prospect else 'NO'} — {preview}")
         return result
 
