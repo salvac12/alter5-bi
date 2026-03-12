@@ -1217,6 +1217,9 @@ function KanbanCard({ prospect, colColor, onDragStart, onDragEnd, onClick, match
               fontFamily: "'DM Sans', sans-serif",
             }}>
               {prospect.name || 'Sin nombre'}
+              {prospect.aiSummary && (
+                <span style={{ color: '#8B5CF6', fontSize: 11, marginLeft: 4 }} title="Inteligencia IA disponible">✦</span>
+              )}
             </div>
             {prospect.origin && (
               <div style={{
