@@ -316,6 +316,28 @@ def save_companies(data, paths):
     print(f"  OK: Written {paths['compact']}")
 
 
+def git_commit_push(enriched_so_far, total):
+    """Commit and push the current state of companies JSON files."""
+    import subprocess
+    try:
+        subprocess.run(
+            ["git", "add", "src/data/companies_full.json", "src/data/companies.json"],
+            cwd=PROJECT_DIR, check=True, capture_output=True,
+        )
+        msg = f"chore: enrich originacion batch ({enriched_so_far}/{total})"
+        subprocess.run(
+            ["git", "commit", "-m", msg],
+            cwd=PROJECT_DIR, check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "push", "origin", "main"],
+            cwd=PROJECT_DIR, check=True, capture_output=True,
+        )
+        print(f"  [git] Commit + push OK ({enriched_so_far}/{total})")
+    except subprocess.CalledProcessError as e:
+        print(f"  [git] Error: {e.stderr.decode()[:200] if e.stderr else str(e)}")
+
+
 def get_email_context(company):
     """Extract subjects and bodies from company details."""
     subjects = []
@@ -345,6 +367,7 @@ def main():
     single_domain = None
     unenriched_only = False
     dry_run = False
+    batch_commit = 0  # 0 = disabled, N = commit+push every N companies
 
     i = 0
     while i < len(args):
@@ -360,6 +383,9 @@ def main():
         elif args[i] == "--dry-run":
             dry_run = True
             i += 1
+        elif args[i] == "--batch-commit" and i + 1 < len(args):
+            batch_commit = int(args[i + 1])
+            i += 2
         else:
             print(f"Unknown arg: {args[i]}")
             sys.exit(1)
@@ -418,11 +444,14 @@ def main():
     print(f"  Targets: {len(targets)} companies")
     if dry_run:
         print("  Mode: DRY RUN (no writes)")
+    if batch_commit > 0:
+        print(f"  Batch commit: every {batch_commit} companies")
     print()
 
     # Process each company
     enriched_count = 0
     failed_count = 0
+    batch_enriched = 0  # counter within current batch
 
     for idx, (domain, company) in enumerate(targets.items(), 1):
         name = company.get("name", domain)
@@ -430,6 +459,11 @@ def main():
         enrichment = company.get("enrichment") or {}
 
         print(f"  [{idx}/{len(targets)}] {name} ({domain}) — {interactions} interactions")
+
+        # Skip already enriched (resume support)
+        if enrichment.get("_web_enriched_at") and not single_domain:
+            print(f"    Already enriched, skipping")
+            continue
 
         # 1. Fetch website
         print(f"    Fetching website...", end=" ", flush=True)
@@ -497,6 +531,16 @@ def main():
             enr["_web_source"] = "website+grounding" if website_data["status"] == "ok" else "grounding_only"
 
         enriched_count += 1
+        batch_enriched += 1
+
+        # Batch save + commit + push
+        if batch_commit > 0 and batch_enriched >= batch_commit and not dry_run:
+            print(f"\n  --- Batch save ({enriched_count} enriched so far) ---")
+            save_companies(data, paths)
+            git_commit_push(enriched_count, len(targets))
+            batch_enriched = 0
+            print()
+
         time.sleep(GEMINI_RPM_DELAY)
 
     # Summary
@@ -507,6 +551,8 @@ def main():
 
     if not dry_run and enriched_count > 0:
         save_companies(data, paths)
+        if batch_commit > 0 and batch_enriched > 0:
+            git_commit_push(enriched_count, len(targets))
     elif dry_run:
         print("  (dry run — no files written)")
 
