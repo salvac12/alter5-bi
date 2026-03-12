@@ -1198,6 +1198,9 @@ def process_pipeline(reprocess=False):
                         "sentiment", "inv_phase", "ticket_size", "asset_types",
                         "inv_criteria", "next_action", "deals_mentioned",
                         "inv_subtipo", "_inv_source", "_inv_updated_at",
+                        "business_lines", "project_scale", "known_pipeline_mw",
+                        "website_url", "website_description",
+                        "_web_enriched_at", "_web_source",
                     ]
                     for key in PRESERVE_KEYS:
                         if key in existing_enrichment and key not in enr:
