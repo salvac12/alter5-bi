@@ -284,6 +284,7 @@ export async function generateProspectIntelligence(
   prospectName: string,
   company: any,
   existingContext: string = "",
+  prospectData?: { product?: string; stage?: string; contacts?: { name: string; email: string; role: string }[]; notes?: string; amount?: string; origin?: string; assignedTo?: string },
 ): Promise<{ summary: string; suggestedNextSteps: string[] }> {
   const enrichment = company?.detail?.enrichment || {};
   const datedSubjects = (company?.detail?.datedSubjects || []).slice(0, 30);
@@ -310,9 +311,22 @@ export async function generateProspectIntelligence(
     })
     .join("\n");
 
+  // Build prospect-specific data block (when no CRM company matched)
+  const prospectBlock = prospectData ? `
+=== DATOS DEL PROSPECT (Airtable) ===
+Producto: ${prospectData.product || "No especificado"}
+Fase: ${prospectData.stage || "Lead"}
+Importe: ${prospectData.amount || "No especificado"}
+Origen: ${prospectData.origin || "No especificado"}
+Asignado a: ${prospectData.assignedTo || "No asignado"}
+${prospectData.contacts?.length ? `Contactos:\n${prospectData.contacts.map(c => `  - ${c.name || "?"} <${c.email || "?"}> — ${c.role || "sin rol"}`).join("\n")}` : "Sin contactos"}
+${prospectData.notes ? `Notas del equipo:\n${prospectData.notes}` : ""}` : "";
+
+  const hasCRM = !!(company?.domain || company?.interactions);
+
   const prompt = `Eres un analista senior de deal origination en Alter5 (financiacion de energias renovables en Espana).
 
-Analiza los datos CRM de la siguiente empresa y genera una ficha de inteligencia comercial.
+${hasCRM ? "Analiza los datos CRM de la siguiente empresa y genera una ficha de inteligencia comercial." : "Analiza los datos disponibles del siguiente prospect y genera una ficha de inteligencia comercial. No hay datos CRM historicos, asi que basa tu analisis en la informacion del prospect."}
 
 === DATOS DEL PROSPECT ===
 Nombre: ${prospectName}
@@ -324,8 +338,8 @@ Descripcion empresa: ${enrichment?.description || ""}
 Tecnologias: ${(enrichment?.technologies || []).join(", ")}
 Geografia: ${enrichment?.geography || ""}
 Roles de mercado: ${(company?.marketRoles || []).join(", ")}
-
-=== HISTORIAL DE COMUNICACIONES (ultimas interacciones) ===
+${prospectBlock}
+${hasCRM ? `=== HISTORIAL DE COMUNICACIONES (ultimas interacciones) ===
 Total interacciones: ${company?.interactions || 0}
 Ultima fecha: ${company?.lastDate || ""}
 
@@ -335,7 +349,7 @@ ${subjectsBlock ? `Ultimos asuntos de email:\n${subjectsBlock}` : ""}
 ${employeeLines || "Sin datos de empleados"}
 
 === CONTEXTO ADICIONAL ===
-${context || "Sin contexto adicional"}
+${context || "Sin contexto adicional"}` : ""}
 
 ${existingContext ? `=== NOTAS PREVIAS DEL EQUIPO ===\n${existingContext}` : ""}
 
@@ -344,7 +358,7 @@ ${existingContext ? `=== NOTAS PREVIAS DEL EQUIPO ===\n${existingContext}` : ""}
 2. Si hay un intermediario (broker, asesor, fondo de fondos), identifica quien es el beneficiario final real
 3. Genera un resumen ejecutivo estructurado con:
    - Naturaleza de la relacion y tipo de oportunidad
-   - Historico de comunicaciones y nivel de engagement
+${hasCRM ? "   - Historico de comunicaciones y nivel de engagement" : "   - Informacion disponible y gaps de datos"}
    - Posicion en el funnel de origination
    - Riesgos o alertas detectadas
 4. Sugiere proximos pasos concretos y accionables

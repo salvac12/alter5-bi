@@ -217,15 +217,24 @@ export default function App() {
     }
 
     if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(c =>
-        c.name.toLowerCase().includes(q) ||
-        c.domain.toLowerCase().includes(q) ||
-        (c.role || "").toLowerCase().includes(q) ||
-        (c.segment || "").toLowerCase().includes(q) ||
-        (c.companyType || "").toLowerCase().includes(q) ||
-        (c.marketRoles || []).some(mr => mr.toLowerCase().includes(q))
-      );
+      const q = search.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      list = list.filter(c => {
+        const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return (
+          norm(c.name).includes(q) ||
+          norm(c.domain).includes(q) ||
+          norm(c.role).includes(q) ||
+          norm(c.segment).includes(q) ||
+          norm(c.companyType).includes(q) ||
+          (c.marketRoles || []).some(mr => norm(mr).includes(q)) ||
+          (c.activities || []).some(a => norm(a).includes(q)) ||
+          (c.businessLines || []).some(bl => norm(bl).includes(q)) ||
+          (c.technologies || []).some(t => norm(t).includes(q)) ||
+          (c.senales || []).some(s => norm(s).includes(q)) ||
+          norm(c.detail?.context).includes(q) ||
+          (c.detail?.subjects || []).some(s => norm(s).includes(q))
+        );
+      });
     }
     if (selEmployees.length) list = list.filter(c => selEmployees.some(e => c.employees.includes(e)));
     if (selGroups.length) list = list.filter(c => selGroups.includes(c.role));

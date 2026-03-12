@@ -290,7 +290,8 @@ function handleDashboard() {
   //                 E=Grupo, F=Variante, G=Estado, H=FechaEnvio,
   //                 I=PrimeraApertura, J=NumAperturas, K=PrimerClic,
   //                 L=NumClics, M=Respondido
-  var legacyId = PropertiesService.getScriptProperties().getProperty('LEGACY_SHEET_ID');
+  var props = PropertiesService.getScriptProperties();
+  var legacyId = props.getProperty('LEGACY_SHEET_ID') || props.getProperty('CAMPAIGN_SHEET_ID');
   if (legacyId) {
     try {
       var legacySs = SpreadsheetApp.openById(legacyId);
