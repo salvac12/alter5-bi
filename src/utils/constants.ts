@@ -48,6 +48,29 @@ export const CORPORATE_ACTIVITIES = [
   "Agritech / Agrovoltaica",
 ];
 
+/* ── Originación: Business Lines (from enrich_originacion.py) ── */
+export const ORIGINACION_BUSINESS_LINES = [
+  { id: "Utility-scale developer", label: "Utility-scale developer", icon: "\u26A1" },
+  { id: "Autoconsumo industrial", label: "Autoconsumo industrial", icon: "\uD83C\uDFED" },
+  { id: "Autoconsumo residencial", label: "Autoconsumo residencial", icon: "\uD83C\uDFE0" },
+  { id: "EPC / Construcci\u00F3n", label: "EPC / Construcci\u00F3n", icon: "\uD83D\uDD27" },
+  { id: "IPP", label: "IPP", icon: "\uD83D\uDD0C" },
+  { id: "O&M / Asset Management", label: "O&M / Asset Mgmt", icon: "\uD83D\uDEE0\uFE0F" },
+  { id: "Almacenamiento / BESS", label: "BESS", icon: "\uD83D\uDD0B" },
+  { id: "Hidr\u00F3geno verde", label: "H2 Verde", icon: "\uD83D\uDCA7" },
+  { id: "Biog\u00E1s / Biometano", label: "Biog\u00E1s", icon: "\u267B\uFE0F" },
+  { id: "Agrovoltaica", label: "Agrovoltaica", icon: "\uD83C\uDF31" },
+  { id: "Cargadores EV / Movilidad", label: "EV / Movilidad", icon: "\uD83D\uDE97" },
+  { id: "Trading / PPA", label: "Trading / PPA", icon: "\uD83D\uDCCA" },
+];
+
+/* ── Originación: Project Scales ── */
+export const PROJECT_SCALES = [
+  { id: "Utility-scale", label: "Utility-scale", color: "#3B82F6" },
+  { id: "Distribuido", label: "Distribuido", color: "#F59E0B" },
+  { id: "Mixto", label: "Mixto", color: "#8B5CF6" },
+];
+
 /* ── Technologies (multi-select) ── */
 export const TECHNOLOGIES = [
   { id: "Solar", label: "Solar", icon: "☀️" },

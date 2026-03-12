@@ -189,6 +189,12 @@ export function parseCompanies() {
       // Employee / revenue from enrichment
       employeeCount: enrichment.emp_count || null,
       estimatedRevenue: enrichment.revenue_eur || null,
+      // Originación enrichment (enrich_originacion.py)
+      businessLines: enrichment.business_lines || [],
+      projectScale: enrichment.project_scale || null,
+      knownPipelineMw: enrichment.known_pipeline_mw || null,
+      websiteUrl: enrichment.website_url || null,
+      websiteDescription: enrichment.website_description || null,
       // Investor preferences
       sentiment: enrichment.sentiment || null,
       investorPhase: enrichment.inv_phase || null,
@@ -332,6 +338,32 @@ export function calculateProductMatches(companies) {
         }
       }
       score += Math.min(15, roleScore);
+
+      // --- Business line bonus (max 15) ---
+      if (product.id === "debt" && c.businessLines?.length > 0) {
+        const debtLines = ["Utility-scale developer", "IPP", "EPC / Construcción",
+                            "Almacenamiento / BESS", "Agrovoltaica"];
+        const matchedLines = c.businessLines.filter(bl => debtLines.includes(bl));
+        if (matchedLines.length > 0) {
+          score += Math.min(15, matchedLines.length * 5);
+          signals.push({ type: "business_line", value: matchedLines.join(", ") });
+        }
+      }
+      if (product.id === "equity" && c.businessLines?.length > 0) {
+        const equityLines = ["Utility-scale developer", "IPP", "Trading / PPA"];
+        const matchedLines = c.businessLines.filter(bl => equityLines.includes(bl));
+        if (matchedLines.length > 0) {
+          score += Math.min(15, matchedLines.length * 5);
+          signals.push({ type: "business_line", value: matchedLines.join(", ") });
+        }
+      }
+
+      // --- Pipeline MW bonus (max 10) ---
+      if (c.knownPipelineMw && c.knownPipelineMw > 0) {
+        const mwBonus = c.knownPipelineMw >= 500 ? 10 : c.knownPipelineMw >= 100 ? 7 : 3;
+        score += mwBonus;
+        signals.push({ type: "pipeline_mw", value: `${c.knownPipelineMw} MW` });
+      }
 
       // --- Activity bonus: recent + high volume (max 10) ---
       if (c.monthsAgo <= 6 && c.interactions > 100) {

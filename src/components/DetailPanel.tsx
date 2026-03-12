@@ -601,6 +601,69 @@ FORMATO (JSON valido, sin markdown):
               </div>
             )}
 
+            {/* Perfil de negocio (Originacion enrichment) */}
+            {(c.businessLines?.length > 0 || c.projectScale || c.knownPipelineMw || c.websiteUrl) && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                }}>Perfil de negocio</div>
+
+                {/* Business lines */}
+                {c.businessLines?.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+                    {c.businessLines.map((bl, i) => (
+                      <span key={i} style={{
+                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                        background: "#F59E0B18", color: "#F59E0B", border: "1px solid #F59E0B30",
+                      }}>{bl}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Scale + Pipeline MW */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: c.websiteUrl || c.websiteDescription ? 8 : 0 }}>
+                  {c.projectScale && (() => {
+                    const scaleColors = { "Utility-scale": "#3B82F6", "Distribuido": "#F59E0B", "Mixto": "#8B5CF6" };
+                    const col = scaleColors[c.projectScale] || "#6B7F94";
+                    return (
+                      <span style={{
+                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                        background: col + "18", color: col, border: `1px solid ${col}30`,
+                      }}>{c.projectScale}</span>
+                    );
+                  })()}
+                  {c.knownPipelineMw > 0 && (
+                    <span style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                      background: "#10B98118", color: "#10B981", border: "1px solid #10B98130",
+                    }}>{c.knownPipelineMw} MW pipeline</span>
+                  )}
+                </div>
+
+                {/* Website */}
+                {c.websiteUrl && (
+                  <div style={{ fontSize: 11, marginBottom: c.websiteDescription ? 6 : 0 }}>
+                    <a href={c.websiteUrl.startsWith("http") ? c.websiteUrl : `https://${c.websiteUrl}`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{ color: "#3B82F6", textDecoration: "none" }}>
+                      {c.websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                    </a>
+                  </div>
+                )}
+
+                {/* Website description */}
+                {c.websiteDescription && (
+                  <div style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.5 }}>
+                    {c.websiteDescription}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Historico trimestral compacto */}
             {det?.timeline?.length > 0 && (
               <SummaryRow

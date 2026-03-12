@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch } from './utils/data';
-import { PER_PAGE, COMPANY_ROLES, TECHNOLOGIES, PRODUCTS, ALL_COMPANY_TYPES, STATUS_LABELS, STATUS_COLORS } from './utils/constants';
+import { PER_PAGE, COMPANY_ROLES, TECHNOLOGIES, PRODUCTS, ALL_COMPANY_TYPES, STATUS_LABELS, STATUS_COLORS, ORIGINACION_BUSINESS_LINES, PROJECT_SCALES } from './utils/constants';
 import CompanyTable from './components/CompanyTable';
 import DetailPanel from './components/DetailPanel';
 import KanbanView from './components/KanbanView';
@@ -192,6 +192,8 @@ export default function App() {
   const [selPipeline, setSelPipeline] = useState("");  // "" | "_any" | stage name
   const [selSentiment, setSelSentiment] = useState<string[]>([]);
   const [selTicket, setSelTicket] = useState<string[]>([]);
+  const [selBusinessLines, setSelBusinessLines] = useState<string[]>([]);
+  const [selScale, setSelScale] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
@@ -263,6 +265,9 @@ export default function App() {
       });
     }
 
+    if (selBusinessLines.length) list = list.filter(c => selBusinessLines.some(bl => c.businessLines?.includes(bl)));
+    if (selScale.length) list = list.filter(c => selScale.includes(c.projectScale));
+
     // Cleanup mode filters
     if (cleanupMode && cleanupFilter === 'suspicious') {
       list = list.filter(c => isSuspiciousCompany(c));
@@ -281,7 +286,7 @@ export default function App() {
       }
       return m * ((a[sortBy] || 0) - (b[sortBy] || 0));
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, selSentiment, selTicket, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, selSentiment, selTicket, selBusinessLines, selScale, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -578,7 +583,7 @@ export default function App() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
               Filtros
               {(() => {
-                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0) + selSentiment.length + selTicket.length;
+                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0) + selSentiment.length + selTicket.length + selBusinessLines.length + selScale.length;
                 return count > 0 ? (
                   <span style={{
                     background: showFilters ? "#3B82F6" : "#3B82F6",
@@ -616,7 +621,7 @@ export default function App() {
               boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
             }}>
               {/* Active filters summary + clear */}
-              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct || selSentiment.length > 0 || selTicket.length > 0) && (
+              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct || selSentiment.length > 0 || selTicket.length > 0 || selBusinessLines.length > 0 || selScale.length > 0) && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid #F1F5F9" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
                     <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>Activos:</span>
@@ -662,9 +667,21 @@ export default function App() {
                         {t} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
                       </span>
                     ))}
+                    {selBusinessLines.map(bl => (
+                      <span key={bl} onClick={() => { setSelBusinessLines(prev => prev.filter(x => x !== bl)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#FEF3C7", color: "#92400E", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {ORIGINACION_BUSINESS_LINES.find(b => b.id === bl)?.label || bl} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
+                    {selScale.map(s => (
+                      <span key={s} onClick={() => { setSelScale(prev => prev.filter(x => x !== s)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: (PROJECT_SCALES.find(ps => ps.id === s)?.color || "#8B5CF6") + "20", color: PROJECT_SCALES.find(ps => ps.id === s)?.color || "#8B5CF6", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {s} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
                   </div>
                   <button
-                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setSelSentiment([]); setSelTicket([]); setPage(0); }}
+                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setSelSentiment([]); setSelTicket([]); setSelBusinessLines([]); setSelScale([]); setPage(0); }}
                     style={{ fontSize: 11, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap", fontFamily: "'DM Sans', sans-serif" }}
                   >Limpiar todo</button>
                 </div>
@@ -809,6 +826,48 @@ export default function App() {
                           <FilterPill key={t.id} active={active} color={t.color}
                             onClick={() => { setSelTicket(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]); setPage(0); }}>
                             {t.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                          </FilterPill>
+                        );
+                      })}
+                    </FilterRow>
+                  );
+                })()}
+
+                {/* Linea de negocio (Originacion) */}
+                {(() => {
+                  const totalWithBL = companies.filter(c => c.businessLines?.length > 0).length;
+                  if (totalWithBL === 0) return null;
+                  return (
+                    <FilterRow label="Linea de negocio">
+                      {ORIGINACION_BUSINESS_LINES.map(bl => {
+                        const active = selBusinessLines.includes(bl.id);
+                        const count = companies.filter(c => c.businessLines?.includes(bl.id)).length;
+                        if (count === 0) return null;
+                        return (
+                          <FilterPill key={bl.id} active={active} color="#B45309"
+                            onClick={() => { setSelBusinessLines(prev => prev.includes(bl.id) ? prev.filter(x => x !== bl.id) : [...prev, bl.id]); setPage(0); }}>
+                            {bl.icon} {bl.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                          </FilterPill>
+                        );
+                      })}
+                    </FilterRow>
+                  );
+                })()}
+
+                {/* Escala de proyecto */}
+                {(() => {
+                  const totalWithScale = companies.filter(c => c.projectScale).length;
+                  if (totalWithScale === 0) return null;
+                  return (
+                    <FilterRow label="Escala">
+                      {PROJECT_SCALES.map(s => {
+                        const active = selScale.includes(s.id);
+                        const count = companies.filter(c => c.projectScale === s.id).length;
+                        if (count === 0) return null;
+                        return (
+                          <FilterPill key={s.id} active={active} color={s.color}
+                            onClick={() => { setSelScale(prev => prev.includes(s.id) ? prev.filter(x => x !== s.id) : [...prev, s.id]); setPage(0); }}>
+                            {s.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
                           </FilterPill>
                         );
                       })}
