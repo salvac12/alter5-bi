@@ -379,7 +379,7 @@ def main():
     for domain, company in all_companies.items():
         enrichment = company.get("enrichment") or {}
         role = enrichment.get("role", "")
-        if role == "Originacion":
+        if role in ("Originacion", "Originación"):
             originacion[domain] = company
 
     print(f"  Total Originación companies: {len(originacion)}")
