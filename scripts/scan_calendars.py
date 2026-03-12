@@ -115,6 +115,17 @@ MAX_EXTERNAL_DOMAINS = 3
 # Domains not in CRM are also allowed (unknown company with a real meeting)
 PROSPECT_ELIGIBLE_GROUPS = {"Capital Seeker"}
 
+# CRM roles that are NEVER prospects — investors, advisors, etc. may appear in
+# meetings but the prospect is their portfolio company, not them.
+# Hard block: skip entirely without consulting Gemini.
+NON_PROSPECT_ROLES = {
+    "Inversión", "Inversion",   # banks, funds, investors
+    "Services",                  # law firms, consultants, advisors
+    "Ecosistema",                # regulators, associations
+    "No relevante",              # spam, SaaS tools, etc.
+    "Otro",                      # miscellaneous non-prospects
+}
+
 # Gemini config for smart CRM filter (analyzes email context)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.5-flash"
@@ -1279,11 +1290,24 @@ def main():
                         continue
 
                     # Check CRM classification: only create prospects for
-                    # originacion companies (Capital Seekers) or unknown domains
+                    # originacion companies (Capital Seekers) or unknown domains.
+                    # Hard block: companies with non-prospect roles (Inversión,
+                    # Services, etc.) are NEVER prospects — they may bring us
+                    # prospects from their portfolio, but they themselves are not.
                     crm_entry = crm_companies.get(domain)
                     ai_result = None
                     if crm_entry:
-                        grp = crm_entry.get("enrichment", {}).get("grp", "")
+                        enrichment = crm_entry.get("enrichment", {})
+                        role = enrichment.get("role", "")
+                        grp = enrichment.get("grp", "")
+
+                        # Hard block by CRM role — skip without Gemini
+                        if role and role in NON_PROSPECT_ROLES:
+                            crm_name = crm_entry.get("name", domain)
+                            print(f"  ⊘ Skipped '{crm_name}' ({domain}) — role: {role} (never prospect)")
+                            total_filtered_crm += 1
+                            continue
+
                         if grp and grp not in PROSPECT_ELIGIBLE_GROUPS:
                             crm_name = crm_entry.get("name", domain)
                             ai_result = analyze_prospect_intelligence(

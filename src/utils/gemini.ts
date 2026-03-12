@@ -42,6 +42,121 @@ export async function callGemini(prompt, temperature = 0.3) {
 }
 
 /**
+ * Call Gemini with Google Search grounding enabled.
+ * Used when no CRM data is available — searches the web for company info.
+ * Returns concatenated text from all response parts.
+ */
+export async function callGeminiWithGrounding(prompt: string, temperature = 0.3): Promise<string> {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("VITE_GEMINI_API_KEY no configurada");
+
+  const url = `${GEMINI_API_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature },
+      tools: [{ google_search: {} }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini API error ${res.status}: ${err}`);
+  }
+
+  const data = await res.json();
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  // Concatenate all text parts (grounding may return multiple)
+  const text = parts
+    .filter((p: any) => p.text)
+    .map((p: any) => p.text)
+    .join("\n");
+  if (!text) throw new Error("Gemini no devolvio respuesta");
+  return text;
+}
+
+// ── Stage-specific prompts for Prospect Intelligence ─────────────────────
+
+import { PROSPECT_STAGES } from './airtableProspects';
+
+export const STAGE_PROMPTS: Record<string, string> = {
+  "Lead": `FASE ACTUAL: Lead (cualificacion inicial)
+
+ENFOQUE DE ANALISIS:
+- Evalua si este lead es REAL o un FALSO POSITIVO (proveedor SaaS, intermediario sin proyecto, etc.)
+- Identifica la contraparte real (si hay intermediario, quien es el beneficiario final)
+- Evalua el potencial: tipo de proyecto, tamano estimado, encaje con Alter5
+- Detecta gaps de informacion criticos que impiden cualificar
+- Valora la urgencia y el timing del lead
+
+RECOMENDACION DE FASE:
+- Si hay suficiente informacion y el lead es real, recomienda avanzar a "Interesado"
+- Si faltan datos basicos, recomienda mantener en "Lead" y pedir mas info
+- Si es falso positivo, indicalo claramente`,
+
+  "Interesado": `FASE ACTUAL: Interesado (engagement activo)
+
+ENFOQUE DE ANALISIS:
+- Evalua el nivel de engagement: frecuencia de contacto, quien toma la iniciativa, temas tratados
+- Identifica senales de avance (piden mas info, comparten docs, presentan equipo)
+- Identifica senales de riesgo (ghosting, respuestas vagas, piden solo info sin comprometerse)
+- Mapea stakeholders: quien decide, quien influye, quien bloquea
+- Evalua si hay un proyecto concreto o solo interes generico
+
+RECOMENDACION DE FASE:
+- Si hay proyecto concreto y quieren reunion, recomienda "Reunion"
+- Si el engagement es bajo o hay riesgo, recomienda mantener en "Interesado"
+- Si se ha perdido el contacto, recomienda volver a "Lead"`,
+
+  "Reunion": `FASE ACTUAL: Reunion (preparacion o seguimiento de reunion)
+
+ENFOQUE DE ANALISIS:
+- Evalua la historia de la relacion y el contexto de la(s) reunion(es)
+- Identifica los temas clave a tratar o ya tratados
+- Sugiere proximos pasos concretos post-reunion
+- Evalua la posicion negociadora de Alter5 (fortalezas, debilidades, alternativas del prospect)
+- Identifica a los participantes clave y su rol en la decision
+
+RECOMENDACION DE FASE:
+- Si la reunion fue productiva y hay docs pendientes, recomienda "Documentacion Pendiente"
+- Si necesitan mas reuniones, recomienda mantener en "Reunion"
+- Si no hubo avance, recomienda volver a "Interesado"`,
+
+  "Documentacion Pendiente": `FASE ACTUAL: Documentacion Pendiente (due diligence)
+
+ENFOQUE DE ANALISIS:
+- Evalua que documentos se han recibido vs cuales faltan (NDA, teaser, modelo financiero, etc.)
+- Identifica blockers: que impide avanzar, quien debe actuar
+- Evalua el timeline: cuanto tiempo llevan pendientes los docs, hay deadline
+- Detecta riesgo de attrition: el prospect se esta enfriando, hay competencia
+- Sugiere acciones para desbloquear (reclamar, ofrecer ayuda, escalar)
+
+RECOMENDACION DE FASE:
+- Si toda la documentacion esta completa, recomienda "Listo para Term-Sheet"
+- Si faltan docs pero hay avance, mantener en "Documentacion Pendiente"
+- Si hay bloqueo prolongado, considerar volver a "Reunion" para reactivar`,
+
+  "Listo para Term-Sheet": `FASE ACTUAL: Listo para Term-Sheet (decision final)
+
+ENFOQUE DE ANALISIS:
+- Genera un BRIEFING EJECUTIVO completo:
+  * Tipo de operacion (Project Finance, Corporate Debt, etc.)
+  * Tamano estimado del deal y estructura propuesta
+  * Activo subyacente (tecnologia, ubicacion, MW)
+  * Geografia y regulacion aplicable
+- Metricas clave: TIR estimada, ratio de cobertura, plazo
+- Riesgos principales: regulatorio, construccion, contraparte, mercado
+- Fortalezas del deal: sponsor, tecnologia, contratos, garantias
+- Estructura financiera recomendada
+
+RECOMENDACION DE FASE:
+- En esta fase, no recomiendas mover a otra fase sino que te enfocas en el briefing para la decision de inversion`,
+};
+
+/**
  * Generate an executive summary from meeting notes.
  */
 export async function summarizeMeetingNotes(notes, prospectName) {
@@ -285,11 +400,15 @@ export async function generateProspectIntelligence(
   company: any,
   existingContext: string = "",
   prospectData?: { product?: string; stage?: string; contacts?: { name: string; email: string; role: string }[]; notes?: string; amount?: string; origin?: string; assignedTo?: string },
-): Promise<{ summary: string; suggestedNextSteps: string[] }> {
+): Promise<{ summary: string; suggestedNextSteps: string[]; suggestedStage: string | null }> {
   const enrichment = company?.detail?.enrichment || {};
   const datedSubjects = (company?.detail?.datedSubjects || []).slice(0, 30);
   const context = company?.detail?.context || "";
   const employees = company?.detail?.employees || {};
+  const currentStage = prospectData?.stage || "Lead";
+
+  // Select stage-specific prompt
+  const stagePrompt = STAGE_PROMPTS[currentStage] || STAGE_PROMPTS["Lead"];
 
   // Build per-employee breakdown
   const employeeLines = Object.entries(employees)
@@ -326,7 +445,9 @@ ${prospectData.notes ? `Notas del equipo:\n${prospectData.notes}` : ""}` : "";
 
   const prompt = `Eres un analista senior de deal origination en Alter5 (financiacion de energias renovables en Espana).
 
-${hasCRM ? "Analiza los datos CRM de la siguiente empresa y genera una ficha de inteligencia comercial." : "Analiza los datos disponibles del siguiente prospect y genera una ficha de inteligencia comercial. No hay datos CRM historicos, asi que basa tu analisis en la informacion del prospect."}
+${stagePrompt}
+
+${hasCRM ? "Analiza los datos CRM de la siguiente empresa y genera una ficha de inteligencia comercial adaptada a la fase actual." : "No hay datos CRM historicos. Basa tu analisis en la informacion del prospect disponible."}
 
 === DATOS DEL PROSPECT ===
 Nombre: ${prospectName}
@@ -356,33 +477,54 @@ ${existingContext ? `=== NOTAS PREVIAS DEL EQUIPO ===\n${existingContext}` : ""}
 === INSTRUCCIONES ===
 1. Analiza si este prospect es REAL o un FALSO POSITIVO (ej: proveedor de servicios, herramienta SaaS, intermediario sin proyecto real, etc.)
 2. Si hay un intermediario (broker, asesor, fondo de fondos), identifica quien es el beneficiario final real
-3. Genera un resumen ejecutivo estructurado con:
+3. Genera un resumen ejecutivo estructurado adaptado a la fase "${currentStage}" con:
    - Naturaleza de la relacion y tipo de oportunidad
 ${hasCRM ? "   - Historico de comunicaciones y nivel de engagement" : "   - Informacion disponible y gaps de datos"}
-   - Posicion en el funnel de origination
+   - Analisis especifico de la fase actual (segun las instrucciones de la fase)
    - Riesgos o alertas detectadas
 4. Sugiere proximos pasos concretos y accionables
+5. Recomienda la fase mas adecuada (puede ser la actual u otra)
+
+Las fases validas son: "Lead", "Interesado", "Reunion", "Documentacion Pendiente", "Listo para Term-Sheet"
 
 Responde UNICAMENTE con un JSON valido con esta estructura exacta:
 {
   "is_prospect": true,
   "summary": "Texto del resumen ejecutivo estructurado con saltos de linea para legibilidad. Si es falso positivo, indicar FALSO POSITIVO al inicio.",
-  "suggested_next_steps": ["Paso 1", "Paso 2", "Paso 3"]
+  "suggested_next_steps": ["Paso 1", "Paso 2", "Paso 3"],
+  "suggested_stage": "Interesado"
 }`;
 
-  const raw = await callGemini(prompt, 0.2);
+  // Use grounding (web search) when no CRM data available
+  let raw: string;
+  if (!hasCRM) {
+    try {
+      raw = await callGeminiWithGrounding(prompt, 0.2);
+    } catch {
+      // Fallback to normal call if grounding fails
+      raw = await callGemini(prompt, 0.2);
+    }
+  } else {
+    raw = await callGemini(prompt, 0.2);
+  }
+
   const cleaned = raw.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
 
   try {
     const parsed = JSON.parse(cleaned);
+    // Validate suggestedStage against known stages
+    let suggestedStage: string | null = parsed.suggested_stage || null;
+    if (suggestedStage && !PROSPECT_STAGES.includes(suggestedStage)) {
+      suggestedStage = null;
+    }
     return {
       summary: parsed.summary || "",
       suggestedNextSteps: Array.isArray(parsed.suggested_next_steps) ? parsed.suggested_next_steps : [],
+      suggestedStage,
     };
   } catch {
     console.warn("Failed to parse Gemini prospect intelligence response:", cleaned);
-    // Return raw text as summary if JSON parsing fails
-    return { summary: cleaned, suggestedNextSteps: [] };
+    return { summary: cleaned, suggestedNextSteps: [], suggestedStage: null };
   }
 }
 

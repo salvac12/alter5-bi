@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   updateProspect,
   createProspect,
@@ -213,13 +213,22 @@ export default function ProspectPanel({
     ).then(async (result) => {
       if (cancelled) return;
       try {
-        await updateProspect(prospect.id, { "AI Summary": result.summary });
+        const aiFields: Record<string, any> = {
+          "AI Summary": result.summary,
+          "AI Generated At": new Date().toISOString(),
+        };
+        if (result.suggestedStage) aiFields["AI Suggested Stage"] = result.suggestedStage;
+        await updateProspect(prospect.id, aiFields);
         if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
           const stepsText = result.suggestedNextSteps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n');
           updateField('nextSteps', stepsText);
           await updateProspect(prospect.id, { "Next Steps": stepsText });
         }
-        if (prospect) prospect.aiSummary = result.summary;
+        if (prospect) {
+          prospect.aiSummary = result.summary;
+          prospect.aiSuggestedStage = result.suggestedStage || "";
+          prospect.aiGeneratedAt = new Date().toISOString();
+        }
       } catch { /* silent — will show on next open */ }
     }).catch((err: any) => {
       if (!cancelled) setAiIntelError(err.message || 'Error al generar inteligencia IA');
@@ -228,6 +237,50 @@ export default function ProspectPanel({
     });
     return () => { cancelled = true; };
   }, [prospect?.id]);
+
+  // ── Auto-regen AI when stage changes (selector in panel) ──
+  const prevStageRef = useRef(formData.stage);
+  useEffect(() => {
+    if (isNew || !prospect?.id || !isGeminiConfigured()) return;
+    if (!formData.name) return;
+    // Only trigger when stage actually changed from its previous value
+    if (formData.stage === prevStageRef.current) return;
+    prevStageRef.current = formData.stage;
+
+    const timer = setTimeout(() => {
+      let cancelled = false;
+      setAiIntelLoading(true);
+      setAiIntelError(null);
+      generateProspectIntelligence(
+        formData.name,
+        matchedCompany,
+        formData.context,
+        { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
+      ).then(async (result) => {
+        if (cancelled) return;
+        try {
+          const aiFields: Record<string, any> = {
+            "AI Summary": result.summary,
+            "AI Generated At": new Date().toISOString(),
+          };
+          if (result.suggestedStage) aiFields["AI Suggested Stage"] = result.suggestedStage;
+          await updateProspect(prospect.id, aiFields);
+          if (prospect) {
+            prospect.aiSummary = result.summary;
+            prospect.aiSuggestedStage = result.suggestedStage || "";
+            prospect.aiGeneratedAt = new Date().toISOString();
+          }
+          showFeedback('success', 'IA regenerada para nueva fase');
+        } catch { /* silent */ }
+      }).catch((err: any) => {
+        if (!cancelled) setAiIntelError(err.message || 'Error al regenerar IA');
+      }).finally(() => {
+        if (!cancelled) setAiIntelLoading(false);
+      });
+      return () => { cancelled = true; };
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData.stage]);
 
   const handleAiProcess = async () => {
     setAiLoading(true);
@@ -937,14 +990,22 @@ export default function ProspectPanel({
                           formData.context,
                           { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
                         );
-                        await updateProspect(prospect.id, { "AI Summary": result.summary });
+                        const aiFields: Record<string, any> = {
+                          "AI Summary": result.summary,
+                          "AI Generated At": new Date().toISOString(),
+                        };
+                        if (result.suggestedStage) aiFields["AI Suggested Stage"] = result.suggestedStage;
+                        await updateProspect(prospect.id, aiFields);
                         if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
-                          const stepsText = result.suggestedNextSteps.map((s, i) => `${i + 1}. ${s}`).join('\n');
+                          const stepsText = result.suggestedNextSteps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n');
                           updateField('nextSteps', stepsText);
                           await updateProspect(prospect.id, { "Next Steps": stepsText });
                         }
-                        // Update local prospect data
-                        if (prospect) prospect.aiSummary = result.summary;
+                        if (prospect) {
+                          prospect.aiSummary = result.summary;
+                          prospect.aiSuggestedStage = result.suggestedStage || "";
+                          prospect.aiGeneratedAt = new Date().toISOString();
+                        }
                         showFeedback('success', 'Inteligencia IA actualizada');
                       } catch (err: any) {
                         setAiIntelError(err.message || 'Error al generar inteligencia IA');
@@ -969,16 +1030,70 @@ export default function ProspectPanel({
               </div>
 
               {prospect?.aiSummary ? (
-                <div style={{
-                  fontSize: 13, color: DK.text,
-                  whiteSpace: 'pre-wrap', lineHeight: 1.6,
-                  padding: '10px 12px',
-                  background: `${DK.bg}80`,
-                  borderRadius: RADIUS.sm,
-                  border: `1px solid ${DK.border}`,
-                }}>
-                  {prospect.aiSummary}
-                </div>
+                <>
+                  <div style={{
+                    fontSize: 13, color: DK.text,
+                    whiteSpace: 'pre-wrap', lineHeight: 1.6,
+                    padding: '10px 12px',
+                    background: `${DK.bg}80`,
+                    borderRadius: RADIUS.sm,
+                    border: `1px solid ${DK.border}`,
+                  }}>
+                    {prospect.aiSummary}
+                  </div>
+                  {/* Suggested stage badge + action button */}
+                  {prospect.aiSuggestedStage && prospect.aiSuggestedStage !== formData.stage && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      marginTop: 10, padding: '8px 12px',
+                      background: `${DK.purple}12`,
+                      borderRadius: RADIUS.sm,
+                      border: `1px solid ${DK.purple}30`,
+                    }}>
+                      <span style={{ fontSize: 12, color: DK.textSecondary, whiteSpace: 'nowrap' }}>
+                        IA recomienda:
+                      </span>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700,
+                        color: (PROSPECT_STAGE_COLORS as any)[prospect.aiSuggestedStage]?.color || DK.purple,
+                        background: (PROSPECT_STAGE_COLORS as any)[prospect.aiSuggestedStage]?.bg || `${DK.purple}15`,
+                        border: `1px solid ${(PROSPECT_STAGE_COLORS as any)[prospect.aiSuggestedStage]?.border || DK.purple}`,
+                        borderRadius: 5, padding: '3px 8px',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {(PROSPECT_STAGE_SHORT as any)[prospect.aiSuggestedStage] || prospect.aiSuggestedStage}
+                      </span>
+                      <button
+                        disabled={aiIntelLoading}
+                        onClick={async () => {
+                          const newStage = prospect.aiSuggestedStage;
+                          updateField('stage', newStage);
+                          try {
+                            await updateProspect(prospect.id, { "Stage": newStage });
+                            if (prospect) prospect.stage = newStage;
+                            showFeedback('success', `Movido a ${(PROSPECT_STAGE_SHORT as any)[newStage] || newStage}`);
+                          } catch (err: any) {
+                            showFeedback('error', 'Error al mover: ' + err.message);
+                          }
+                        }}
+                        style={{
+                          marginLeft: 'auto',
+                          padding: '4px 10px', fontSize: 11, fontWeight: 700,
+                          color: '#FFFFFF',
+                          background: `linear-gradient(135deg, ${DK.purple}, ${DK.accent})`,
+                          border: 'none', borderRadius: RADIUS.sm,
+                          cursor: aiIntelLoading ? 'not-allowed' : 'pointer',
+                          fontFamily: 'inherit', transition: 'all 0.15s',
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          whiteSpace: 'nowrap',
+                          opacity: aiIntelLoading ? 0.6 : 1,
+                        }}
+                      >
+                        Mover a {(PROSPECT_STAGE_SHORT as any)[prospect.aiSuggestedStage] || prospect.aiSuggestedStage} →
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div>
                   <p style={{
@@ -1008,13 +1123,22 @@ export default function ProspectPanel({
                           { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
                         );
                         if (!isNew && prospect?.id) {
-                          await updateProspect(prospect.id, { "AI Summary": result.summary });
+                          const aiFields: Record<string, any> = {
+                            "AI Summary": result.summary,
+                            "AI Generated At": new Date().toISOString(),
+                          };
+                          if (result.suggestedStage) aiFields["AI Suggested Stage"] = result.suggestedStage;
+                          await updateProspect(prospect.id, aiFields);
                           if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
-                            const stepsText = result.suggestedNextSteps.map((s, i) => `${i + 1}. ${s}`).join('\n');
+                            const stepsText = result.suggestedNextSteps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n');
                             updateField('nextSteps', stepsText);
                             await updateProspect(prospect.id, { "Next Steps": stepsText });
                           }
-                          if (prospect) prospect.aiSummary = result.summary;
+                          if (prospect) {
+                            prospect.aiSummary = result.summary;
+                            prospect.aiSuggestedStage = result.suggestedStage || "";
+                            prospect.aiGeneratedAt = new Date().toISOString();
+                          }
                         }
                         showFeedback('success', 'Inteligencia IA generada');
                       } catch (err: any) {

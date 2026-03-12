@@ -252,6 +252,8 @@ export function normalizeProspect(record) {
   try { tasks = JSON.parse(f["Tasks"] || "[]"); } catch { tasks = []; }
 
   const aiSummary = f["AI Summary"] || "";
+  const aiSuggestedStage = f["AI Suggested Stage"] || "";
+  const aiGeneratedAt = f["AI Generated At"] || "";
 
   return {
     id: record.id,
@@ -273,6 +275,8 @@ export function normalizeProspect(record) {
     recordStatus,
     tasks,
     aiSummary,
+    aiSuggestedStage,
+    aiGeneratedAt,
     _raw: f,
   };
 }

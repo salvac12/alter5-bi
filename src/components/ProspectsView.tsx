@@ -12,6 +12,7 @@ import {
   ORIGIN_OPTIONS,
 } from '../utils/airtableProspects';
 import { isAirtableConfigured } from '../utils/airtable';
+import { isGeminiConfigured, generateProspectIntelligence } from '../utils/gemini';
 import {
   fetchBridgePipelineCards,
   computeSyncSuggestions,
@@ -202,7 +203,51 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
         p.name = name;
       }
 
-      // --- Step 2: Aggressive multi-key dedup ---
+      // --- Step 2: Extract ALL domains from each prospect (contacts + contactEmail) ---
+      const getAllDomains = (p: any): string[] => {
+        const domains: string[] = [];
+        if (p.contactEmail) {
+          const d = domainFromEmail(p.contactEmail);
+          if (d && !isInternalDomain(d)) domains.push(d);
+        }
+        if (p.contacts?.length) {
+          for (const c of p.contacts) {
+            const d = domainFromEmail(c.email || '');
+            if (d && !isInternalDomain(d) && !domains.includes(d)) domains.push(d);
+          }
+        }
+        return domains;
+      };
+
+      // --- Step 3: Filter out non-prospect companies (Inversión, Services, etc.) ---
+      // Only Originación companies (or unknowns not in CRM) should be prospects
+      const NON_PROSPECT_ROLES = new Set(['Inversión', 'Inversion', 'Services', 'Ecosistema', 'No relevante', 'Otro']);
+
+      const filtered = active.filter(p => {
+        const domains = getAllDomains(p);
+        // Check if ANY contact domain matches a non-prospect CRM company
+        for (const d of domains) {
+          const crm = crmByDomain.get(d);
+          if (crm) {
+            const role = crm.role || crm.group || '';
+            if (NON_PROSPECT_ROLES.has(role)) return false;
+          }
+        }
+        // Also check by prospect name vs CRM name
+        const pName = (p.name || '').trim().toLowerCase();
+        if (pName.length >= 4) {
+          for (const c of companies) {
+            if (c.name.toLowerCase() === pName) {
+              const role = c.role || c.group || '';
+              if (NON_PROSPECT_ROLES.has(role)) return false;
+              break;
+            }
+          }
+        }
+        return true;
+      });
+
+      // --- Step 4: Aggressive multi-key dedup ---
       const normalizeName = (name: string): string => {
         return stripCorpSuffix(name)
           .toLowerCase()
@@ -240,14 +285,35 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       // Spaceless key catches "dunascapital" vs "dunas capital"
       const spacelessKey = (nk: string): string => nk.replace(/\s/g, '');
 
-      for (const p of active) {
+      /** Register all domains of a prospect in the domain index */
+      const registerDomains = (p: any) => {
+        for (const d of getAllDomains(p)) {
+          byDomain.set(d, p);
+        }
+      };
+
+      for (const p of filtered) {
         const nk = normalizeName(p.name);
         if (!nk) continue;
         const sk = spacelessKey(nk);
 
-        // Check if this prospect matches an existing one by domain, name, or spaceless name
-        const pDomain = p.contactEmail ? domainFromEmail(p.contactEmail) : '';
-        const domainMatch = pDomain ? byDomain.get(pDomain) : undefined;
+        // Check if this prospect matches an existing one by ANY domain, name, or spaceless name
+        const pDomains = getAllDomains(p);
+        let domainMatch: any = undefined;
+        for (const d of pDomains) {
+          domainMatch = byDomain.get(d);
+          if (domainMatch) break;
+        }
+        // Also check if both prospects match the same CRM company (dedup by CRM domain)
+        if (!domainMatch) {
+          for (const d of pDomains) {
+            const crm = crmByDomain.get(d);
+            if (crm?.domain) {
+              domainMatch = byDomain.get(crm.domain);
+              if (domainMatch) break;
+            }
+          }
+        }
         const nameMatch = byName.get(nk) || byName.get(sk);
         const existing = domainMatch || nameMatch;
 
@@ -272,13 +338,12 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
           byName.set(spacelessKey(winnerNk), winner);
           byName.set(existingNk, winner);
           byName.set(spacelessKey(existingNk), winner);
-          if (pDomain) byDomain.set(pDomain, winner);
-          const eDomain = existing.contactEmail ? domainFromEmail(existing.contactEmail) : '';
-          if (eDomain) byDomain.set(eDomain, winner);
+          registerDomains(winner);
+          registerDomains(loser);
         } else {
           byName.set(nk, p);
           byName.set(sk, p);
-          if (pDomain) byDomain.set(pDomain, p);
+          registerDomains(p);
         }
       }
 
@@ -346,6 +411,27 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       setProspects(updated);
 
       await updateProspect(draggedCard.id, { "Stage": targetStage });
+
+      // Fire-and-forget: regen AI intelligence for new stage
+      if (isGeminiConfigured()) {
+        const matchedCo = findCompanyForProspect(draggedCard);
+        generateProspectIntelligence(
+          draggedCard.name,
+          matchedCo,
+          draggedCard.context || "",
+          { product: draggedCard.product, stage: targetStage, contacts: draggedCard.contacts, notes: draggedCard.context, amount: String(draggedCard.amount || ""), origin: draggedCard.origin, assignedTo: draggedCard.assignedTo },
+        ).then(async (result) => {
+          const aiFields: Record<string, any> = {
+            "AI Summary": result.summary,
+            "AI Generated At": new Date().toISOString(),
+          };
+          if (result.suggestedStage) aiFields["AI Suggested Stage"] = result.suggestedStage;
+          await updateProspect(draggedCard.id, aiFields);
+          setProspects(prev => prev.map(p =>
+            p.id === draggedCard.id ? { ...p, aiSummary: result.summary, aiSuggestedStage: result.suggestedStage || "", aiGeneratedAt: new Date().toISOString() } : p
+          ));
+        }).catch(err => console.warn("AI regen after drop failed:", err));
+      }
     } catch (err: any) {
       console.error('Failed to update prospect stage:', err);
       setProspects(prospects);
@@ -390,6 +476,27 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
       );
       setProspects(updated);
       await updateProspect(prospect.id, { "Stage": targetStage });
+
+      // Fire-and-forget: regen AI intelligence for new stage
+      if (isGeminiConfigured()) {
+        const matchedCo = findCompanyForProspect(prospect);
+        generateProspectIntelligence(
+          prospect.name,
+          matchedCo,
+          prospect.context || "",
+          { product: prospect.product, stage: targetStage, contacts: prospect.contacts, notes: prospect.context, amount: String(prospect.amount || ""), origin: prospect.origin, assignedTo: prospect.assignedTo },
+        ).then(async (result) => {
+          const aiFields: Record<string, any> = {
+            "AI Summary": result.summary,
+            "AI Generated At": new Date().toISOString(),
+          };
+          if (result.suggestedStage) aiFields["AI Suggested Stage"] = result.suggestedStage;
+          await updateProspect(prospect.id, aiFields);
+          setProspects(prev => prev.map(p =>
+            p.id === prospect.id ? { ...p, aiSummary: result.summary, aiSuggestedStage: result.suggestedStage || "", aiGeneratedAt: new Date().toISOString() } : p
+          ));
+        }).catch(err => console.warn("AI regen after move failed:", err));
+      }
     } catch (err: any) {
       console.error('Failed to move prospect:', err);
       setProspects(prospects);
@@ -1404,6 +1511,26 @@ function KanbanCard({ prospect, colColor, onDragStart, onDragEnd, onClick, match
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* AI suggested stage mini badge */}
+        {prospect.aiSuggestedStage && prospect.aiSuggestedStage !== prospect.stage && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            marginTop: 6, padding: '3px 8px',
+            background: '#F5F3FF', borderRadius: 5,
+            border: '1px solid #DDD6FE',
+          }}>
+            <span style={{ fontSize: 9, color: '#8B5CF6', fontWeight: 700, fontFamily: "'DM Sans', sans-serif" }}>
+              ✦ →
+            </span>
+            <span style={{
+              fontSize: 9, fontWeight: 700, color: '#6B21A8',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {(PROSPECT_STAGE_SHORT as any)[prospect.aiSuggestedStage] || prospect.aiSuggestedStage}
+            </span>
           </div>
         )}
       </div>
