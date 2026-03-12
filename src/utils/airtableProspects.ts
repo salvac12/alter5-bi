@@ -56,6 +56,7 @@ export const ORIGIN_OPTIONS = [
   "Campana",
   "Cold Outreach",
   "Web/Inbound",
+  "Pipeline",
   "Otro",
 ];
 
