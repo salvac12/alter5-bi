@@ -12,15 +12,22 @@
   If the domain doesn't match any existing prospect, a new
   prospect is created in stage "Reunion".
 
+  Uses Gemini AI to generate structured intelligence summaries
+  for each prospect (relationship analysis, operation details,
+  next steps).
+
   Variables de entorno requeridas:
     GOOGLE_SERVICE_ACCOUNT_JSON  — JSON de la service account
     AIRTABLE_PAT                 — Personal Access Token
+    GEMINI_API_KEY               — Gemini API key (for AI analysis)
 
   Uso:
-    python scripts/scan_calendars.py              # scan desde last_scan + check docs
-    python scripts/scan_calendars.py --dry-run    # log sin PATCH
-    python scripts/scan_calendars.py --days 7     # override: ultimos 7 dias
-    python scripts/scan_calendars.py --check-docs # solo verificar docs (sin calendar scan)
+    python scripts/scan_calendars.py                    # scan desde last_scan + sync opps + check docs
+    python scripts/scan_calendars.py --dry-run          # log sin PATCH
+    python scripts/scan_calendars.py --days 7           # override: ultimos 7 dias
+    python scripts/scan_calendars.py --check-docs       # solo verificar docs (sin calendar scan)
+    python scripts/scan_calendars.py --generate-summaries  # generar AI summaries para prospects sin resumen
+    python scripts/scan_calendars.py --sync-opportunities  # importar opportunities como prospects
 ===============================================================
 """
 
@@ -29,7 +36,9 @@ import json
 import os
 import ssl
 import sys
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -70,8 +79,6 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-import urllib.parse
-
 INTERNAL_DOMAINS = {
     "alter-5.com",
     "alter5.com",
@@ -121,6 +128,25 @@ MAILBOX_TO_MANAGER = {
     "carlos.almodovar@alter-5.com": "Carlos Almodovar",
     "gonzalo.degracia@alter-5.com": "Gonzalo de Gracia",
     "rafael.nevado@alter-5.com": "Rafael Nevado",
+}
+
+# Opportunity stage -> Prospect stage mapping
+OPPORTUNITY_STAGE_MAP = {
+    "New": "Lead",
+    "Origination - Preparation & NDA": "Documentacion Pendiente",
+    "Origination - Financial Analysis": "Documentacion Pendiente",
+    "Origination - Termsheet": "Listo para Term-Sheet",
+}
+
+# Opportunity business type -> Prospect Product mapping
+BUSINESS_TYPE_TO_PRODUCT = {
+    "Project Finance": "Project Finance",
+    "Corporate Debt": "Corporate Debt",
+    "Development Debt": "Development Debt",
+    "PF Guaranteed": "PF Guaranteed",
+    "Investment": "Investment",
+    "Co-Development": "Co-Development",
+    "M&A": "M&A",
 }
 
 
@@ -305,12 +331,32 @@ def build_domain_index(prospects):
     return index
 
 
+def build_name_index(prospects):
+    """Build a dict: normalized_name -> prospect record for dedup checks."""
+    index = {}
+    for rec in prospects:
+        f = rec.get("fields", {})
+        name = (f.get("Prospect Name") or "").strip().lower().replace(" ", "")
+        if name:
+            index[name] = rec
+    return index
+
+
 def patch_prospect_stage(record_id, dry_run=False):
     """PATCH a prospect's Stage to 'Reunion'."""
     if dry_run:
         return True
     url = f"{PROSPECTS_API}/{record_id}"
     result = airtable_request(url, method="PATCH", data={"fields": {"Stage": "Reunion"}})
+    return result is not None
+
+
+def patch_prospect_fields(record_id, fields, dry_run=False):
+    """PATCH arbitrary fields on a prospect record."""
+    if dry_run:
+        return True
+    url = f"{PROSPECTS_API}/{record_id}"
+    result = airtable_request(url, method="PATCH", data={"fields": fields})
     return result is not None
 
 
@@ -371,10 +417,12 @@ def merge_contacts_to_prospect(prospect, new_attendees, dry_run=False):
 
 
 def create_prospect_from_meeting(domain, employee_email, event_summary,
-                                  company_name=None, attendees=None, dry_run=False):
+                                  company_name=None, attendees=None,
+                                  ai_result=None, dry_run=False):
     """Create a new prospect in stage 'Reunion' from a calendar meeting.
 
     attendees: list of {name, email, domain} for this domain's attendees.
+    ai_result: dict from analyze_prospect_intelligence() with summary and next steps.
     """
     manager = MAILBOX_TO_MANAGER.get(employee_email, "")
     name = company_name or domain.split(".")[0].capitalize()
@@ -405,6 +453,15 @@ def create_prospect_from_meeting(domain, employee_email, event_summary,
     if contacts:
         fields["Contacts"] = json.dumps(contacts, ensure_ascii=False)
         fields["Contact Email"] = contacts[0]["email"]
+
+    # Add AI-generated intelligence
+    if ai_result:
+        summary = ai_result.get("summary", "")
+        if summary:
+            fields["AI Summary"] = summary
+        steps = ai_result.get("suggested_next_steps", [])
+        if steps:
+            fields["Next Steps"] = "\n".join(f"• {s}" for s in steps)
 
     if dry_run:
         return True
@@ -647,16 +704,24 @@ def review_all_prospect_stages(prospects, docs_index, dry_run=False):
 
 
 # ---------------------------------------------------------------------------
-# Gemini smart filter — analyze email context for capital-seeking intent
+# Gemini AI — prospect intelligence analysis
 # ---------------------------------------------------------------------------
-_gemini_cache = {}  # domain -> bool (avoid re-asking for same domain across employees)
+_gemini_cache = {}  # domain -> dict result (avoid re-asking for same domain across employees)
 
 
-def ask_gemini_is_capital_seeker(domain, crm_entry, event_summary):
-    """Ask Gemini if this company is seeking financing based on email context.
+def analyze_prospect_intelligence(domain, crm_entry, event_summary):
+    """Analyze a company's relationship with Alter5 using Gemini AI.
 
-    Returns True if the company (or a related party) is seeking debt/equity,
-    False otherwise. Returns None if Gemini is unavailable.
+    Sends CRM context, enrichment data, email history, and meeting info to Gemini
+    to generate a structured intelligence summary.
+
+    Returns a dict with keys:
+      - is_prospect (bool): whether this is a real prospect
+      - summary (str): structured analysis in Spanish
+      - suggested_next_steps (list[str]): concrete action items
+
+    Returns None if Gemini is unavailable or on error.
+    Results are cached by domain within a single run.
     """
     if domain in _gemini_cache:
         return _gemini_cache[domain]
@@ -666,45 +731,75 @@ def ask_gemini_is_capital_seeker(domain, crm_entry, event_summary):
 
     company_name = crm_entry.get("name", domain)
     context = crm_entry.get("context", "")
-    grp = crm_entry.get("enrichment", {}).get("grp", "")
-    tp = crm_entry.get("enrichment", {}).get("tp", "")
+    enrichment = crm_entry.get("enrichment", {})
+    grp = enrichment.get("grp", "")
+    tp = enrichment.get("tp", "")
+    role = enrichment.get("role", "")
+    segment = enrichment.get("segment", "")
+    technologies = enrichment.get("technologies", "")
 
-    # Collect recent subjects
+    # Collect recent dated_subjects (30 entries with date + subject + extract)
     dated_subjects = crm_entry.get("dated_subjects", [])
     subjects = []
-    for ds in dated_subjects[-15:]:
-        if isinstance(ds, list) and len(ds) >= 2:
+    for ds in dated_subjects[-30:]:
+        if isinstance(ds, list) and len(ds) >= 3:
+            subjects.append(f"[{ds[0]}] {ds[1]} — {ds[2]}")
+        elif isinstance(ds, list) and len(ds) >= 2:
             subjects.append(f"[{ds[0]}] {ds[1]}")
         elif isinstance(ds, str):
             subjects.append(ds)
     if not subjects:
-        subjects = crm_entry.get("subjects", [])[-15:]
+        subjects = crm_entry.get("subjects", [])[-30:]
 
     subjects_text = "\n".join(subjects) if subjects else "(sin emails)"
 
-    prompt = f"""Alter5 es una empresa de financiación de energías renovables (deuda y equity).
-Analiza si la empresa "{company_name}" ({domain}) está buscando financiación o representa una oportunidad de negocio para Alter5 donde alguien necesita capital (deuda o equity).
+    # Per-employee breakdown
+    employees = crm_entry.get("employees", {})
+    employee_lines = []
+    for emp_name, emp_data in employees.items():
+        count = emp_data if isinstance(emp_data, int) else emp_data.get("count", 0)
+        employee_lines.append(f"  - {emp_name}: {count} emails")
+    employee_text = "\n".join(employee_lines) if employee_lines else "(sin desglose)"
 
-Clasificación actual en CRM: grupo={grp}, tipo={tp}
-Contexto CRM: {context[:500]}
-Titulo reunion reciente: {event_summary}
+    # Event attendees info
+    attendees_text = ""
+    if isinstance(event_summary, dict):
+        # If event_summary is actually a full event object with attendees
+        attendees_text = f"\nAsistentes: {event_summary.get('attendees', '')}"
+        event_summary = event_summary.get("summary", "(sin titulo)")
 
-Últimos emails intercambiados:
+    prompt = f"""Alter5 es una empresa de financiacion de energias renovables (deuda y equity para proyectos solares, eolicos, BESS, etc.)
+
+Analiza la relacion con "{company_name}" ({domain}):
+
+IMPORTANTE sobre intermediarios:
+- Si la empresa es un ASESOR o INTERMEDIARIO (advisory, consulting, legal) que presenta deals de TERCEROS, identifica quien es el beneficiario final del proyecto y que busca.
+- Ejemplo: JQ Advisors es intermediario, el cliente real es Grupo Visalia que busca financiacion merchant.
+- Ejemplo: Q-Impact es un fondo, pero presenta una participada (Green Home Finance) que necesita un tramo junior.
+
+Genera un resumen estructurado en espanol:
+1. EMPRESA: Que hace y su relacion con Alter5
+2. OPERACION: Que buscan exactamente (tipo de financiacion, proyecto, importe si se menciona)
+3. BENEFICIARIO FINAL: Si es intermediario, quien es el destinatario real del proyecto
+4. ESTADO: Donde esta la relacion ahora (primeros contactos, en analisis, docs enviadas, etc.)
+5. PROXIMOS PASOS: 2-3 acciones concretas que deberia tomar el equipo
+
+Si la empresa NO es un prospect real (no busca financiacion, solo presta servicios sin deal concreto, es un banco ofreciendo capital, networking puro), indica claramente "POSIBLE FALSO POSITIVO" al inicio y explica por que.
+
+Datos CRM:
+  Grupo: {grp}, Tipo: {tp}, Rol: {role}, Segmento: {segment}, Tecnologias: {technologies}
+  Contexto: {context}
+
+Desglose por empleado:
+{employee_text}
+
+Emails recientes (ultimos 30):
 {subjects_text}
 
-IMPORTANTE: Responde SOLO con un JSON:
-{{"is_prospect": true/false, "reason": "explicacion breve en español"}}
+Reunion reciente: {event_summary}{attendees_text}
 
-Criterios para is_prospect=true:
-- La empresa busca financiación directamente (deuda, equity, project finance)
-- La empresa tiene participadas/proyectos que necesitan financiación
-- La reunión trata sobre una operación donde alguien necesita capital
-- Es un intermediario presentando un deal que necesita financiación
-
-Criterios para is_prospect=false:
-- Solo presta servicios (legal, consultoría, rating) sin deal concreto
-- Es un banco/inversor buscando invertir (no buscan capital, lo ofrecen)
-- La relación es puramente networking sin operación concreta"""
+Responde SOLO con JSON:
+{{"is_prospect": true/false, "summary": "resumen estructurado completo", "suggested_next_steps": ["paso 1", "paso 2", "paso 3"]}}"""
 
     try:
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
@@ -735,15 +830,225 @@ Criterios para is_prospect=false:
 
         result = json.loads(text)
         is_prospect = result.get("is_prospect", False)
-        reason = result.get("reason", "")
-        _gemini_cache[domain] = is_prospect
-        print(f"    Gemini: {'YES' if is_prospect else 'NO'} — {reason}")
-        return is_prospect
+        summary = result.get("summary", "")
+        steps = result.get("suggested_next_steps", [])
+
+        _gemini_cache[domain] = result
+        preview = summary[:80] + "..." if len(summary) > 80 else summary
+        print(f"    Gemini: {'PROSPECT' if is_prospect else 'NO'} — {preview}")
+        return result
 
     except Exception as e:
         print(f"    Gemini error: {e}")
-        _gemini_cache[domain] = False
+        _gemini_cache[domain] = {"is_prospect": False, "summary": "", "suggested_next_steps": []}
         return None
+
+
+# ---------------------------------------------------------------------------
+# Sync Opportunities → Prospects
+# ---------------------------------------------------------------------------
+def fetch_all_opportunities():
+    """Fetch active Transaction opportunities from the Opportunities table."""
+    all_records = []
+    offset = None
+    formula = urllib.parse.quote(
+        'AND({Type of opportunity} = "Transaction", {Record Status} = "Active", {Global Status} != "Stand-by")'
+    )
+    base_url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{OPPORTUNITIES_TABLE_ID}"
+
+    while True:
+        url = f"{base_url}?filterByFormula={formula}"
+        if offset:
+            url += f"&offset={offset}"
+        data = airtable_request(url)
+        if not data:
+            break
+        all_records.extend(data.get("records", []))
+        offset = data.get("offset")
+        if not offset:
+            break
+
+    return all_records
+
+
+def sync_opportunities_to_prospects(prospects, dry_run=False):
+    """Import early-stage Opportunities as Prospects.
+
+    Fetches all active Transactions, filters to early stages, and creates
+    prospect records for any that don't already exist.
+    """
+    print(f"\n{'='*50}")
+    print("Syncing Opportunities → Prospects...")
+
+    # Fetch opportunities
+    opportunities = fetch_all_opportunities()
+    print(f"  {len(opportunities)} active transactions found")
+
+    # Build name index from existing prospects for dedup
+    name_index = build_name_index(prospects)
+
+    created = 0
+    skipped = 0
+
+    for opp in opportunities:
+        f = opp.get("fields", {})
+        opp_name = (f.get("Opportunity Name") or f.get("Name") or "").strip()
+        stage = f.get("Global Status", "")
+
+        # Only sync early-stage opportunities
+        if stage not in OPPORTUNITY_STAGE_MAP:
+            continue
+
+        prospect_stage = OPPORTUNITY_STAGE_MAP[stage]
+
+        # Check if already exists as prospect (by normalized name)
+        normalized = opp_name.lower().replace(" ", "")
+        if normalized in name_index:
+            skipped += 1
+            continue
+
+        # Map fields
+        amount = f.get("Targeted Ticket Size") or f.get("Amount") or 0
+        if isinstance(amount, str):
+            amount = float(amount.replace(",", "").replace(".", "")) if amount else 0
+        currency = f.get("Currency", "EUR")
+        if isinstance(currency, list):
+            currency = "EUR"
+
+        # Business type -> Product
+        business_type = f.get("Type (from Business Program)", "")
+        if isinstance(business_type, list):
+            business_type = business_type[0] if business_type else ""
+        product = BUSINESS_TYPE_TO_PRODUCT.get(business_type, "")
+
+        # Deal Manager
+        deal_manager = f.get("Deal Manager") or f.get("Responsible") or f.get("Assigned To") or ""
+
+        # Context from opportunity notes
+        notes = f.get("Notes") or f.get("Description") or ""
+        context = f"Importado desde Pipeline (Opportunity). Stage original: {stage}"
+        if notes:
+            context += f"\n{notes[:500]}"
+
+        fields = {
+            "Prospect Name": opp_name,
+            "Stage": prospect_stage,
+            "Origin": "Pipeline",
+            "Record Status": "Active",
+            "Context": context,
+        }
+        if amount:
+            fields["Amount"] = amount
+        if currency and currency != "EUR":
+            fields["Currency"] = currency
+        if product:
+            fields["Product"] = product
+        if deal_manager:
+            fields["Deal Manager"] = str(deal_manager)
+
+        prefix = "[DRY-RUN] " if dry_run else ""
+        print(f"  {prefix}+ {opp_name} ({stage} → {prospect_stage})")
+
+        if not dry_run:
+            result = airtable_request(PROSPECTS_API, method="POST", data={"fields": fields})
+            if result:
+                created += 1
+                # Add to name index to prevent duplicates within this run
+                name_index[normalized] = result
+        else:
+            created += 1
+
+    print(f"  Opportunities synced: {created} created, {skipped} already exist")
+    if dry_run:
+        print("  (DRY RUN — no changes made)")
+    return created
+
+
+# ---------------------------------------------------------------------------
+# Generate AI summaries for existing prospects
+# ---------------------------------------------------------------------------
+def generate_summaries_for_prospects(prospects, crm_companies, dry_run=False):
+    """Iterate all prospects without AI Summary, generate intelligence, PATCH to Airtable."""
+    print(f"\n{'='*50}")
+    print("Generating AI summaries for prospects without one...")
+
+    if not GEMINI_API_KEY:
+        print("  ERROR: GEMINI_API_KEY not set, cannot generate summaries")
+        return 0
+
+    updated = 0
+    skipped = 0
+
+    for prospect in prospects:
+        pf = prospect.get("fields", {})
+        name = pf.get("Prospect Name", "?")
+        existing_summary = pf.get("AI Summary", "")
+
+        if existing_summary:
+            skipped += 1
+            continue
+
+        # Try to find CRM entry by contact email domain or prospect name
+        domain = None
+        contact_email = pf.get("Contact Email", "")
+        if contact_email and "@" in contact_email:
+            domain = contact_email.split("@")[1].lower()
+
+        # Also try from Contacts JSON
+        if not domain:
+            contacts_raw = pf.get("Contacts", "")
+            if contacts_raw:
+                try:
+                    contacts = json.loads(contacts_raw)
+                    for c in contacts:
+                        email = c.get("email", "")
+                        if email and "@" in email:
+                            d = email.split("@")[1].lower()
+                            if d not in INTERNAL_DOMAINS and d not in PERSONAL_DOMAINS:
+                                domain = d
+                                break
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        crm_entry = crm_companies.get(domain, {}) if domain else {}
+
+        # If no CRM entry, build a minimal one from prospect fields
+        if not crm_entry:
+            crm_entry = {
+                "name": name,
+                "context": pf.get("Context", ""),
+                "enrichment": {},
+                "dated_subjects": [],
+                "employees": {},
+            }
+
+        event_summary = pf.get("Context", "")[:200]
+
+        print(f"  Analyzing: {name} ({domain or 'no domain'})...")
+        ai_result = analyze_prospect_intelligence(domain or name, crm_entry, event_summary)
+
+        if ai_result:
+            patch_fields = {}
+            summary = ai_result.get("summary", "")
+            if summary:
+                patch_fields["AI Summary"] = summary
+            steps = ai_result.get("suggested_next_steps", [])
+            if steps:
+                patch_fields["Next Steps"] = "\n".join(f"• {s}" for s in steps)
+
+            if patch_fields:
+                prefix = "[DRY-RUN] " if dry_run else ""
+                print(f"  {prefix}  Updated AI Summary for {name}")
+                patch_prospect_fields(prospect["id"], patch_fields, dry_run=dry_run)
+                updated += 1
+
+        # Rate limit: 1 second between Gemini calls
+        time.sleep(1)
+
+    print(f"  Summaries generated: {updated}, already had summary: {skipped}")
+    if dry_run:
+        print("  (DRY RUN — no changes made)")
+    return updated
 
 
 # ---------------------------------------------------------------------------
@@ -770,19 +1075,13 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Log matches without patching Airtable")
     parser.add_argument("--days", type=int, default=None, help="Override: scan last N days instead of since last_scan")
     parser.add_argument("--check-docs", action="store_true", help="Review all prospect stages vs actual Airtable documentation")
+    parser.add_argument("--generate-summaries", action="store_true", help="Generate AI summaries for prospects without one")
+    parser.add_argument("--sync-opportunities", action="store_true", help="Import early-stage Opportunities as Prospects")
     args = parser.parse_args()
 
     if not AIRTABLE_PAT:
         print("ERROR: AIRTABLE_PAT env var not set")
         sys.exit(1)
-
-    # Load mailboxes
-    with open(MAILBOXES_FILE, "r", encoding="utf-8") as f:
-        mailboxes = json.load(f)["mailboxes"]
-    active_mailboxes = [m for m in mailboxes if m.get("activo", True)]
-
-    # Load scan state
-    state = load_scan_state()
 
     # Load CRM companies for classification filtering
     crm_companies = {}
@@ -799,6 +1098,29 @@ def main():
     print(f"  {len(prospects)} active prospects loaded")
     domain_index = build_domain_index(prospects)
     print(f"  {len(domain_index)} unique contact domains indexed")
+
+    # --- Standalone modes ---
+    if args.generate_summaries:
+        generate_summaries_for_prospects(prospects, crm_companies, dry_run=args.dry_run)
+        return
+
+    if args.sync_opportunities:
+        sync_opportunities_to_prospects(prospects, dry_run=args.dry_run)
+        return
+
+    if args.check_docs:
+        docs_index = load_airtable_docs_index()
+        review_all_prospect_stages(prospects, docs_index, dry_run=args.dry_run)
+        return
+
+    # --- Normal calendar scan flow ---
+    # Load mailboxes
+    with open(MAILBOXES_FILE, "r", encoding="utf-8") as f:
+        mailboxes = json.load(f)["mailboxes"]
+    active_mailboxes = [m for m in mailboxes if m.get("activo", True)]
+
+    # Load scan state
+    state = load_scan_state()
 
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
@@ -896,6 +1218,29 @@ def main():
                             if ok:
                                 total_advanced += 1
                                 pf["Stage"] = "Reunion"
+
+                            # Generate AI summary for newly advanced prospects if missing
+                            if not pf.get("AI Summary"):
+                                crm_entry = crm_companies.get(domain, {})
+                                if crm_entry:
+                                    ai_result = analyze_prospect_intelligence(
+                                        domain, crm_entry, summary,
+                                    )
+                                    if ai_result and prospect.get("id") != "new":
+                                        patch_fields = {}
+                                        ai_summary = ai_result.get("summary", "")
+                                        if ai_summary:
+                                            patch_fields["AI Summary"] = ai_summary
+                                        steps = ai_result.get("suggested_next_steps", [])
+                                        if steps:
+                                            patch_fields["Next Steps"] = "\n".join(f"• {s}" for s in steps)
+                                        if patch_fields:
+                                            patch_prospect_fields(
+                                                prospect["id"], patch_fields,
+                                                dry_run=args.dry_run,
+                                            )
+                                            prefix2 = "[DRY-RUN] " if args.dry_run else ""
+                                            print(f"  {prefix2}  + AI Summary added to {pname}")
                         else:
                             print(f"  · {pname} already at {stage}, skipping")
 
@@ -921,18 +1266,36 @@ def main():
                     # Check CRM classification: only create prospects for
                     # originacion companies (Capital Seekers) or unknown domains
                     crm_entry = crm_companies.get(domain)
+                    ai_result = None
                     if crm_entry:
                         grp = crm_entry.get("enrichment", {}).get("grp", "")
                         if grp and grp not in PROSPECT_ELIGIBLE_GROUPS:
                             crm_name = crm_entry.get("name", domain)
-                            gemini_result = ask_gemini_is_capital_seeker(
+                            ai_result = analyze_prospect_intelligence(
                                 domain, crm_entry, summary,
                             )
-                            if not gemini_result:
+                            if not ai_result or not ai_result.get("is_prospect"):
                                 print(f"  ⊘ Skipped '{crm_name}' ({domain}) — CRM: {grp}, Gemini: no capital intent")
                                 total_filtered_crm += 1
                                 continue
                             print(f"  ✓ '{crm_name}' ({domain}) — CRM: {grp}, but Gemini detected capital intent")
+                        else:
+                            # Capital Seeker — still generate AI intelligence
+                            ai_result = analyze_prospect_intelligence(
+                                domain, crm_entry, summary,
+                            )
+                    else:
+                        # Unknown domain — generate intelligence with minimal data
+                        minimal_entry = {
+                            "name": domain.split(".")[0].capitalize(),
+                            "context": "",
+                            "enrichment": {},
+                            "dated_subjects": [],
+                            "employees": {},
+                        }
+                        ai_result = analyze_prospect_intelligence(
+                            domain, minimal_entry, summary,
+                        )
 
                     prefix = "[DRY-RUN] " if args.dry_run else ""
                     crm_name = crm_entry.get("name", domain.split(".")[0].capitalize()) if crm_entry else None
@@ -941,6 +1304,7 @@ def main():
                         domain, email, summary,
                         company_name=crm_name,
                         attendees=domain_attendees,
+                        ai_result=ai_result,
                         dry_run=args.dry_run,
                     )
                     if ok:
@@ -982,15 +1346,21 @@ def main():
     if args.dry_run:
         print("  (DRY RUN — no changes made to Airtable)")
 
+    # --- Sync opportunities before doc check ---
+    # Re-fetch prospects to include newly created ones
+    if total_advanced > 0 or total_created > 0:
+        print("\nRe-fetching prospects after calendar updates...")
+        prospects = fetch_all_prospects()
+
+    sync_opportunities_to_prospects(prospects, dry_run=args.dry_run)
+
+    # Re-fetch again after opportunity sync
+    prospects = fetch_all_prospects()
+
     # --- Documentation verification pass ---
-    # Always run after calendar scan (or standalone with --check-docs)
-    if args.check_docs or True:  # always run for now
-        docs_index = load_airtable_docs_index()
-        # Re-fetch prospects to get latest stages (including those just advanced)
-        if total_advanced > 0 or total_created > 0:
-            print("\nRe-fetching prospects after calendar updates...")
-            prospects = fetch_all_prospects()
-        review_all_prospect_stages(prospects, docs_index, dry_run=args.dry_run)
+    # Always run after calendar scan
+    docs_index = load_airtable_docs_index()
+    review_all_prospect_stages(prospects, docs_index, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

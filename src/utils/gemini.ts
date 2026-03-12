@@ -276,6 +276,103 @@ INSTRUCCIONES:
 }
 
 /**
+ * Generate AI prospect intelligence from CRM data.
+ * Analyzes company email history, enrichment, and context to produce
+ * a structured summary and suggested next steps.
+ */
+export async function generateProspectIntelligence(
+  prospectName: string,
+  company: any,
+  existingContext: string = "",
+): Promise<{ summary: string; suggestedNextSteps: string[] }> {
+  const enrichment = company?.detail?.enrichment || {};
+  const datedSubjects = (company?.detail?.datedSubjects || []).slice(0, 30);
+  const context = company?.detail?.context || "";
+  const employees = company?.detail?.employees || {};
+
+  // Build per-employee breakdown
+  const employeeLines = Object.entries(employees)
+    .map(([empKey, empData]: [string, any]) => {
+      const name = empKey.replace(/_/g, " ");
+      const count = empData?.count || 0;
+      const subjects = (empData?.subjects || []).slice(0, 5).join("; ");
+      return `  - ${name}: ${count} emails${subjects ? ` | Asuntos: ${subjects}` : ""}`;
+    })
+    .join("\n");
+
+  // Build dated subjects block
+  const subjectsBlock = datedSubjects
+    .map((ds: any) => {
+      const date = ds.date || "";
+      const subject = ds.subject || "";
+      const extract = ds.extract ? ` — ${ds.extract.slice(0, 200)}` : "";
+      return `  [${date}] ${subject}${extract}`;
+    })
+    .join("\n");
+
+  const prompt = `Eres un analista senior de deal origination en Alter5 (financiacion de energias renovables en Espana).
+
+Analiza los datos CRM de la siguiente empresa y genera una ficha de inteligencia comercial.
+
+=== DATOS DEL PROSPECT ===
+Nombre: ${prospectName}
+Dominio: ${company?.domain || ""}
+Grupo/Tipo: ${company?.group || ""} / ${company?.companyType || ""}
+Segmento: ${enrichment?.st || ""}
+Fase de inversion: ${enrichment?.fc || ""}
+Descripcion empresa: ${enrichment?.description || ""}
+Tecnologias: ${(enrichment?.technologies || []).join(", ")}
+Geografia: ${enrichment?.geography || ""}
+Roles de mercado: ${(company?.marketRoles || []).join(", ")}
+
+=== HISTORIAL DE COMUNICACIONES (ultimas interacciones) ===
+Total interacciones: ${company?.interactions || 0}
+Ultima fecha: ${company?.lastDate || ""}
+
+${subjectsBlock ? `Ultimos asuntos de email:\n${subjectsBlock}` : ""}
+
+=== DESGLOSE POR EMPLEADO ===
+${employeeLines || "Sin datos de empleados"}
+
+=== CONTEXTO ADICIONAL ===
+${context || "Sin contexto adicional"}
+
+${existingContext ? `=== NOTAS PREVIAS DEL EQUIPO ===\n${existingContext}` : ""}
+
+=== INSTRUCCIONES ===
+1. Analiza si este prospect es REAL o un FALSO POSITIVO (ej: proveedor de servicios, herramienta SaaS, intermediario sin proyecto real, etc.)
+2. Si hay un intermediario (broker, asesor, fondo de fondos), identifica quien es el beneficiario final real
+3. Genera un resumen ejecutivo estructurado con:
+   - Naturaleza de la relacion y tipo de oportunidad
+   - Historico de comunicaciones y nivel de engagement
+   - Posicion en el funnel de origination
+   - Riesgos o alertas detectadas
+4. Sugiere proximos pasos concretos y accionables
+
+Responde UNICAMENTE con un JSON valido con esta estructura exacta:
+{
+  "is_prospect": true,
+  "summary": "Texto del resumen ejecutivo estructurado con saltos de linea para legibilidad. Si es falso positivo, indicar FALSO POSITIVO al inicio.",
+  "suggested_next_steps": ["Paso 1", "Paso 2", "Paso 3"]
+}`;
+
+  const raw = await callGemini(prompt, 0.2);
+  const cleaned = raw.replace(/```json?\s*/g, "").replace(/```\s*/g, "").trim();
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return {
+      summary: parsed.summary || "",
+      suggestedNextSteps: Array.isArray(parsed.suggested_next_steps) ? parsed.suggested_next_steps : [],
+    };
+  } catch {
+    console.warn("Failed to parse Gemini prospect intelligence response:", cleaned);
+    // Return raw text as summary if JSON parsing fails
+    return { summary: cleaned, suggestedNextSteps: [] };
+  }
+}
+
+/**
  * Attempt to fetch text content from a public Google Doc.
  * Only works with publicly shared docs (CORS limitations).
  */
