@@ -198,6 +198,37 @@ export default function ProspectPanel({
     return null;
   })();
 
+  // ── Auto-generate AI summary when opening a prospect without one ──
+  useEffect(() => {
+    if (isNew || !prospect?.id || prospect.aiSummary || !isGeminiConfigured()) return;
+    if (!formData.name) return;
+    let cancelled = false;
+    setAiIntelLoading(true);
+    setAiIntelError(null);
+    generateProspectIntelligence(
+      formData.name,
+      matchedCompany,
+      formData.context,
+      { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
+    ).then(async (result) => {
+      if (cancelled) return;
+      try {
+        await updateProspect(prospect.id, { "AI Summary": result.summary });
+        if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
+          const stepsText = result.suggestedNextSteps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n');
+          updateField('nextSteps', stepsText);
+          await updateProspect(prospect.id, { "Next Steps": stepsText });
+        }
+        if (prospect) prospect.aiSummary = result.summary;
+      } catch { /* silent — will show on next open */ }
+    }).catch((err: any) => {
+      if (!cancelled) setAiIntelError(err.message || 'Error al generar inteligencia IA');
+    }).finally(() => {
+      if (!cancelled) setAiIntelLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [prospect?.id]);
+
   const handleAiProcess = async () => {
     setAiLoading(true);
     setAiError(null);
@@ -856,7 +887,7 @@ export default function ProspectPanel({
           )}
 
           {/* ── AI Intelligence Section ────────────────── */}
-          {(prospect?.aiSummary || matchedCompany) && (
+          {!isNew && (
             <div style={{
               marginBottom: 22, padding: 16,
               background: (() => {
@@ -897,7 +928,6 @@ export default function ProspectPanel({
                 {prospect?.aiSummary && (
                   <button
                     onClick={async () => {
-                      if (!matchedCompany) return;
                       setAiIntelLoading(true);
                       setAiIntelError(null);
                       try {
@@ -905,6 +935,7 @@ export default function ProspectPanel({
                           formData.name,
                           matchedCompany,
                           formData.context,
+                          { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
                         );
                         await updateProspect(prospect.id, { "AI Summary": result.summary });
                         if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
@@ -921,7 +952,7 @@ export default function ProspectPanel({
                         setAiIntelLoading(false);
                       }
                     }}
-                    disabled={aiIntelLoading || !matchedCompany}
+                    disabled={aiIntelLoading}
                     style={{
                       padding: '4px 10px', fontSize: 11, fontWeight: 600,
                       color: DK.purple, background: `${DK.purple}15`,
@@ -967,7 +998,6 @@ export default function ProspectPanel({
                   )}
                   <button
                     onClick={async () => {
-                      if (!matchedCompany) return;
                       setAiIntelLoading(true);
                       setAiIntelError(null);
                       try {
@@ -975,6 +1005,7 @@ export default function ProspectPanel({
                           formData.name,
                           matchedCompany,
                           formData.context,
+                          { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
                         );
                         if (!isNew && prospect?.id) {
                           await updateProspect(prospect.id, { "AI Summary": result.summary });
