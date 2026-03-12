@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { createProspectingJob, triggerGitHubAction } from '../utils/airtableProspecting';
+import { createProspectingJob, triggerGitHubAction, updateJobStatusByJobId } from '../utils/airtableProspecting';
 
 const COLORS = {
   header: '#1A2B3D',
@@ -142,9 +142,12 @@ export default function ProspectingCriteriaModal({ currentUser, onClose, onJobCr
         await triggerGitHubAction(criteria, jobId);
         setToast(`✅ Búsqueda "${jobName}" lanzada correctamente`);
       } catch (ghErr) {
-        // Job created in Airtable but GitHub Action failed
+        // Job created in Airtable but GitHub Action failed — mark as failed immediately
         console.warn('[ProspectingCriteriaModal] GitHub Action trigger failed:', ghErr.message);
-        setToast(`⚠️ Job creado (${jobId}) pero no se pudo lanzar el Action. Lánzalo manualmente en GitHub.`);
+        await updateJobStatusByJobId(jobId, "failed", `Dispatch falló: ${ghErr.message}`);
+        setError(`No se pudo lanzar el Action: ${ghErr.message}. El job se marcó como fallido.`);
+        setSubmitting(false);
+        return;
       }
 
       setTimeout(() => {
