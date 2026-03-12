@@ -20,25 +20,30 @@ var SPREADSHEET_ID = null; // auto-detected: uses the spreadsheet bound to this 
 var SHEET_CAMPAIGNS = 'Campaigns';
 var SHEET_RECIPIENTS = 'Recipients';
 var SHEET_FOLLOWUPS = 'FollowUps';
+var SHEET_PIPELINE = 'Pipeline';
 
 var CAMPAIGN_HEADERS = [
   'id', 'name', 'type', 'status', 'senderEmail', 'senderName',
   'subjectA', 'bodyA', 'subjectB', 'bodyB',
   'abTestPercent', 'abWinnerCriteria', 'abWinner',
   'totalRecipients', 'totalSent', 'totalOpened', 'totalClicked', 'totalReplied',
-  'createdTime', 'startedTime', 'completedTime', 'notes'
+  'createdTime', 'startedTime', 'completedTime', 'notes', 'knowledgeBase'
 ];
 
 var RECIPIENT_HEADERS = [
   'id', 'campaignId', 'email', 'name', 'lastName', 'organization',
   'status', 'variant', 'openCount', 'clickCount', 'messageId',
-  'sentTime', 'openedTime'
+  'sentTime', 'openedTime', 'clickedTime'
 ];
 
 var FOLLOWUP_HEADERS = [
   'id', 'email', 'name', 'organization', 'status',
   'instructions', 'scheduledAt', 'senderEmail', 'senderName',
   'draftHtml', 'sentTime', 'createdTime', 'cancelledTime'
+];
+
+var PIPELINE_HEADERS = [
+  'email', 'etapa', 'etapaAnterior', 'fechaCambio', 'fechaCreacion', 'notas', 'historial'
 ];
 
 // ── Entry points ──────────────────────────────────────────────────────
@@ -63,14 +68,28 @@ function doPost(e) {
       'createCampaign': handleCreateCampaign,
       'startCampaign': handleStartCampaign,
       'updateCampaignStatus': handleUpdateCampaignStatus,
+      'updateCampaign': handleUpdateCampaign,
       'addRecipients': handleAddRecipients,
       'getCampaignRecipients': handleGetCampaignRecipients,
+      'getCampaignDashboard': handleCampaignDashboard,
       'getFollowUps': handleGetFollowUps,
       'scheduleFollowUp': handleScheduleFollowUp,
       'cancelFollowUp': handleCancelFollowUp,
       'sendTestEmail': handleSendTestEmail,
       'createDrafts': handleCreateDrafts,
       'sendDrafts': handleSendDrafts,
+      'moveStage': handleMoveStage,
+      'addNote': handleAddNote,
+      'sendDraft': handleSendDraft,
+      'saveDraft': handleSaveDraft,
+      'composeAndSaveDraft': handleComposeAndSaveDraft,
+      'composeFromInstructions': handleComposeFromInstructions,
+      'uploadMeetingNotes': handleUploadMeetingNotes,
+      'generateFollowUp': handleGenerateFollowUp,
+      'improveMessage': handleImproveMessage,
+      'generateFollowUpBatch': handleGenerateFollowUpBatch,
+      'sendFollowUpBatch': handleSendFollowUpBatch,
+      'classifyReply': handleClassifyReply,
     };
 
     if (!handlers[action]) {
@@ -100,6 +119,30 @@ function doGet(e) {
 
     if (action === 'pipeline') {
       var result = handlePipeline();
+      return jsonResponse(result);
+    }
+
+    if (action === 'getConversation' || action === 'getConversacion') {
+      var email = (e.parameter.email || '').trim();
+      if (!email) return jsonResponse({ error: 'Missing email parameter' }, 400);
+      var result = handleGetConversation({ email: email, campaignId: e.parameter.campaignId || '' });
+      return jsonResponse(result);
+    }
+
+    if (action === 'getConversacionCompleta') {
+      var email = (e.parameter.email || '').trim();
+      if (!email) return jsonResponse({ error: 'Missing email parameter' }, 400);
+      var result = handleGetConversacionCompleta({ email: email });
+      return jsonResponse(result);
+    }
+
+    if (action === 'getFollowUpCandidates') {
+      var result = handleGetFollowUpCandidates({ campaignId: e.parameter.campaignId || '' });
+      return jsonResponse(result);
+    }
+
+    if (action === 'getConversaciones') {
+      var result = handleGetConversaciones(e.parameter);
       return jsonResponse(result);
     }
 
@@ -356,7 +399,7 @@ function handleDashboard() {
       fechaEnvio: r.sentTime ? String(r.sentTime) : null,
       primeraApertura: r.openedTime ? String(r.openedTime) : null,
       numAperturas: openCount,
-      primerClic: null, // Not tracked in Recipients sheet
+      primerClic: r.clickedTime ? String(r.clickedTime) : null,
       numClics: clickCount,
       respondido: respondido,
     });
@@ -409,11 +452,36 @@ function handleDashboard() {
 }
 
 /**
- * pipeline — Stub for BridgeCampaignView pipeline tab.
- * Returns empty array so the view doesn't break.
+ * pipeline — Read pipeline cards from Pipeline sheet.
+ * Returns cards with parsed notas/historial.
  */
 function handlePipeline() {
-  return { success: true, pipeline: [] };
+  var rows = readAll(SHEET_PIPELINE, PIPELINE_HEADERS);
+  var pipeline = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var notas = [];
+    var historial = [];
+    try { notas = JSON.parse(r.notas || '[]'); } catch (e) { /* ignore */ }
+    try { historial = JSON.parse(r.historial || '[]'); } catch (e) { /* ignore */ }
+
+    // Enrich with recipient data if available
+    var recipientInfo = findRecipientByEmail(r.email);
+
+    pipeline.push({
+      email: r.email,
+      etapa: r.etapa || 'nuevo',
+      etapaAnterior: r.etapaAnterior || '',
+      fechaCambio: r.fechaCambio || '',
+      fechaCreacion: r.fechaCreacion || '',
+      notas: notas,
+      historial: historial,
+      nombre: recipientInfo ? recipientInfo.name : '',
+      apellido: recipientInfo ? recipientInfo.lastName : '',
+      organizacion: recipientInfo ? recipientInfo.organization : '',
+    });
+  }
+  return { success: true, pipeline: pipeline };
 }
 
 /**
@@ -998,4 +1066,766 @@ function handleSendDrafts(payload) {
   }
 
   return { sent: sentCount, errors: errors, draftLeft: draftLeft };
+}
+
+// ── New helpers ──────────────────────────────────────────────────────
+
+/** Find a recipient row by email (returns first match) */
+function findRecipientByEmail(email) {
+  if (!email) return null;
+  var recipients = readAll(SHEET_RECIPIENTS, RECIPIENT_HEADERS);
+  var emailLower = String(email).toLowerCase().trim();
+  for (var i = 0; i < recipients.length; i++) {
+    if (String(recipients[i].email).toLowerCase().trim() === emailLower) {
+      return recipients[i];
+    }
+  }
+  return null;
+}
+
+/** Get or create a Pipeline row for an email. Returns { sheet, rowIndex, row } */
+function getOrCreatePipelineRow(email) {
+  var sheet = getOrCreateSheet(SHEET_PIPELINE, PIPELINE_HEADERS);
+  var emailCol = PIPELINE_HEADERS.indexOf('email');
+  var rowIndex = findRowIndex(sheet, emailCol, email);
+
+  if (rowIndex === -1) {
+    var newRow = {
+      email: email,
+      etapa: 'nuevo',
+      etapaAnterior: '',
+      fechaCambio: now(),
+      fechaCreacion: now(),
+      notas: '[]',
+      historial: '[]',
+    };
+    appendRow(sheet, PIPELINE_HEADERS, newRow);
+    rowIndex = sheet.getLastRow();
+    return { sheet: sheet, rowIndex: rowIndex, row: newRow };
+  }
+
+  // Read existing row
+  var data = sheet.getRange(rowIndex, 1, 1, PIPELINE_HEADERS.length).getValues()[0];
+  var row = {};
+  for (var i = 0; i < PIPELINE_HEADERS.length; i++) {
+    row[PIPELINE_HEADERS[i]] = data[i];
+  }
+  return { sheet: sheet, rowIndex: rowIndex, row: row };
+}
+
+/** Get sender config from Script Properties or campaign */
+function getSenderConfig() {
+  var props = PropertiesService.getScriptProperties();
+  var email = props.getProperty('SENDER_EMAIL') || '';
+  var name = props.getProperty('SENDER_NAME') || '';
+
+  // Fallback: try first active campaign
+  if (!email) {
+    var campaigns = readAll(SHEET_CAMPAIGNS, CAMPAIGN_HEADERS);
+    for (var i = 0; i < campaigns.length; i++) {
+      if (campaigns[i].senderEmail) {
+        email = campaigns[i].senderEmail;
+        name = name || campaigns[i].senderName;
+        break;
+      }
+    }
+  }
+
+  return { email: email, name: name };
+}
+
+/** Call Gemini 2.0 Flash API */
+function callGemini(prompt, maxTokens) {
+  var apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) throw new Error('GEMINI_API_KEY not configured in Script Properties');
+
+  maxTokens = maxTokens || 1024;
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey;
+
+  var payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 }
+  };
+
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
+
+  var json = JSON.parse(response.getContentText());
+  if (json.error) throw new Error('Gemini error: ' + json.error.message);
+
+  var candidates = json.candidates || [];
+  if (candidates.length === 0) return '';
+  var parts = candidates[0].content && candidates[0].content.parts || [];
+  return parts.map(function(p) { return p.text || ''; }).join('');
+}
+
+/** Get conversation context from Gmail for an email address */
+function getConversationContext(email, maxMessages) {
+  maxMessages = maxMessages || 5;
+  var threads = GmailApp.search('from:' + email + ' OR to:' + email, 0, 3);
+  var messages = [];
+
+  for (var t = 0; t < threads.length; t++) {
+    var msgs = threads[t].getMessages();
+    for (var m = 0; m < msgs.length; m++) {
+      var msg = msgs[m];
+      var from = msg.getFrom();
+      var esLeticia = (from.indexOf('alter-5.com') !== -1 || from.indexOf('alter5.com') !== -1);
+
+      messages.push({
+        fecha: msg.getDate().toISOString(),
+        remitente: from,
+        esLeticia: esLeticia,
+        asunto: msg.getSubject(),
+        cuerpo: msg.getPlainBody().substring(0, 2000),
+      });
+    }
+  }
+
+  // Sort by date desc, limit
+  messages.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); });
+  return messages.slice(0, maxMessages);
+}
+
+/** Find an existing Gmail draft for a specific email address */
+function findDraftForEmail(email) {
+  var drafts = GmailApp.getDrafts();
+  var emailLower = String(email).toLowerCase().trim();
+
+  for (var i = 0; i < drafts.length; i++) {
+    var msg = drafts[i].getMessage();
+    var to = String(msg.getTo()).toLowerCase();
+    if (to.indexOf(emailLower) !== -1) {
+      return {
+        draftId: drafts[i].getId(),
+        cuerpo: msg.getBody(),
+        asunto: msg.getSubject(),
+        existe: true,
+        estado: 'listo',
+      };
+    }
+  }
+
+  return { draftId: null, cuerpo: '', asunto: '', existe: false, estado: '' };
+}
+
+// ── Pipeline handlers ────────────────────────────────────────────────
+
+/** moveStage — Move a contact to a new pipeline stage */
+function handleMoveStage(payload) {
+  var email = payload.email;
+  var newStage = payload.newStage;
+  if (!email || !newStage) return { error: 'Missing email or newStage' };
+
+  var p = getOrCreatePipelineRow(email);
+  var oldStage = p.row.etapa || 'nuevo';
+
+  // Update etapa
+  updateCell(p.sheet, p.rowIndex, PIPELINE_HEADERS, 'etapa', newStage);
+  updateCell(p.sheet, p.rowIndex, PIPELINE_HEADERS, 'etapaAnterior', oldStage);
+  updateCell(p.sheet, p.rowIndex, PIPELINE_HEADERS, 'fechaCambio', now());
+
+  // Append to historial
+  var historial = [];
+  try { historial = JSON.parse(p.row.historial || '[]'); } catch (e) { /* ignore */ }
+  historial.push({ etapa: newStage, fecha: now() });
+  updateCell(p.sheet, p.rowIndex, PIPELINE_HEADERS, 'historial', JSON.stringify(historial));
+
+  return { success: true, email: email, etapa: newStage, etapaAnterior: oldStage };
+}
+
+/** addNote — Add a note to a pipeline contact */
+function handleAddNote(payload) {
+  var email = payload.email;
+  var note = payload.note;
+  if (!email || !note) return { error: 'Missing email or note' };
+
+  var p = getOrCreatePipelineRow(email);
+
+  var notas = [];
+  try { notas = JSON.parse(p.row.notas || '[]'); } catch (e) { /* ignore */ }
+  notas.push({ fecha: now(), texto: note });
+  updateCell(p.sheet, p.rowIndex, PIPELINE_HEADERS, 'notas', JSON.stringify(notas));
+
+  return { success: true, email: email, totalNotas: notas.length };
+}
+
+// ── Gmail reading handlers ───────────────────────────────────────────
+
+/** getConversation — Get conversation thread + draft for an email */
+function handleGetConversation(payload) {
+  var email = payload.email;
+  if (!email) return { error: 'Missing email' };
+
+  // Get conversation history
+  var historial = [];
+  var ultimaRespuesta = null;
+
+  try {
+    var threads = GmailApp.search('from:' + email + ' OR to:' + email, 0, 5);
+
+    for (var t = 0; t < threads.length; t++) {
+      var msgs = threads[t].getMessages();
+      for (var m = 0; m < msgs.length; m++) {
+        var msg = msgs[m];
+        var from = msg.getFrom();
+        var esLeticia = (from.indexOf('alter-5.com') !== -1 || from.indexOf('alter5.com') !== -1);
+
+        var entry = {
+          fecha: msg.getDate().toISOString(),
+          remitente: from,
+          esLeticia: esLeticia,
+          cuerpo: msg.getPlainBody().substring(0, 2000),
+          asunto: msg.getSubject(),
+        };
+        historial.push(entry);
+
+        // Track last reply from the contact (not from us)
+        if (!esLeticia) {
+          if (!ultimaRespuesta || msg.getDate().toISOString() > ultimaRespuesta.fecha) {
+            ultimaRespuesta = entry;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    Logger.log('Error reading Gmail for ' + email + ': ' + e.message);
+  }
+
+  // Sort historial by date desc
+  historial.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); });
+
+  // Find existing draft for this email
+  var borrador = findDraftForEmail(email);
+
+  return {
+    success: true,
+    respuesta: ultimaRespuesta ? {
+      fecha: ultimaRespuesta.fecha,
+      cuerpo: ultimaRespuesta.cuerpo,
+      estado: 'recibido',
+    } : null,
+    borrador: borrador,
+    historial: historial,
+  };
+}
+
+/** getConversacionCompleta — Full conversation thread with AI summary */
+function handleGetConversacionCompleta(payload) {
+  var email = payload.email;
+  if (!email) return { error: 'Missing email' };
+
+  var mensajes = getConversationContext(email, 20);
+  var resumen = '';
+
+  // Generate AI summary if we have Gemini and messages
+  if (mensajes.length > 0) {
+    try {
+      var context = mensajes.map(function(m) {
+        return (m.esLeticia ? 'Alter5' : 'Contacto') + ' (' + m.fecha.substring(0, 10) + '): ' + m.cuerpo.substring(0, 500);
+      }).join('\n---\n');
+
+      resumen = callGemini(
+        'Resume esta conversación de email en 2-3 frases en español. Indica los puntos clave y el estado actual:\n\n' + context,
+        256
+      );
+    } catch (e) {
+      resumen = 'No se pudo generar resumen: ' + e.message;
+    }
+  }
+
+  return { success: true, mensajes: mensajes, resumen: resumen };
+}
+
+/** getConversaciones — Batch get conversation summaries (for dashboard) */
+function handleGetConversaciones(params) {
+  // Lightweight: just return recent threads count per contact
+  return { success: true, conversaciones: [] };
+}
+
+/** getFollowUpCandidates — Contacts that opened/clicked but haven't been followed up */
+function handleGetFollowUpCandidates(payload) {
+  var campaignId = payload.campaignId || '';
+  var recipients = readAll(SHEET_RECIPIENTS, RECIPIENT_HEADERS);
+  var followUps = readAll(SHEET_FOLLOWUPS, FOLLOWUP_HEADERS);
+
+  // Count follow-ups sent per email
+  var followUpCount = {};
+  for (var f = 0; f < followUps.length; f++) {
+    var fEmail = String(followUps[f].email).toLowerCase().trim();
+    if (followUps[f].status === 'sent' || followUps[f].status === 'scheduled' || followUps[f].status === 'draft_ready') {
+      followUpCount[fEmail] = (followUpCount[fEmail] || 0) + 1;
+    }
+  }
+
+  var candidatos = [];
+  var seen = {};
+
+  for (var i = 0; i < recipients.length; i++) {
+    var r = recipients[i];
+    if (campaignId && r.campaignId !== campaignId) continue;
+
+    var rEmail = String(r.email).toLowerCase().trim();
+    if (!rEmail || seen[rEmail]) continue;
+    seen[rEmail] = true;
+
+    var openCount = Number(r.openCount) || 0;
+    var clickCount = Number(r.clickCount) || 0;
+
+    // Candidate if opened or clicked
+    if (openCount > 0 || clickCount > 0) {
+      candidatos.push({
+        email: rEmail,
+        nombre: r.name || '',
+        apellido: r.lastName || '',
+        organizacion: r.organization || '',
+        numAperturas: openCount,
+        numClics: clickCount,
+        seguimientosEnviados: followUpCount[rEmail] || 0,
+      });
+    }
+  }
+
+  // Sort: clicked first, then most opens
+  candidatos.sort(function(a, b) {
+    if (b.numClics !== a.numClics) return b.numClics - a.numClics;
+    return b.numAperturas - a.numAperturas;
+  });
+
+  return { success: true, candidatos: candidatos };
+}
+
+// ── Gmail writing handlers ───────────────────────────────────────────
+
+/** sendDraft — Send a draft or reply to a thread */
+function handleSendDraft(payload) {
+  var email = payload.email;
+  if (!email) return { error: 'Missing email' };
+
+  var draftId = payload.draftId;
+  var editedBody = payload.editedBody || payload.cuerpoEditado || '';
+  var sender = getSenderConfig();
+
+  // If draftId provided, send that draft (optionally with edited body)
+  if (draftId) {
+    try {
+      var draft = GmailApp.getDraft(draftId);
+      if (editedBody) {
+        // Delete old draft, create new with edited body, and send
+        var origMsg = draft.getMessage();
+        var subject = origMsg.getSubject();
+        var to = origMsg.getTo();
+        draft.deleteDraft();
+        var newDraft = GmailApp.createDraft(to, subject, '', emailOptions(editedBody, sender.email, sender.name));
+        newDraft.send();
+      } else {
+        draft.send();
+      }
+      return { success: true, email: email };
+    } catch (e) {
+      return { error: 'Error sending draft: ' + e.message };
+    }
+  }
+
+  // No draftId: find existing thread and reply, or send new email
+  try {
+    var body = editedBody || payload.body || '';
+    var subject = payload.asunto || payload.subject || 'Seguimiento';
+
+    // Try to find an existing thread to reply to
+    var threads = GmailApp.search('from:' + email + ' OR to:' + email, 0, 1);
+    if (threads.length > 0) {
+      var lastMsg = threads[0].getMessages().pop();
+      subject = 'Re: ' + lastMsg.getSubject();
+      lastMsg.reply('', emailOptions(body, sender.email, sender.name));
+    } else {
+      sendWithFallback(email, subject, body, sender.email, sender.name);
+    }
+
+    return { success: true, email: email };
+  } catch (e) {
+    return { error: 'Error sending: ' + e.message };
+  }
+}
+
+/** saveDraft — Save or update a Gmail draft for an email */
+function handleSaveDraft(payload) {
+  var email = payload.email;
+  var body = payload.body || payload.borradorCuerpo || '';
+  if (!email) return { error: 'Missing email' };
+
+  var sender = getSenderConfig();
+  var subject = payload.asunto || payload.subject || 'Seguimiento';
+
+  try {
+    // Check for existing draft to this email
+    var existing = findDraftForEmail(email);
+    if (existing.existe && existing.draftId) {
+      // Delete old draft
+      try {
+        var oldDraft = GmailApp.getDraft(existing.draftId);
+        subject = existing.asunto || subject; // Keep original subject
+        oldDraft.deleteDraft();
+      } catch (e) { /* draft may have been sent/deleted */ }
+    }
+
+    // Create new draft
+    var draft = createDraftWithFallback(email, subject, body, sender.email, sender.name);
+    return { success: true, draftId: draft.getId() };
+  } catch (e) {
+    return { error: 'Error saving draft: ' + e.message };
+  }
+}
+
+/** composeAndSaveDraft — Create a new draft with given subject and body */
+function handleComposeAndSaveDraft(payload) {
+  var email = payload.email;
+  var body = payload.mensaje || payload.body || '';
+  var subject = payload.asunto || payload.subject || '';
+  if (!email) return { error: 'Missing email' };
+
+  var sender = getSenderConfig();
+
+  try {
+    var draft = createDraftWithFallback(email, subject, body, sender.email, sender.name);
+    return { success: true, draftId: draft.getId() };
+  } catch (e) {
+    return { error: 'Error creating draft: ' + e.message };
+  }
+}
+
+/** uploadMeetingNotes — Upload file to Drive and add note to Pipeline */
+function handleUploadMeetingNotes(payload) {
+  var email = payload.email;
+  var noteText = payload.noteText || '';
+  if (!email) return { error: 'Missing email' };
+
+  var driveUrl = null;
+
+  // Upload file to Drive if provided
+  if (payload.fileBase64 && payload.fileName) {
+    try {
+      var blob = Utilities.newBlob(
+        Utilities.base64Decode(payload.fileBase64),
+        payload.fileType || 'application/octet-stream',
+        payload.fileName
+      );
+
+      var folderId = PropertiesService.getScriptProperties().getProperty('NOTES_FOLDER_ID');
+      var folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
+      var file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      driveUrl = file.getUrl();
+
+      noteText = noteText + (noteText ? '\n' : '') + 'Archivo: ' + driveUrl;
+    } catch (e) {
+      Logger.log('Error uploading file: ' + e.message);
+    }
+  }
+
+  // Add note to pipeline
+  if (noteText) {
+    handleAddNote({ email: email, note: noteText });
+  }
+
+  return { success: true, driveUrl: driveUrl };
+}
+
+// ── AI handlers ──────────────────────────────────────────────────────
+
+/** generateFollowUp — Generate a follow-up draft using Gemini */
+function handleGenerateFollowUp(payload) {
+  var email = payload.email;
+  if (!email) return { error: 'Missing email' };
+
+  // Get conversation context
+  var mensajes = getConversationContext(email, 5);
+
+  var conversationText = '';
+  if (mensajes.length > 0) {
+    conversationText = mensajes.map(function(m) {
+      return (m.esLeticia ? 'Alter5' : 'Contacto') + ': ' + m.cuerpo.substring(0, 500);
+    }).join('\n---\n');
+  }
+
+  // Get recipient info for personalization
+  var recipientInfo = findRecipientByEmail(email);
+  var nombre = recipientInfo ? (recipientInfo.name + ' ' + recipientInfo.lastName).trim() : '';
+  var org = recipientInfo ? recipientInfo.organization : '';
+
+  var prompt = 'Eres un asesor de inversión de Alter5 Capital (financiación energías renovables). ' +
+    'Genera un email de seguimiento profesional en español.\n\n';
+
+  if (nombre) prompt += 'Destinatario: ' + nombre + (org ? ' de ' + org : '') + '\n';
+  if (payload.instructions) prompt += 'Instrucciones: ' + payload.instructions + '\n';
+
+  if (conversationText) {
+    prompt += '\nConversación previa:\n' + conversationText + '\n';
+    prompt += '\nGenera un seguimiento natural basado en la conversación. ';
+  } else {
+    prompt += '\nNo hay conversación previa. Genera un email introductorio breve. ';
+  }
+
+  prompt += 'Responde SOLO con el cuerpo del email en HTML (sin subject, sin metadata). ' +
+    'Usa un tono profesional pero cercano. Incluye un call-to-action claro.';
+
+  try {
+    var borrador = callGemini(prompt, 1024);
+    return { success: true, borrador: borrador, body: borrador, draft: borrador };
+  } catch (e) {
+    return { error: 'Error generating follow-up: ' + e.message };
+  }
+}
+
+/** improveMessage — Improve an email draft using Gemini */
+function handleImproveMessage(payload) {
+  var email = payload.email || '';
+  var texto = payload.texto || payload.text || '';
+  if (!texto) return { error: 'Missing texto' };
+
+  var prompt = 'Eres un experto en comunicación comercial de Alter5 Capital (financiación energías renovables). ' +
+    'Mejora el siguiente email manteniendo el mensaje original pero haciéndolo más profesional, ' +
+    'claro y persuasivo. Mantén el mismo idioma. Responde SOLO con el texto mejorado en HTML:\n\n' + texto;
+
+  try {
+    var textoMejorado = callGemini(prompt, 1024);
+    return { success: true, textoMejorado: textoMejorado };
+  } catch (e) {
+    return { error: 'Error improving message: ' + e.message };
+  }
+}
+
+/** composeFromInstructions — Compose an email from instructions using Gemini */
+function handleComposeFromInstructions(payload) {
+  var email = payload.email;
+  var instructions = payload.instructions || payload.instrucciones || '';
+  if (!email || !instructions) return { error: 'Missing email or instructions' };
+
+  // Get conversation context for personalization
+  var mensajes = getConversationContext(email, 5);
+  var conversationText = '';
+  if (mensajes.length > 0) {
+    conversationText = mensajes.map(function(m) {
+      return (m.esLeticia ? 'Alter5' : 'Contacto') + ': ' + m.cuerpo.substring(0, 500);
+    }).join('\n---\n');
+  }
+
+  var recipientInfo = findRecipientByEmail(email);
+  var nombre = recipientInfo ? (recipientInfo.name + ' ' + recipientInfo.lastName).trim() : '';
+  var org = recipientInfo ? recipientInfo.organization : '';
+
+  var prompt = 'Eres un asesor de inversión de Alter5 Capital (financiación energías renovables). ' +
+    'Compón un email profesional en español según las instrucciones.\n\n' +
+    'Instrucciones: ' + instructions + '\n';
+
+  if (nombre) prompt += 'Destinatario: ' + nombre + (org ? ' de ' + org : '') + '\n';
+
+  if (conversationText) {
+    prompt += '\nConversación previa para contexto:\n' + conversationText + '\n';
+  }
+
+  prompt += '\nResponde SOLO con el cuerpo del email en HTML (sin subject). ' +
+    'Tono profesional pero cercano.';
+
+  try {
+    var borrador = callGemini(prompt, 1024);
+    return { success: true, borrador: borrador, body: borrador, draft: borrador };
+  } catch (e) {
+    return { error: 'Error composing from instructions: ' + e.message };
+  }
+}
+
+/** classifyReply — Classify a reply using Gemini */
+function handleClassifyReply(payload) {
+  var email = payload.email || '';
+  var replyText = payload.replyText || '';
+  if (!replyText) return { error: 'Missing replyText' };
+
+  var prompt = 'Clasifica la siguiente respuesta de email en UNA de estas categorías:\n' +
+    '- interesado: muestra interés en continuar la conversación\n' +
+    '- reunion: propone o acepta una reunión\n' +
+    '- no_interesado: rechaza o no está interesado\n' +
+    '- informacion: pide más información\n' +
+    '- fuera_oficina: auto-reply o fuera de oficina\n' +
+    '- otro: no encaja en ninguna categoría\n\n' +
+    'También indica el sentimiento: positivo, neutro, negativo.\n\n' +
+    'Respuesta del email:\n' + replyText + '\n\n' +
+    'Responde en formato JSON: {"classification": "...", "sentiment": "..."}';
+
+  try {
+    var result = callGemini(prompt, 128);
+    // Parse JSON from Gemini response
+    var jsonMatch = result.match(/\{[^}]+\}/);
+    if (jsonMatch) {
+      var parsed = JSON.parse(jsonMatch[0]);
+      return { success: true, classification: parsed.classification, sentiment: parsed.sentiment };
+    }
+    return { success: true, classification: 'otro', sentiment: 'neutro' };
+  } catch (e) {
+    return { error: 'Error classifying reply: ' + e.message };
+  }
+}
+
+// ── Batch handlers ───────────────────────────────────────────────────
+
+/** generateFollowUpBatch — Generate follow-up drafts for multiple contacts */
+function handleGenerateFollowUpBatch(payload) {
+  var emails = payload.emails || payload.contacts || [];
+  var instructions = payload.instrucciones || payload.instructions || '';
+  if (!emails || emails.length === 0) return { error: 'Missing emails' };
+
+  var maxBatch = 15;
+  var borradores = [];
+  var errors = [];
+
+  for (var i = 0; i < Math.min(emails.length, maxBatch); i++) {
+    var item = emails[i];
+    var email = (typeof item === 'string') ? item : (item.email || '');
+    if (!email) continue;
+
+    try {
+      var result = handleGenerateFollowUp({ email: email, instructions: instructions });
+      if (result.success) {
+        borradores.push({
+          email: email,
+          asunto: 'Seguimiento - Alter5 Capital',
+          cuerpoHtml: result.borrador || result.body || '',
+        });
+      } else {
+        errors.push({ email: email, error: result.error });
+      }
+    } catch (e) {
+      errors.push({ email: email, error: e.message });
+    }
+
+    // Rate limit Gemini calls
+    if (i < emails.length - 1) Utilities.sleep(500);
+  }
+
+  return { success: true, borradores: borradores, errors: errors };
+}
+
+/** sendFollowUpBatch — Send follow-up emails in batch */
+function handleSendFollowUpBatch(payload) {
+  var emails = payload.emails || [];
+  if (!emails || emails.length === 0) return { error: 'Missing emails' };
+
+  var sender = getSenderConfig();
+  var totalEnviados = 0;
+  var totalErrores = 0;
+  var errors = [];
+
+  for (var i = 0; i < emails.length; i++) {
+    var item = emails[i];
+    var email = item.email || '';
+    var subject = item.asunto || 'Seguimiento - Alter5 Capital';
+    var body = item.cuerpoHtml || '';
+
+    if (!email || !body) {
+      totalErrores++;
+      errors.push({ email: email, error: 'Missing email or body' });
+      continue;
+    }
+
+    try {
+      sendWithFallback(email, subject, body, sender.email, sender.name);
+      totalEnviados++;
+
+      // Move to pipeline stage 'seguimiento' if not already there
+      try {
+        var p = getOrCreatePipelineRow(email);
+        if (p.row.etapa === 'nuevo') {
+          handleMoveStage({ email: email, newStage: 'seguimiento' });
+        }
+      } catch (e) { /* ignore pipeline errors */ }
+
+      // Rate limit: 1 email per second
+      Utilities.sleep(1000);
+    } catch (e) {
+      totalErrores++;
+      errors.push({ email: email, error: e.message });
+    }
+  }
+
+  return { success: true, totalEnviados: totalEnviados, totalErrores: totalErrores, errors: errors };
+}
+
+// ── Campaign management extras ───────────────────────────────────────
+
+/** updateCampaign — Update specific fields of a campaign */
+function handleUpdateCampaign(payload) {
+  var campaignId = payload.campaignId;
+  var fields = payload.fields || {};
+  if (!campaignId) return { error: 'Missing campaignId' };
+
+  var campSheet = getOrCreateSheet(SHEET_CAMPAIGNS, CAMPAIGN_HEADERS);
+  var rowIndex = findRowIndex(campSheet, 0, campaignId);
+  if (rowIndex === -1) return { error: 'Campaign not found' };
+
+  // Update each provided field
+  var updatable = ['name', 'senderEmail', 'senderName', 'subjectA', 'bodyA',
+    'subjectB', 'bodyB', 'abTestPercent', 'abWinnerCriteria', 'notes', 'knowledgeBase'];
+
+  for (var i = 0; i < updatable.length; i++) {
+    var key = updatable[i];
+    if (fields[key] !== undefined) {
+      updateCell(campSheet, rowIndex, CAMPAIGN_HEADERS, key, fields[key]);
+    }
+  }
+
+  return { success: true, id: campaignId };
+}
+
+/** getCampaignDashboard — Dashboard metrics for a specific campaign */
+function handleCampaignDashboard(payload) {
+  var campaignId = payload.campaignId;
+  if (!campaignId) return { error: 'Missing campaignId' };
+
+  var recipients = readAll(SHEET_RECIPIENTS, RECIPIENT_HEADERS);
+  var campaignRecipients = recipients.filter(function(r) { return r.campaignId === campaignId; });
+
+  var contactos = [];
+  var metricas = { total: 0, enviados: 0, abiertos: 0, clics: 0, respondidos: 0, errores: 0 };
+
+  for (var i = 0; i < campaignRecipients.length; i++) {
+    var r = campaignRecipients[i];
+    var openCount = Number(r.openCount) || 0;
+    var clickCount = Number(r.clickCount) || 0;
+    var isSent = (r.status === 'sent' || r.status === 'replied');
+    var isReplied = (r.status === 'replied');
+    var isError = (r.status === 'error');
+
+    metricas.total++;
+    if (isSent || isError) metricas.enviados++;
+    if (openCount > 0) metricas.abiertos++;
+    if (clickCount > 0) metricas.clics++;
+    if (isReplied) metricas.respondidos++;
+    if (isError) metricas.errores++;
+
+    contactos.push({
+      email: String(r.email).toLowerCase().trim(),
+      nombre: r.name || '',
+      apellido: r.lastName || '',
+      organizacion: r.organization || '',
+      variante: r.variant || '-',
+      estado: mapStatus(r.status, openCount, clickCount),
+      fechaEnvio: r.sentTime ? String(r.sentTime) : null,
+      primeraApertura: r.openedTime ? String(r.openedTime) : null,
+      numAperturas: openCount,
+      primerClic: r.clickedTime ? String(r.clickedTime) : null,
+      numClics: clickCount,
+      respondido: isReplied ? 'Sí' : 'No',
+    });
+  }
+
+  return {
+    success: true,
+    contactos: contactos,
+    metricas: metricas,
+    actualizado: now(),
+  };
 }

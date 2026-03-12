@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { fetchCandidateTargets, fetchAllBridgeTargets, upsertCandidateTarget } from '../utils/airtableCandidates';
-import { fetchSentDomains } from '../utils/campaignApi';
+import { fetchSentDomains, fetchSentEmails } from '../utils/campaignApi';
 import { callGemini } from '../utils/gemini';
 // Sender is fixed — Leticia is the Bridge campaign owner
 
@@ -118,26 +118,30 @@ const BRIDGE_EMAIL_TEMPLATE_B = `<p>Hola {{nombre}},</p>
 <p>Creo que podría ser interesante para {{empresa}}. ¿Tiene unos minutos para una llamada esta semana?</p>
 <p>Quedo a su disposición,<br/>Leticia Menéndez<br/>Alter5</p>`;
 
-function explorerScore(c) {
+function bridgeScore(c) {
   let score = 0;
-  const enrichment = c.detail?.enrichment || {};
-  if ((enrichment._tv || 0) >= 2 && c.role !== 'No relevante') score += 25;
-  else if ((enrichment._tv || 0) >= 2) score += 10;
-  const identified = (c.detail?.contacts || []).filter(
-    ct => ct.role && ct.role !== 'No identificado' && ct.role !== '' && ct.email
-  );
-  if (identified.length >= 2) score += 20;
-  else if (identified.length === 1) score += 10;
-  const hasTopContact = identified.some(ct => contactPriority(ct.role) <= 2);
-  if (hasTopContact) score += 10;
-  if (c.interactions > 100) score += 20;
-  else if (c.interactions > 50) score += 12;
-  else if (c.interactions > 20) score += 6;
-  else if (c.interactions > 5) score += 2;
-  if (c.monthsAgo <= 6) score += 15;
-  else if (c.monthsAgo <= 18) score += 8;
-  else if (c.monthsAgo <= 36) score += 3;
-  if ((c.detail?.context || '').length > 200) score += 5;
+
+  // Company type fit (40 pts max) — factor dominante
+  const tp = (c.companyType || '').toLowerCase();
+  if (tp.includes('developer') && tp.includes('ipp')) score += 40;
+  else if (tp.includes('developer')) score += 35;
+  else if (tp === 'ipp') score += 30;
+
+  // Segment fit (25 pts max)
+  if (c.segment === 'Project Finance') score += 25;
+  else if (c.segment === 'Corporate Finance') score += 5;
+
+  // Asset phase fit (25 pts max) — RTB/construcción necesitan bridge YA
+  const phase = (c.assetPhase || '').toLowerCase();
+  if (phase === 'rtb' || phase === 'construcción' || phase === 'construccion') score += 25;
+  else if (phase === 'desarrollo') score += 18;
+  else if (phase === 'operativo') score += 3;
+
+  // Technologies — utility-scale renovables (10 pts max)
+  const techs = c.technologies || [];
+  if (techs.includes('Solar') || techs.includes('Eólica')) score += 7;
+  if (techs.includes('BESS')) score += 3;
+
   return Math.min(100, score);
 }
 
@@ -164,7 +168,10 @@ function Toast({ msg, onClose }) {
 export default function BridgeExplorerView({ allCompanies, campaignRef, previousTargets = {}, bridgeContacts = [], campaignMetrics = null, currentUser, onBack }) {
   // Data state
   const [trackingDomains, setTrackingDomains] = useState(new Set());
+  const [sentEmails, setSentEmails] = useState<Set<string>>(new Set()); // full emails from GAS tracking
   const [allSentDomains, setAllSentDomains] = useState(new Set()); // domains from ALL Bridge targets (approved/sent)
+  const [atTargetEmails, setAtTargetEmails] = useState<Set<string>>(new Set()); // emails from Airtable CampaignTargets
+  const [atTargetNames, setAtTargetNames] = useState<Set<string>>(new Set()); // company names from Airtable CampaignTargets
   const [trackingError, setTrackingError] = useState(false);
   const [savedTargets, setSavedTargets] = useState({});
   const [loadingData, setLoadingData] = useState(true);
@@ -239,6 +246,25 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
     return domains;
   }, [bridgeContacts, GENERIC_DOMAINS]);
 
+  // Full emails from bridgeContacts (covers generic domains)
+  const bridgeContactEmails = useMemo(() => {
+    const emails = new Set<string>();
+    for (const c of bridgeContacts) {
+      if (c.email) emails.add(c.email.toLowerCase().trim());
+    }
+    return emails;
+  }, [bridgeContacts]);
+
+  // Company names from bridgeContacts (fallback when domain doesn't match)
+  const sentCompanyNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const c of bridgeContacts) {
+      const org = (c.organizacion || '').toLowerCase().trim();
+      if (org) names.add(org);
+    }
+    return names;
+  }, [bridgeContacts]);
+
   // ── Detect domains already contacted by Leticia (campaign sender) ──
   const leticiaDomains = useMemo(() => {
     const matched = new Set();
@@ -261,26 +287,42 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   async function loadData() {
     setLoadingData(true);
     try {
-      // 1. Sent domains (anti-duplicate shield from GAS tracking)
+      // 1. Sent domains + emails (anti-duplicate shield from GAS tracking)
       let domains = new Set();
       try { domains = await fetchSentDomains(); }
       catch { setTrackingError(true); }
       setTrackingDomains(domains);
+
+      // 1b. Full emails (covers generic domains that fetchSentDomains skips)
+      setSentEmails(await fetchSentEmails().catch(() => new Set()));
 
       // 2. Saved targets in Airtable (current wave)
       const targets = await fetchCandidateTargets(campaignRef).catch(() => ({}));
       setSavedTargets(targets || {});
 
       // 3. ALL Bridge targets across all waves (robust exclusion from Airtable)
+      // This is the AUTHORITATIVE source — works even when GAS dashboard is misconfigured
       try {
         const { allTargets } = await fetchAllBridgeTargets("Bridge_Q1");
-        const sentSet = new Set();
-        for (const [domain, t] of Object.entries(allTargets)) {
+        const sentSet = new Set<string>();
+        const emailSet = new Set<string>();
+        const nameSet = new Set<string>();
+        for (const [domain, t] of Object.entries(allTargets) as [string, any][]) {
           if (t.status === 'approved' || t.status === 'sent' || t.status === 'selected') {
             sentSet.add(domain);
+            // Extract emails from selectedContacts
+            for (const ct of (t.selectedContacts || [])) {
+              const email = (ct.email || '').toLowerCase().trim();
+              if (email) emailSet.add(email);
+            }
+            // Extract company name
+            const name = (t.companyName || '').toLowerCase().trim();
+            if (name) nameSet.add(name);
           }
         }
         setAllSentDomains(sentSet);
+        setAtTargetEmails(emailSet);
+        setAtTargetNames(nameSet);
       } catch { /* non-blocking — previousTargets prop is the fallback */ }
 
     } finally {
@@ -310,6 +352,18 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
         // Exclude companies already approved/sent in previous waves (prop from parent)
         const prevStatus = previousTargets[domain]?.status;
         if (prevStatus === 'approved' || prevStatus === 'sent' || prevStatus === 'selected') return false;
+
+        // Shield 6: Direct email match — covers generic domains (gmail, etc)
+        const companyEmails = (c.detail?.contacts || [])
+          .map(ct => (ct.email || '').toLowerCase().trim()).filter(Boolean);
+        if (companyEmails.some(e => sentEmails.has(e))) return false;
+        if (companyEmails.some(e => bridgeContactEmails.has(e))) return false;
+        if (companyEmails.some(e => atTargetEmails.has(e))) return false;
+
+        // Shield 7: Company name match — fallback when domain doesn't match email domain
+        const companyNameLower = (c.name || '').toLowerCase().trim();
+        if (sentCompanyNames.has(companyNameLower)) return false;
+        if (atTargetNames.has(companyNameLower)) return false;
 
         // Only Originación companies (Bridge target segment)
         if (c.role !== 'Originación') return false;
@@ -365,25 +419,25 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
         return true;
       })
       .map(c => {
-        const sc = explorerScore(c);
+        const sc = bridgeScore(c);
         const llmEntry = llmOrdering?.find(l => l.domain === c.domain?.toLowerCase());
         return {
           ...c,
-          explorerScore: sc,
+          bridgeScoreVal: sc,
           llmScore: llmEntry?.score ?? null,
           llmReason: llmEntry?.reason ?? null,
         };
       })
-      .filter(c => c.explorerScore >= minScore)
+      .filter(c => c.bridgeScoreVal >= minScore)
       .sort((a, b) => {
         if (llmOrdering) {
           const aS = a.llmScore ?? -1;
           const bS = b.llmScore ?? -1;
           if (aS !== bS) return bS - aS;
         }
-        return b.explorerScore - a.explorerScore;
+        return b.bridgeScoreVal - a.bridgeScoreVal;
       });
-  }, [allCompanies, bridgeContactDomains, trackingDomains, allSentDomains, leticiaDomains, savedTargets, previousTargets, segFilter, typeFilter,
+  }, [allCompanies, bridgeContactDomains, bridgeContactEmails, sentCompanyNames, sentEmails, atTargetEmails, atTargetNames, trackingDomains, allSentDomains, leticiaDomains, savedTargets, previousTargets, segFilter, typeFilter,
       techFilter, geoFilter, targetFilter, statusFilter, searchQuery, minScore, llmOrdering]);
 
   // Unique filter values
@@ -830,14 +884,14 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
             setExpandedCompany(isExpanded ? null : domain);
           }}
         >
-          {/* Score */}
-          <div style={{
+          {/* Bridge fit score */}
+          <div title="Bridge fit score" style={{
             minWidth: 36, height: 36, borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: company.explorerScore >= 70 ? T.emeraldBg : company.explorerScore >= 40 ? T.amberBg : T.sidebar,
+            background: company.bridgeScoreVal >= 70 ? T.emeraldBg : company.bridgeScoreVal >= 40 ? T.amberBg : T.sidebar,
             fontSize: 12, fontWeight: 700, fontFamily: T.mono,
-            color: company.explorerScore >= 70 ? T.emerald : company.explorerScore >= 40 ? T.amber : T.muted,
-          }}>{company.explorerScore}</div>
+            color: company.bridgeScoreVal >= 70 ? T.emerald : company.bridgeScoreVal >= 40 ? T.amber : T.muted,
+          }}>{company.bridgeScoreVal}</div>
 
           {/* Company info */}
           <div style={{ flex: 1, minWidth: 0 }}>

@@ -2763,12 +2763,54 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
     setLoading(true);
     try {
       if (!API_URL) throw new Error("No URL");
-      // Fetch paralelo: dashboard + pipeline al mismo tiempo
-      const [dashboardRes, pipelineRes] = await Promise.all([
+      // Fetch paralelo: dashboard + pipeline + Airtable targets al mismo tiempo
+      const [dashboardRes, pipelineRes, atResult] = await Promise.all([
         fetch(API_URL + "?action=dashboard").then(r => r.json()).catch(() => null),
-        fetch(API_URL + "?action=pipeline").then(r => r.json()).catch(() => null)
+        fetch(API_URL + "?action=pipeline").then(r => r.json()).catch(() => null),
+        fetchAllBridgeTargets("Bridge_Q1").catch(() => ({ allTargets: {}, maxWave: 1 })),
       ]);
       if (!dashboardRes) throw new Error("Dashboard fetch failed");
+
+      // If GAS dashboard returns very few contacts but Airtable has more,
+      // augment with CampaignTargets data (LEGACY_SHEET_ID might not be configured)
+      const gasContacts = dashboardRes.contactos || [];
+      const { allTargets } = atResult;
+      const atEntries = Object.values(allTargets);
+      const sentTargets = atEntries.filter(t =>
+        t.status === 'approved' || t.status === 'sent' || t.status === 'selected'
+      );
+
+      if (gasContacts.length < 10 && sentTargets.length > gasContacts.length) {
+        // Build contact records from Airtable CampaignTargets as fallback
+        const seenEmails = new Set(gasContacts.map(c => (c.email || '').toLowerCase()));
+        const augmented = [...gasContacts];
+        for (const t of sentTargets) {
+          const contacts = t.selectedContacts || [];
+          for (const ct of contacts) {
+            const email = (ct.email || '').toLowerCase().trim();
+            if (!email || seenEmails.has(email)) continue;
+            seenEmails.add(email);
+            augmented.push({
+              email,
+              nombre: ct.name || '',
+              apellido: '',
+              organizacion: t.companyName || '',
+              grupo: t.campaignRef || '',
+              variante: '-',
+              estado: 'Enviado',
+              fechaEnvio: t.reviewedAt || null,
+              primeraApertura: null,
+              numAperturas: 0,
+              primerClic: null,
+              numClics: 0,
+              respondido: 'No',
+            });
+          }
+        }
+        dashboardRes.contactos = augmented;
+        dashboardRes._augmentedFromAirtable = true;
+      }
+
       setData(dashboardRes);
       setMock(false);
       // Pipeline es opcional (falla silenciosa)

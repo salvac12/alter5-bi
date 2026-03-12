@@ -16,6 +16,7 @@ const GET_ACTIONS = new Set([
   'dashboard',
   'pipeline',
   'getConversation',
+  'getConversacionCompleta',
   'getFollowUpCandidates',
   'getConversaciones',
   // These are also in doGet in the deployed GAS
@@ -39,6 +40,7 @@ const POST_ACTIONS = new Set([
   'updateCampaign',
   'sendDraft',
   'saveDraft',
+  'composeAndSaveDraft',
   'composeFromInstructions',
   'classifyReply',
   'generateFollowUpBatch',
@@ -47,9 +49,12 @@ const POST_ACTIONS = new Set([
   'addNote',
   'generateFollowUp',
   'improveMessage',
+  'uploadMeetingNotes',
   'sendTestEmail',
   'createDrafts',
   'sendDrafts',
+  'updateCampaign',
+  'getCampaignDashboard',
 ]);
 
 const ALL_ACTIONS = new Set([...GET_ACTIONS, ...POST_ACTIONS]);

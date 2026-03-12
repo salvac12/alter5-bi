@@ -243,3 +243,17 @@ export async function fetchSentDomains() {
   }
   return domains;
 }
+
+/**
+ * Fetch full emails that have already been contacted (from GAS Tracking sheet).
+ * Returns a Set<string> of lowercase emails — covers generic domains that fetchSentDomains skips.
+ */
+export async function fetchSentEmails(): Promise<Set<string>> {
+  const data = await proxyFetch('dashboard');
+  const emails = new Set<string>();
+  for (const c of (data?.contactos || [])) {
+    const email = (c.email || '').toLowerCase().trim();
+    if (email) emails.add(email);
+  }
+  return emails;
+}

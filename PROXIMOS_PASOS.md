@@ -1,106 +1,120 @@
-# Proximos Pasos — Alter5 BI
-**Sesion:** 2 de marzo de 2026
-**Contexto:** Se ha implementado el Cerebro AI (v1.7.0) y necesita testing en produccion.
+# Próximos Pasos — Campaign Backend GAS
+**Sesión:** 11 de marzo de 2026
+**Contexto:** Se han implementado TODAS las acciones GAS que faltaban en `campaignBackend.gs` para que BridgeCampaignView y BridgeSlideOverPanel funcionen completamente.
 
 ---
 
-## 1. Probar el Cerebro AI en produccion
+## 1. Qué hemos hecho
 
-Una vez desplegado en Vercel (el push de este commit activa auto-deploy):
+### Pipeline Sheet + Persistencia
+- **Nueva sheet "Pipeline"** con headers: `email, etapa, etapaAnterior, fechaCambio, fechaCreacion, notas, historial`
+- **`handleMoveStage`** — Mueve contacto a nueva etapa, guarda historial como JSON
+- **`handleAddNote`** — Añade notas con timestamp al pipeline
+- **`handlePipeline`** upgrade — Ya no es stub vacío, lee de la sheet Pipeline con notas/historial parseados y datos del recipient
 
-### Requisitos
-- `VITE_GEMINI_API_KEY` configurada en Vercel (ya deberia estar)
-- `VITE_AIRTABLE_PAT` configurada en Vercel (necesaria para la knowledge base)
+### Lectura Gmail (3 handlers GET)
+- **`handleGetConversation`** — Busca threads en Gmail (`from:EMAIL OR to:EMAIL`), devuelve último reply del contacto + borrador existente + historial completo
+- **`handleGetConversacionCompleta`** — Thread completo + resumen AI con Gemini
+- **`handleGetFollowUpCandidates`** — Cruza Recipients (opens/clicks) con FollowUps para contar seguimientos enviados
 
-### Tests sugeridos
-1. Abrir el dashboard en Vercel
-2. Pulsar el boton "Cerebro" en la barra de navegacion (vista Empresas)
-3. Probar queries como:
-   - "Term sheets enviados" (deberia devolver 100+ empresas)
-   - "Developers sin contacto 1 ano"
-   - "Empresas con proyectos BESS"
-   - "IPPs mas activos"
-   - "Fondos interesados en deuda"
-4. Verificar que:
-   - Las tarjetas de empresas aparecen correctamente
-   - Click en una tarjeta abre su ficha detallada
-   - La respuesta de Gemini es coherente y en espanol
-   - Los botones de feedback (thumbs up/down) funcionan
-5. Ir a Airtable -> tabla `Cerebro-Knowledge` y verificar que las consultas se han guardado
+### Escritura Gmail (4 handlers POST)
+- **`handleSendDraft`** — Envía draft existente (con edición opcional) o reply a thread existente
+- **`handleSaveDraft`** — Guarda/actualiza borrador Gmail para un email
+- **`handleComposeAndSaveDraft`** — Crea draft nuevo con asunto y cuerpo dados
+- **`handleUploadMeetingNotes`** — Sube archivo a Drive (base64) + añade nota al Pipeline
 
-### Si algo falla
-- **"API key de Gemini no configurada"**: falta `VITE_GEMINI_API_KEY` en Vercel env vars
-- **No se guardan en Airtable**: falta `VITE_AIRTABLE_PAT` o el token no tiene scope `data.records:write`
-- **0 resultados**: revisar que el query tiene palabras significativas (no solo stop words)
-- **Error de Gemini**: verificar que el modelo `gemini-2.5-flash` esta disponible con tu API key
+### AI con Gemini (5 funciones)
+- **`callGemini(prompt, maxTokens)`** — Helper Gemini 2.0 Flash via REST, usa Script Property `GEMINI_API_KEY`
+- **`getConversationContext(email, maxMessages)`** — Lee threads Gmail, identifica `esLeticia` por dominio alter-5.com/alter5.com
+- **`handleGenerateFollowUp`** — Genera borrador de seguimiento personalizado con contexto de conversación
+- **`handleImproveMessage`** — Mejora texto de email con Gemini
+- **`handleComposeFromInstructions`** — Compone email desde instrucciones + contexto conversación
+- **`handleClassifyReply`** — Clasifica respuesta (interesado/reunion/no_interesado/informacion/fuera_oficina/otro) + sentimiento
 
----
+### Batch (2 handlers POST)
+- **`handleGenerateFollowUpBatch`** — Genera borradores para múltiples contactos (max 15), rate limit 500ms entre Gemini calls
+- **`handleSendFollowUpBatch`** — Envía emails en batch con rate limit 1s, mueve a etapa "seguimiento" en Pipeline
 
-## 2. Lo que se hizo en esta sesion (resumen)
+### Gestión de campañas extras (2 handlers POST)
+- **`handleUpdateCampaign`** — Actualiza campos específicos de campaña (name, sender, subjects, bodies, notes, knowledgeBase)
+- **`handleCampaignDashboard`** — Dashboard de métricas para una campaña específica
 
-### Cerebro AI — Busqueda inteligente (NUEVO)
-- **`src/components/CerebroSearch.jsx`** — Overlay modal completo con:
-  - Input de texto + boton buscar + Enter para enviar
-  - 6 ejemplos clickables como chips
-  - Spinner de carga con contador de empresas
-  - Grid de tarjetas de empresas clickables (nombre, subtipo, estado, emails, fase)
-  - Botones de feedback (thumbs up/down) con estado visual
-  - Escape para cerrar
+### Datos + Fixes
+- **`clickedTime`** añadido a RECIPIENT_HEADERS
+- **`knowledgeBase`** añadido a CAMPAIGN_HEADERS
+- **`primerClic`** en handleDashboard ahora mapea `r.clickedTime` correctamente (antes era `null`)
+- **`findDraftForEmail`** helper — Busca drafts existentes en Gmail por email destinatario
+- **`findRecipientByEmail`** helper — Busca datos de recipient para enriquecer pipeline cards
+- **`getSenderConfig`** helper — Lee sender de Script Properties con fallback a campaña activa
 
-- **`src/utils/gemini.js`** — Funcion `queryCerebro()` con 4 fases:
-  1. Keyword extraction: normaliza acentos, filtra 140+ stop words, stemming de plurales
-  2. Knowledge retrieval: busca Q&A relevantes en Airtable
-  3. Gemini analysis: envia top 50 empresas + contexto previo a Gemini 2.5 Flash
-  4. Knowledge save: guarda pregunta + respuesta en Airtable (asincrono)
+### Routing actualizado
+- **doGet**: 4 nuevos cases (getConversation, getConversacionCompleta, getFollowUpCandidates, getConversaciones)
+- **doPost**: 16 handlers nuevos en el mapa de routing
+- **Proxy** (`api/campaign-proxy.js`): añadidos `getConversacionCompleta`, `composeAndSaveDraft`, `uploadMeetingNotes`, `updateCampaign`, `getCampaignDashboard`
 
-- **`src/utils/airtableCerebro.js`** — Cliente REST para tabla `Cerebro-Knowledge`:
-  - `fetchAllKnowledge()` con cache en memoria (TTL 5 min)
-  - `fetchRelevantKnowledge(keywords)` con scoring por overlap de keywords
-  - `saveKnowledge()` fire-and-forget
-  - `updateFeedback()` para thumbs up/down
-
-- **`scripts/create_cerebro_table.py`** — Script one-shot para crear tabla en Airtable (YA EJECUTADO)
-  - Tabla creada: `Cerebro-Knowledge` (ID: `tbliZ7zNci5TUCAhj`)
-  - 8 campos: Question, Answer, Keywords, MatchedDomains, MatchCount, Useful, NotUseful, CreatedAt
-
-- **`src/App.jsx`** — Boton "Cerebro" en nav bar + estado + modal
-
-### Problemas resueltos durante la sesion
-1. **Solo 1 resultado** para "term sheets": stop words insuficientes, "dame", "lista", "empresas" contaminaban la busqueda
-2. **Solo 3 resultados**: el pipeline solo devolvia empresas mencionadas por Gemini. Corregido: devuelve TODAS las coincidencias de keyword search
-3. **Airtable 403**: PAT sin scope `schema.bases:write`. Resuelto creando nuevo token
+### Archivos
+- `campaignBackend.gs` copiado a `~/Desktop/campaignBackend.gs` para pegar en GAS
+- Build OK (`npm run build` sin errores)
 
 ---
 
-## 3. Mejoras futuras del Cerebro
+## 2. Pre-requisitos antes de verificar
 
-### Corto plazo
-- [ ] Mejorar stemming espanol (actualmente solo maneja plurales con -s/-es)
-- [ ] Anadir busqueda fuzzy (tolerancia a typos)
-- [ ] Permitir busqueda desde cualquier vista (no solo Empresas)
-- [ ] Atajo de teclado global (Cmd+K) para abrir el Cerebro
+### En Google Apps Script
+1. **Pegar** `~/Desktop/campaignBackend.gs` en el proyecto GAS (reemplazar todo el código)
+2. **Nueva implementación** (Deploy > New deployment > Web App > Execute as Me > Anyone can access)
+3. **Actualizar URL** en Vercel env var `GAS_WEB_APP_URL` si cambió el deployment ID
 
-### Medio plazo
-- [ ] Captura de metadatos de adjuntos en el pipeline Gmail (attachments filename, MIME type)
-- [ ] Busqueda semantica con embeddings (en vez de keyword matching puro)
-- [ ] Dashboard de analytics de uso del Cerebro (queries mas frecuentes, satisfaction rate)
+### Script Properties necesarias
+| Property | Requerida | Para qué |
+|----------|-----------|----------|
+| `API_TOKEN` | Sí | Auth de POST requests (ya debería existir) |
+| `LEGACY_SHEET_ID` | Sí | Dashboard legacy (ya debería existir) |
+| `GEMINI_API_KEY` | Para AI | generateFollowUp, improveMessage, composeFromInstructions, classifyReply, getConversacionCompleta |
+| `SENDER_EMAIL` | Opcional | Email remitente para envíos (fallback: campaña activa) |
+| `SENDER_NAME` | Opcional | Nombre remitente |
+| `NOTES_FOLDER_ID` | Opcional | Carpeta Drive para notas de reunión |
 
-### Largo plazo
-- [ ] Lectura de contenido de adjuntos (PDFs, Excel) via Document AI
-- [ ] Integracion con Prospects/Pipeline (buscar tambien en deals activos)
-- [ ] Asistente conversacional (multi-turn, refinamiento de queries)
-
----
-
-## 4. Otros pendientes (pre-existentes)
-
-- [ ] Procesar Market Roles en Colab con Gemini
-- [ ] Analisis enriquecido v2 para Salvador
-- [ ] Commitear `api/fetch-gdoc.js`
-- [ ] Renovar `AIRTABLE_PAT` en GitHub Secrets
-- [ ] Adaptar lectura de Tasks en `normalizeProspect`
-- [ ] Graficos de distribucion (sector, subtipo, fase)
+### Permisos GAS
+- GmailApp (leer/enviar/drafts) — ya debería tener
+- DriveApp — necesario si se usa `uploadMeetingNotes`
 
 ---
 
-**Para continuar la sesion:** abre este archivo y sigue los pasos en orden. El Cerebro ya esta implementado y commiteado, solo falta probar en produccion.
+## 3. Verificaciones funcionales
+
+| # | Qué verificar | Cómo | Resultado esperado |
+|---|---------------|------|-------------------|
+| 1 | Dashboard carga | Abrir tab Campañas | Métricas + contactos aparecen ✅ (ya funcionaba) |
+| 2 | primerClic | Ver columna "Primer Clic" en dashboard | Fecha aparece si hay clickedTime en Recipients |
+| 3 | Pipeline persiste | Tab Pipeline > mover card de etapa | Al recargar, la card sigue en la etapa nueva |
+| 4 | Notas pipeline | Tab Pipeline > añadir nota a contacto | La nota aparece al recargar |
+| 5 | Conversación | SlideOverPanel > abrir contacto | Historial de emails carga, borrador existente se detecta |
+| 6 | Conversación completa | Ver hilo completo | Todos los mensajes + resumen AI (req GEMINI_API_KEY) |
+| 7 | Guardar borrador | Editar borrador en panel > guardar | Se crea/actualiza draft en Gmail |
+| 8 | Enviar draft | Botón enviar en panel | El email se envía (draft o reply) |
+| 9 | Candidatos seguimiento | Tab Seguimiento | Lista de contactos que abrieron/clicaron con conteo |
+| 10 | Generar seguimiento AI | Botón "Generar seguimiento" | Gemini genera borrador personalizado (req GEMINI_API_KEY) |
+| 11 | Mejorar mensaje | Botón "Mejorar" en editor | Gemini mejora el texto (req GEMINI_API_KEY) |
+| 12 | Componer desde instrucciones | Instrucciones > generar | Email compuesto con contexto (req GEMINI_API_KEY) |
+| 13 | Clasificar respuesta | Reply recibido > clasificar | Categoría + sentimiento (req GEMINI_API_KEY) |
+| 14 | Batch generar | Seleccionar múltiples > generar | Borradores para cada contacto, max 15 (req GEMINI_API_KEY) |
+| 15 | Batch enviar | Seleccionar múltiples > enviar | Emails enviados, pipeline actualizado |
+| 16 | Subir notas reunión | Panel > subir archivo | Archivo en Drive + nota en Pipeline |
+| 17 | Actualizar campaña | Editar nombre/subject de campaña | Cambios persisten al recargar |
+| 18 | Dashboard campaña | Ver métricas de campaña específica | Contactos + métricas filtrados por campaignId |
+
+---
+
+## 4. Notas importantes
+
+- **Tests seguros (no envían nada)**: 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 17, 18
+- **Tests que envían emails reales**: 8, 14, 15 — probar con emails de test primero
+- **Tests que crean drafts**: 7 — seguro, crea borrador en Gmail sin enviar
+- **Tests que requieren GEMINI_API_KEY**: 6, 10, 11, 12, 13, 14
+- La sheet "Pipeline" se auto-crea en el primer `moveStage` o `addNote`
+- Los handlers de AI fallan gracefully si no hay `GEMINI_API_KEY` (devuelven error descriptivo)
+
+---
+
+**Para continuar:** Pegar el GAS, nueva implementación, y verificar los 18 puntos en orden.
