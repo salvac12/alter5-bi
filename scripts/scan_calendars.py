@@ -185,6 +185,33 @@ def extract_external_domains(event):
     return domains
 
 
+def extract_external_attendees(event):
+    """Extract external attendees grouped by domain.
+
+    Returns: dict[domain] -> list of {name, email, domain}
+    """
+    by_domain = {}
+    for att in event.get("attendees", []):
+        email = (att.get("email") or "").strip().lower()
+        if "@" not in email:
+            continue
+        domain = email.split("@")[1]
+        if domain in INTERNAL_DOMAINS or domain in PERSONAL_DOMAINS or domain in TOOL_DOMAINS or domain in EXCLUDED_DOMAINS:
+            continue
+        display = (att.get("displayName") or "").strip()
+        # If displayName is just the email, try to build name from email local part
+        if not display or display.lower() == email:
+            local = email.split("@")[0]
+            # Convert "juan.garcia" or "jgarcia" → "Juan Garcia" / "Jgarcia"
+            display = " ".join(p.capitalize() for p in local.replace(".", " ").replace("_", " ").split())
+        by_domain.setdefault(domain, []).append({
+            "name": display,
+            "email": email,
+            "domain": domain,
+        })
+    return by_domain
+
+
 def event_has_ended(event, now):
     """Check if an event has already ended."""
     end = event.get("end", {})
@@ -287,15 +314,84 @@ def patch_prospect_stage(record_id, dry_run=False):
     return result is not None
 
 
-def create_prospect_from_meeting(domain, employee_email, event_summary, company_name=None, dry_run=False):
-    """Create a new prospect in stage 'Reunion' from a calendar meeting."""
+def merge_contacts_to_prospect(prospect, new_attendees, dry_run=False):
+    """Merge new attendees into an existing prospect's Contacts field.
+
+    new_attendees: list of {name, email, domain}
+    Returns number of contacts added.
+    """
+    pf = prospect.get("fields", {})
+
+    # Parse existing contacts
+    existing = []
+    try:
+        existing = json.loads(pf.get("Contacts") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        pass
+    if not isinstance(existing, list):
+        existing = []
+
+    # Also include Contact Email if not in existing
+    legacy_email = (pf.get("Contact Email") or "").strip().lower()
+    existing_emails = {(c.get("email") or "").strip().lower() for c in existing}
+    if legacy_email and legacy_email not in existing_emails:
+        existing.append({"name": "", "email": legacy_email, "role": ""})
+        existing_emails.add(legacy_email)
+
+    # Add new attendees that don't already exist
+    added = 0
+    for att in new_attendees:
+        email_lower = att["email"].lower()
+        if email_lower not in existing_emails:
+            existing.append({
+                "name": att["name"],
+                "email": att["email"],
+                "role": "",  # role unknown from calendar
+            })
+            existing_emails.add(email_lower)
+            added += 1
+
+    if added == 0:
+        return 0
+
+    if dry_run:
+        return added
+
+    # PATCH the prospect
+    url = f"{PROSPECTS_API}/{prospect['id']}"
+    fields = {"Contacts": json.dumps(existing, ensure_ascii=False)}
+    # Update Contact Email to first contact if not set
+    if not legacy_email and existing:
+        fields["Contact Email"] = existing[0].get("email", "")
+    airtable_request(url, method="PATCH", data={"fields": fields})
+
+    # Update in-memory
+    pf["Contacts"] = json.dumps(existing, ensure_ascii=False)
+    return added
+
+
+def create_prospect_from_meeting(domain, employee_email, event_summary,
+                                  company_name=None, attendees=None, dry_run=False):
+    """Create a new prospect in stage 'Reunion' from a calendar meeting.
+
+    attendees: list of {name, email, domain} for this domain's attendees.
+    """
     manager = MAILBOX_TO_MANAGER.get(employee_email, "")
     name = company_name or domain.split(".")[0].capitalize()
     if event_summary:
-        # Use event summary as context
         context = f"Reunion detectada automaticamente desde calendario: {event_summary}"
     else:
         context = "Reunion detectada automaticamente desde calendario"
+
+    # Build contacts from attendees
+    contacts = []
+    if attendees:
+        for att in attendees:
+            contacts.append({
+                "name": att.get("name", ""),
+                "email": att.get("email", ""),
+                "role": "",
+            })
 
     fields = {
         "Prospect Name": name,
@@ -306,6 +402,9 @@ def create_prospect_from_meeting(domain, employee_email, event_summary, company_
     }
     if manager:
         fields["Deal Manager"] = manager
+    if contacts:
+        fields["Contacts"] = json.dumps(contacts, ensure_ascii=False)
+        fields["Contact Email"] = contacts[0]["email"]
 
     if dry_run:
         return True
@@ -709,6 +808,7 @@ def main():
     total_created = 0
     total_skipped = 0
     total_filtered_crm = 0
+    total_contacts_added = 0
 
     for mb in active_mailboxes:
         email = mb["email"]
@@ -759,6 +859,9 @@ def main():
             if not ext_domains:
                 continue
 
+            # Also extract full attendee info (name + email) grouped by domain
+            attendees_by_domain = extract_external_attendees(event)
+
             summary = event.get("summary", "(sin titulo)")
 
             # Filter: skip events with too many external domains (conferences/webinars)
@@ -767,11 +870,17 @@ def main():
                 total_skipped += 1
                 continue
 
+            # Collect ALL external attendees from this event (for merging into prospects)
+            all_event_attendees = []
+            for atts in attendees_by_domain.values():
+                all_event_attendees.extend(atts)
+
             # Check which domains match existing prospects
             has_known_prospect = any(domain_index.get(d) for d in ext_domains)
 
             for domain in ext_domains:
                 matching = domain_index.get(domain, [])
+                domain_attendees = attendees_by_domain.get(domain, [])
 
                 if matching:
                     # Domain matches an existing prospect — advance if eligible
@@ -786,10 +895,21 @@ def main():
                             ok = patch_prospect_stage(prospect["id"], dry_run=args.dry_run)
                             if ok:
                                 total_advanced += 1
-                                # Update in-memory so we don't advance twice
                                 pf["Stage"] = "Reunion"
                         else:
                             print(f"  · {pname} already at {stage}, skipping")
+
+                        # Merge ALL event attendees into prospect contacts
+                        # (includes advisors, co-attendees from other orgs)
+                        if all_event_attendees and prospect.get("id") != "new":
+                            added = merge_contacts_to_prospect(
+                                prospect, all_event_attendees, dry_run=args.dry_run,
+                            )
+                            if added:
+                                prefix = "[DRY-RUN] " if args.dry_run else ""
+                                names = ", ".join(a["name"] for a in all_event_attendees[:4])
+                                print(f"  {prefix}  +{added} contacts → {pname} ({names})")
+                                total_contacts_added += added
                 else:
                     # Unknown domain — only create prospect if this looks like
                     # a real 1:1 or small meeting (not a multi-org event where
@@ -804,8 +924,6 @@ def main():
                     if crm_entry:
                         grp = crm_entry.get("enrichment", {}).get("grp", "")
                         if grp and grp not in PROSPECT_ELIGIBLE_GROUPS:
-                            # Not a Capital Seeker by CRM — ask Gemini if the
-                            # email context reveals a capital-seeking intent
                             crm_name = crm_entry.get("name", domain)
                             gemini_result = ask_gemini_is_capital_seeker(
                                 domain, crm_entry, summary,
@@ -822,10 +940,15 @@ def main():
                     ok = create_prospect_from_meeting(
                         domain, email, summary,
                         company_name=crm_name,
+                        attendees=domain_attendees,
                         dry_run=args.dry_run,
                     )
                     if ok:
                         total_created += 1
+                        if domain_attendees:
+                            names = ", ".join(a["name"] for a in domain_attendees[:3])
+                            print(f"  {prefix}  contacts: {names}")
+                            total_contacts_added += len(domain_attendees)
                         # Add to index so we don't create duplicates within this run
                         fake_rec = {
                             "id": "new",
@@ -855,6 +978,7 @@ def main():
     print(f"  Domains skipped (not originacion): {total_filtered_crm}")
     print(f"  Prospects advanced to Reunion: {total_advanced}")
     print(f"  New prospects created: {total_created}")
+    print(f"  Contacts added/merged: {total_contacts_added}")
     if args.dry_run:
         print("  (DRY RUN — no changes made to Airtable)")
 
