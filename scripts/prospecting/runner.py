@@ -424,6 +424,9 @@ def main():
         print(f"\n[runner] Job {job_id} completed!")
         print(f"[runner] Uploaded: {uploaded}, Errors: {errors}")
 
+        # Explicitly mark job as completed
+        update_job_status(job_id, "completed", f"Uploaded {uploaded} companies, {errors} errors")
+
         if errors > 0 and uploaded == 0:
             sys.exit(1)
 

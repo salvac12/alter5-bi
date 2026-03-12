@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchProspectingJobs } from '../utils/airtableProspecting';
+import { fetchProspectingJobs, retryProspectingJob, updateJobStatusByJobId } from '../utils/airtableProspecting';
 import ProspectingCriteriaModal from './ProspectingCriteriaModal';
 import ProspectingResultsView from './ProspectingResultsView';
 
@@ -15,14 +15,23 @@ const COLORS = {
   text: '#6B7F94',
 };
 
-function StatusBadge({ status }) {
+const STUCK_THRESHOLD_MS = 20 * 60 * 1000; // 20 minutes
+
+function isJobStuck(job) {
+  if (job.status !== 'pending' && job.status !== 'running') return false;
+  if (!job.createdAt) return false;
+  return Date.now() - new Date(job.createdAt).getTime() > STUCK_THRESHOLD_MS;
+}
+
+function StatusBadge({ status, stuck }) {
   const config = {
     pending: { color: '#92400E', bg: '#FEF3C7', label: '⏳ Pendiente' },
     running: { color: '#1D4ED8', bg: '#EFF6FF', label: '🔄 En curso' },
     completed: { color: '#065F46', bg: '#ECFDF5', label: '✅ Completado' },
     failed: { color: '#991B1B', bg: '#FEF2F2', label: '❌ Fallido' },
+    stuck: { color: '#92400E', bg: '#FEF2F2', label: '⚠️ Atascado' },
   };
-  const c = config[status] || config.pending;
+  const c = stuck ? config.stuck : (config[status] || config.pending);
   return (
     <span style={{
       fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
@@ -72,8 +81,8 @@ export default function ProspectingView({ currentUser }) {
 
   // Polling every 30s for running jobs
   useEffect(() => {
-    const hasRunning = jobs.some(j => j.status === 'running');
-    if (!hasRunning) return;
+    const hasActive = jobs.some(j => j.status === 'running' || j.status === 'pending');
+    if (!hasActive) return;
 
     const interval = setInterval(loadJobs, 30000);
     return () => clearInterval(interval);
@@ -196,8 +205,19 @@ export default function ProspectingView({ currentUser }) {
                 job={job}
                 isLast={idx === jobs.length - 1}
                 onReview={() => { setSelectedJobId(job.jobId); setSelectedJobName(job.jobName); }}
-                onRetry={() => {
-                  // TODO: implement retry
+                onRetry={async () => {
+                  try {
+                    await retryProspectingJob(job.jobId, job.criteria);
+                    loadJobs();
+                  } catch (err) {
+                    console.warn('Retry failed:', err.message);
+                    await updateJobStatusByJobId(job.jobId, "failed", `Reintento falló: ${err.message}`);
+                    loadJobs();
+                  }
+                }}
+                onCancel={async () => {
+                  await updateJobStatusByJobId(job.jobId, "failed", "Cancelado manualmente");
+                  loadJobs();
                 }}
               />
             ))}
@@ -220,7 +240,8 @@ export default function ProspectingView({ currentUser }) {
   );
 }
 
-function JobRow({ job, isLast, onReview, onRetry }) {
+function JobRow({ job, isLast, onReview, onRetry, onCancel }) {
+  const stuck = isJobStuck(job);
   const criteriaStr = [
     job.criteria?.description,
     job.criteria?.focus_countries?.join(', '),
@@ -249,8 +270,8 @@ function JobRow({ job, isLast, onReview, onRetry }) {
         {criteriaStr || '—'}
       </div>
       <div>
-        <StatusBadge status={job.status} />
-        {job.status === 'running' && (
+        <StatusBadge status={job.status} stuck={stuck} />
+        {job.status === 'running' && !stuck && (
           <div style={{ fontSize: 10, color: COLORS.blue, marginTop: 3 }}>
             Actualizando cada 30s...
           </div>
@@ -276,7 +297,7 @@ function JobRow({ job, isLast, onReview, onRetry }) {
             Revisar →
           </button>
         )}
-        {job.status === 'failed' && (
+        {(job.status === 'failed' || stuck) && (
           <button
             onClick={onRetry}
             style={{
@@ -288,10 +309,22 @@ function JobRow({ job, isLast, onReview, onRetry }) {
             Reintentar
           </button>
         )}
-        {job.status === 'running' && (
+        {stuck && (
+          <button
+            onClick={onCancel}
+            style={{
+              padding: '5px 12px', borderRadius: 6, border: `1px solid ${COLORS.red}`,
+              background: '#FEF2F2', color: '#991B1B',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            Cancelar
+          </button>
+        )}
+        {job.status === 'running' && !stuck && (
           <span style={{ fontSize: 11, color: COLORS.text }}>En progreso...</span>
         )}
-        {job.status === 'pending' && (
+        {job.status === 'pending' && !stuck && (
           <span style={{ fontSize: 11, color: COLORS.text }}>⏳ Esperando...</span>
         )}
       </div>

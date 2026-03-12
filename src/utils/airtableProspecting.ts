@@ -57,7 +57,7 @@ export async function fetchProspectingJobs() {
 
   try {
     do {
-      let url = `${API_ROOT}?pageSize=100&fields[]=JobId&fields[]=JobName&fields[]=JobStatus&fields[]=SearchCriteria&fields[]=CreatedAt&fields[]=CreatedBy&fields[]=ReviewStatus&fields[]=Confidence`;
+      let url = `${API_ROOT}?pageSize=100&fields[]=JobId&fields[]=JobName&fields[]=JobStatus&fields[]=SearchCriteria&fields[]=CreatedAt&fields[]=CreatedBy&fields[]=ReviewStatus&fields[]=Confidence&fields[]=CompanyName`;
       if (offset) url += `&offset=${encodeURIComponent(offset)}`;
 
       const res = await fetch(url, { headers: headers() });
@@ -79,7 +79,10 @@ export async function fetchProspectingJobs() {
   for (const r of allRecords) {
     const f = r.fields;
     const jobId = f.JobId || "";
-    if (!jobId || f.CompanyName === "__JOB_PLACEHOLDER__") continue;
+    if (!jobId) continue;
+
+    const isPlaceholder = f.CompanyName === "__JOB_PLACEHOLDER__";
+    const isNoResults = f.CompanyName === "__NO_RESULTS__";
 
     if (!jobMap.has(jobId)) {
       let criteria = {};
@@ -99,8 +102,11 @@ export async function fetchProspectingJobs() {
       });
     }
 
+    // Placeholders and __NO_RESULTS__ create the job entry but don't count as companies
+    if (isPlaceholder || isNoResults) continue;
+
     const job = jobMap.get(jobId);
-    if (f.CompanyName && f.CompanyName !== "__NO_RESULTS__") {
+    if (f.CompanyName) {
       job.totalCompanies++;
       if (f.ReviewStatus === "approved") job.approvedCount++;
       if (f.ReviewStatus === "pending") job.pendingCount++;
@@ -331,12 +337,56 @@ export async function triggerGitHubAction(criteria, jobId) {
     }),
   });
 
-  if (!res.ok && res.status !== 204) {
+  if (res.status !== 204) {
     const err = await res.text();
-    throw new Error(`GitHub API error ${res.status}: ${err}`);
+    throw new Error(`GitHub dispatch failed (status ${res.status}). Verifica que VITE_GITHUB_TOKEN tenga scope "repo". Detalle: ${err}`);
   }
 
   return { success: true, jobId };
+}
+
+/**
+ * Update job status for all records matching a JobId.
+ */
+export async function updateJobStatusByJobId(jobId, status, notes) {
+  const token = getToken();
+  if (!token || !jobId) return;
+
+  // Find all record IDs for this job
+  const filterFormula = encodeURIComponent(`{JobId}="${jobId}"`);
+  let url = `${API_ROOT}?pageSize=100&filterByFormula=${filterFormula}&fields[]=JobId`;
+  try {
+    const res = await fetch(url, { headers: headers() });
+    if (!res.ok) return;
+    const data = await res.json();
+    const recordIds = (data.records || []).map(r => r.id);
+    if (recordIds.length === 0) return;
+
+    const fields = { JobStatus: status };
+    if (notes) fields.Notes = notes;
+
+    // Update in batches of 10
+    for (let i = 0; i < recordIds.length; i += 10) {
+      const batch = recordIds.slice(i, i + 10);
+      const payload = { records: batch.map(id => ({ id, fields })) };
+      await fetch(API_ROOT, {
+        method: "PATCH",
+        headers: headers(),
+        body: JSON.stringify(payload),
+      });
+    }
+    invalidateJobsCache();
+  } catch (err) {
+    console.warn("updateJobStatusByJobId failed:", err.message);
+  }
+}
+
+/**
+ * Retry a failed/stuck prospecting job: reset status to "pending" and re-trigger dispatch.
+ */
+export async function retryProspectingJob(jobId, criteria) {
+  await updateJobStatusByJobId(jobId, "pending", "Reintento manual");
+  return triggerGitHubAction(criteria, jobId);
 }
 
 /**
