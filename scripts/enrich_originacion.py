@@ -32,11 +32,13 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     import requests
     from bs4 import BeautifulSoup
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 except ImportError:
     print("[error] Missing dependencies. Run: pip install requests beautifulsoup4")
     sys.exit(1)
@@ -224,68 +226,79 @@ NOTAS:
 - known_pipeline_mw: número entero si la web menciona MW totales de pipeline/proyectos. null si no hay dato.
 - confidence: "alta" si la web tiene info clara, "media" si solo grounding, "baja" si escasa info."""
 
-    try:
-        api_key = os.environ.get("GEMINI_API_KEY", "")
-        if not api_key:
-            print("  [error] GEMINI_API_KEY not set")
-            return None
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        print("  [error] GEMINI_API_KEY not set")
+        return None
 
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
+    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={api_key}"
 
-        payload = json.dumps({
-            "contents": [{"parts": [{"text": prompt}]}],
-            "tools": [{"google_search": {}}],
-            "generationConfig": {"temperature": 0.2},
-        }).encode("utf-8")
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {"temperature": 0.2},
+    }).encode("utf-8")
 
-        req = urllib.request.Request(
-            api_url,
-            data=payload,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
+    MAX_RETRIES = 3
+    text = ""
 
-        with urllib.request.urlopen(req, context=SSL_CTX, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+    for attempt in range(MAX_RETRIES):
+        try:
+            req = urllib.request.Request(
+                api_url,
+                data=payload,
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
 
-        text = ""
-        for part in data.get("candidates", [{}])[0].get("content", {}).get("parts", []):
-            if "text" in part:
-                text += part["text"]
-        text = text.strip()
+            with urllib.request.urlopen(req, context=SSL_CTX, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
 
-        if not text:
-            print(f"  [warn] Empty response for {domain}")
-            return None
-
-        # Clean markdown fences
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1]
-            if text.endswith("```"):
-                text = text.rsplit("```", 1)[0]
+            text = ""
+            for part in data.get("candidates", [{}])[0].get("content", {}).get("parts", []):
+                if "text" in part:
+                    text += part["text"]
             text = text.strip()
 
-        result = json.loads(text)
-        return result
+            if not text:
+                print(f"  [warn] Empty response for {domain}")
+                return None
 
-    except json.JSONDecodeError as e:
-        print(f"  [warn] JSON parse error for {domain}: {e}")
-        try:
-            json_match = re.search(r'\{[\s\S]*\}', text)
-            if json_match:
-                return json.loads(json_match.group())
-        except Exception:
-            pass
-        return None
+            # Clean markdown fences
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1]
+                if text.endswith("```"):
+                    text = text.rsplit("```", 1)[0]
+                text = text.strip()
 
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        print(f"  [warn] Gemini API error {e.code} for {domain}: {body[:200]}")
-        return None
+            result = json.loads(text)
+            return result
 
-    except Exception as e:
-        print(f"  [warn] Gemini enrichment failed for {domain}: {e}")
-        return None
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8") if e.fp else ""
+            if e.code in (429, 500, 503) and attempt < MAX_RETRIES - 1:
+                wait = (attempt + 1) * 10  # 10s, 20s, 30s
+                print(f"  [retry] Gemini {e.code} for {domain}, waiting {wait}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(wait)
+                continue
+            print(f"  [warn] Gemini API error {e.code} for {domain}: {body[:200]}")
+            return None
+
+        except json.JSONDecodeError as e:
+            print(f"  [warn] JSON parse error for {domain}: {e}")
+            try:
+                json_match = re.search(r'\{[\s\S]*\}', text)
+                if json_match:
+                    return json.loads(json_match.group())
+            except Exception:
+                pass
+            return None
+
+        except Exception as e:
+            print(f"  [warn] Gemini enrichment failed for {domain}: {e}")
+            return None
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +333,13 @@ def git_commit_push(enriched_so_far, total):
     """Commit and push the current state of companies JSON files."""
     import subprocess
     try:
+        # Detect current branch
+        branch_result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=PROJECT_DIR, check=True, capture_output=True, text=True,
+        )
+        branch = branch_result.stdout.strip() or "main"
+
         subprocess.run(
             ["git", "add", "src/data/companies_full.json", "src/data/companies.json"],
             cwd=PROJECT_DIR, check=True, capture_output=True,
@@ -330,10 +350,10 @@ def git_commit_push(enriched_so_far, total):
             cwd=PROJECT_DIR, check=True, capture_output=True,
         )
         subprocess.run(
-            ["git", "push", "origin", "main"],
+            ["git", "push", "origin", branch],
             cwd=PROJECT_DIR, check=True, capture_output=True,
         )
-        print(f"  [git] Commit + push OK ({enriched_so_far}/{total})")
+        print(f"  [git] Commit + push OK ({enriched_so_far}/{total}) -> {branch}")
     except subprocess.CalledProcessError as e:
         print(f"  [git] Error: {e.stderr.decode()[:200] if e.stderr else str(e)}")
 
@@ -487,14 +507,27 @@ def main():
             time.sleep(GEMINI_RPM_DELAY)
             continue
 
-        # Validate business_lines
+        # Validate business_lines (fuzzy match to canonical values)
         blines = result.get("business_lines", [])
         if isinstance(blines, str):
             blines = [blines]
-        valid_blines = [b for b in blines if b in ORIGINACION_BUSINESS_LINES]
-        if not valid_blines and blines:
-            # Keep original if none match exactly (Gemini may use slight variations)
-            valid_blines = blines[:4]
+        valid_blines = []
+        for b in blines:
+            if b in ORIGINACION_BUSINESS_LINES:
+                valid_blines.append(b)
+            else:
+                # Fuzzy: case-insensitive substring match
+                b_lower = b.lower().strip()
+                matched = next(
+                    (canon for canon in ORIGINACION_BUSINESS_LINES
+                     if canon.lower() in b_lower or b_lower in canon.lower()),
+                    None,
+                )
+                if matched:
+                    valid_blines.append(matched)
+                else:
+                    print(f"    [warn] Unknown business_line ignored: {b}")
+        valid_blines = valid_blines[:4]
 
         scale = result.get("project_scale", "")
         if scale not in PROJECT_SCALES:
@@ -527,7 +560,7 @@ def main():
                 enr["website_url"] = website_data["url"]
             if description:
                 enr["website_description"] = description
-            enr["_web_enriched_at"] = datetime.utcnow().isoformat()
+            enr["_web_enriched_at"] = datetime.now(timezone.utc).isoformat()
             enr["_web_source"] = "website+grounding" if website_data["status"] == "ok" else "grounding_only"
 
         enriched_count += 1
