@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Sources Seeker — uses Gemini 2.0 Flash with Google Search to find data sources
-where target companies are listed.
+Sources Seeker — uses Gemini 2.5 Flash REST API with Google Search grounding
+to find data sources where target companies are listed.
 
 Input: search criteria dict
 Output: JSON with 10-15 sources where Company Seeker will look for companies
@@ -12,8 +12,11 @@ Requires: GEMINI_API_KEY environment variable
 import json
 import os
 import sys
+import requests
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 SOURCES_PROMPT_TEMPLATE = """You are a senior corporate intelligence analyst for Alter5, a European financial intermediary that structures debt and equity transactions for companies across ANY sector.
 
@@ -21,7 +24,7 @@ YOUR MISSION: Find high-quality data SOURCES (not companies directly) where anot
 
 TARGET COMPANY PROFILE:
 - What these companies do: {description}
-- Financing needed: {target_market_role}  
+- Financing needed: {target_market_role}
 - Asset type / sector: {asset_type} → {sector}
 - Target countries: {focus_countries}
 - FEI/EU eligibility: {fei_eligible}
@@ -29,7 +32,7 @@ TARGET COMPANY PROFILE:
 SOURCE HIERARCHY (search in this priority order):
 1. SECTORAL ASSOCIATIONS & TRADE BODIES - member directories
 2. OFFICIAL GOVERNMENT & REGULATORY REGISTRIES
-3. SPECIALIZED SECTOR DATABASES  
+3. SPECIALIZED SECTOR DATABASES
 4. RANKINGS & MEDIA - "Top 50/100" lists in trade press
 5. FINANCIAL DATABASES - publicly accessible portions
 
@@ -45,24 +48,10 @@ Return ONLY a valid JSON array with fields: source_name, url, page_range_start, 
 
 def run(criteria: dict) -> dict:
     """
-    Find data sources using Gemini 2.0 Flash with Google Search grounding.
-
-    Args:
-        criteria: dict with keys: description, target_market_role, asset_type,
-                  sector, focus_countries, fei_eligible, min_size
-
-    Returns:
-        dict with "sources" list
+    Find data sources using Gemini 2.5 Flash REST API with Google Search grounding.
     """
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY environment variable not set")
-
-    try:
-        import google.generativeai as genai
-    except ImportError:
-        raise ImportError("google-generativeai package required: pip install google-generativeai")
-
-    genai.configure(api_key=GEMINI_API_KEY)
 
     prompt = SOURCES_PROMPT_TEMPLATE.format(
         description=criteria.get("description", ""),
@@ -73,15 +62,34 @@ def run(criteria: dict) -> dict:
         fei_eligible=criteria.get("fei_eligible", False),
     )
 
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        tools=["google_search"],
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "tools": [{"google_search": {}}],
+    }
+
+    print(f"[sources_seeker] Calling {GEMINI_MODEL} with Google Search grounding...")
+    resp = requests.post(
+        GEMINI_API_URL,
+        params={"key": GEMINI_API_KEY},
+        headers={"Content-Type": "application/json"},
+        json=payload,
+        timeout=120,
     )
 
-    print("[sources_seeker] Calling Gemini 2.0 Flash with Google Search grounding...")
-    response = model.generate_content(prompt)
+    if resp.status_code != 200:
+        raise RuntimeError(f"{resp.status_code} {resp.text[:500]}")
 
-    raw_text = response.text.strip()
+    data = resp.json()
+    candidates = data.get("candidates", [])
+    if not candidates:
+        raise RuntimeError("No candidates in Gemini response")
+
+    raw_text = ""
+    for part in candidates[0].get("content", {}).get("parts", []):
+        if "text" in part:
+            raw_text += part["text"]
+
+    raw_text = raw_text.strip()
 
     # Extract JSON from response (handle markdown code blocks)
     if "```json" in raw_text:
