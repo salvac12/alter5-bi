@@ -118,7 +118,7 @@ MAX_EXTERNAL_DOMAINS = 3
 PROSPECT_ELIGIBLE_GROUPS = {"Capital Seeker"}
 
 # Max age (in days) for events to create NEW prospects — older events are skipped
-MAX_EVENT_AGE_DAYS = 60
+MAX_EVENT_AGE_DAYS = 15
 
 # Gemini config for smart CRM filter (analyzes email context)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -468,13 +468,17 @@ def merge_contacts_to_prospect(prospect, new_attendees, dry_run=False):
 def create_prospect_from_meeting(domain, employee_email, event_summary,
                                   company_name=None, attendees=None,
                                   ai_result=None, meeting_date=None,
-                                  dry_run=False):
-    """Create a new prospect in stage 'Reunion' from a calendar meeting.
+                                  last_email_date=None,
+                                  suggested_stage=None, dry_run=False):
+    """Create a new prospect from a calendar meeting.
 
     attendees: list of {name, email, domain} for this domain's attendees.
     ai_result: dict from analyze_prospect_intelligence() with summary and next steps.
     meeting_date: str (YYYY-MM-DD) of the event start date.
+    last_email_date: str (YYYY-MM-DD) of the most recent email in CRM.
+    suggested_stage: "Lead" | "Interesado" | "Reunion" (default "Reunion").
     """
+    stage = suggested_stage or "Reunion"
     manager = MAILBOX_TO_MANAGER.get(employee_email, "")
     name = company_name or domain.split(".")[0].capitalize()
     if event_summary:
@@ -483,6 +487,8 @@ def create_prospect_from_meeting(domain, employee_email, event_summary,
         context = "Reunion detectada automaticamente desde calendario"
     if meeting_date:
         context += f"\nFecha reunion: {meeting_date}"
+    if last_email_date:
+        context += f"\nUltimo email: {last_email_date}"
 
     # Build contacts from attendees
     contacts = []
@@ -494,9 +500,16 @@ def create_prospect_from_meeting(domain, employee_email, event_summary,
                 "role": "",
             })
 
+    # Confidence markers in Context and AI Summary
+    confidence = ai_result.get("confidence", "") if ai_result else ""
+    if confidence == "baja":
+        context = "[REVISAR] " + context
+    elif confidence == "media":
+        context = "[?] " + context
+
     fields = {
         "Prospect Name": name,
-        "Stage": "Reunion",
+        "Stage": stage,
         "Origin": "Evento",
         "Context": context,
         "Record Status": "Active",
@@ -510,6 +523,8 @@ def create_prospect_from_meeting(domain, employee_email, event_summary,
     # Add AI-generated intelligence
     if ai_result:
         summary = ai_result.get("summary", "")
+        if confidence == "baja" and summary:
+            summary = "⚠️ Confianza baja\n\n" + summary
         if summary:
             fields["AI Summary"] = summary
         steps = ai_result.get("suggested_next_steps", [])
@@ -770,6 +785,8 @@ def analyze_prospect_intelligence(domain, crm_entry, event_summary):
 
     Returns a dict with keys:
       - is_prospect (bool): whether this is a real prospect
+      - confidence (str): "alta" | "media" | "baja"
+      - suggested_stage (str): "Lead" | "Interesado" | "Reunion"
       - summary (str): structured analysis in Spanish
       - suggested_next_steps (list[str]): concrete action items
 
@@ -839,6 +856,13 @@ Genera un resumen estructurado en espanol:
 
 Si la empresa NO es un prospect real (no busca financiacion, solo presta servicios sin deal concreto, es un banco ofreciendo capital, networking puro), indica claramente "POSIBLE FALSO POSITIVO" al inicio y explica por que.
 
+DETERMINA TAMBIEN:
+- **confidence**: "alta" (datos claros, deal concreto), "media" (indicios pero no seguro), "baja" (poca info, dudoso)
+- **suggested_stage**: basado en el nivel de interaccion en emails:
+  - "Lead": solo 1-2 emails genericos, sin respuesta clara del cliente, o sin emails
+  - "Interesado": hay intercambio de emails con interes explicito del cliente
+  - "Reunion": la reunion confirma relacion activa Y hay contexto suficiente en emails
+
 Datos CRM:
   Grupo: {grp}, Tipo: {tp}, Rol: {role}, Segmento: {segment}, Tecnologias: {technologies}
   Contexto: {context}
@@ -852,7 +876,7 @@ Emails recientes (ultimos 30):
 Reunion reciente: {event_summary}{attendees_text}
 
 Responde SOLO con JSON:
-{{"is_prospect": true/false, "summary": "resumen estructurado completo", "suggested_next_steps": ["paso 1", "paso 2", "paso 3"]}}"""
+{{"is_prospect": true/false, "confidence": "alta|media|baja", "suggested_stage": "Lead|Interesado|Reunion", "summary": "resumen estructurado completo", "suggested_next_steps": ["paso 1", "paso 2", "paso 3"]}}"""
 
     try:
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
@@ -1579,6 +1603,8 @@ def main():
                     ai_result = None
                     if crm_entry:
                         grp = crm_entry.get("enrichment", {}).get("grp", "")
+                        n_emails = len(crm_entry.get("dated_subjects", []))
+                        print(f"  ℹ {domain}: {n_emails} emails en CRM, grupo={grp or '(sin grupo)'}")
                         if grp and grp not in PROSPECT_ELIGIBLE_GROUPS:
                             crm_name = crm_entry.get("name", domain)
                             ai_result = analyze_prospect_intelligence(
@@ -1595,7 +1621,8 @@ def main():
                                 domain, crm_entry, summary,
                             )
                     else:
-                        # Unknown domain — generate intelligence with minimal data
+                        # Unknown domain — no CRM emails, generate intelligence with minimal data
+                        print(f"  ℹ {domain}: 0 emails en CRM (dominio desconocido)")
                         minimal_entry = {
                             "name": domain.split(".")[0].capitalize(),
                             "context": "",
@@ -1607,16 +1634,33 @@ def main():
                             domain, minimal_entry, summary,
                         )
 
+                    suggested_stage = ai_result.get("suggested_stage", "Reunion") if ai_result else "Reunion"
+                    confidence = ai_result.get("confidence", "") if ai_result else ""
                     prefix = "[DRY-RUN] " if args.dry_run else ""
                     crm_name = crm_entry.get("name", domain.split(".")[0].capitalize()) if crm_entry else None
-                    print(f"  {prefix}+ New prospect from domain '{domain}' — {summary}")
+                    conf_tag = f" [conf={confidence}]" if confidence else ""
+                    print(f"  {prefix}+ New prospect from domain '{domain}' → stage={suggested_stage}{conf_tag} — {summary}")
                     meeting_date_str = event_start.strftime("%Y-%m-%d") if event_start else None
+
+                    # Extract last email date from CRM dated_subjects
+                    last_email_date = None
+                    if crm_entry:
+                        ds = crm_entry.get("dated_subjects", [])
+                        if ds:
+                            last_ds = ds[-1]
+                            if isinstance(last_ds, list) and len(last_ds) >= 1:
+                                last_email_date = last_ds[0]
+                            elif isinstance(last_ds, str):
+                                last_email_date = last_ds[:10]  # YYYY-MM-DD
+
                     ok = create_prospect_from_meeting(
                         domain, email, summary,
                         company_name=crm_name,
                         attendees=domain_attendees,
                         ai_result=ai_result,
                         meeting_date=meeting_date_str,
+                        last_email_date=last_email_date,
+                        suggested_stage=suggested_stage,
                         dry_run=args.dry_run,
                     )
                     if ok:
@@ -1628,7 +1672,7 @@ def main():
                         # Add to index so we don't create duplicates within this run
                         fake_rec = {
                             "id": "new",
-                            "fields": {"Prospect Name": domain, "Stage": "Reunion"},
+                            "fields": {"Prospect Name": domain, "Stage": suggested_stage},
                         }
                         domain_index.setdefault(domain, []).append(fake_rec)
 

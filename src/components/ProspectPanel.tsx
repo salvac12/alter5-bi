@@ -198,37 +198,6 @@ export default function ProspectPanel({
     return null;
   })();
 
-  // ── Auto-generate AI summary when opening a prospect without one ──
-  useEffect(() => {
-    if (isNew || !prospect?.id || prospect.aiSummary || !isGeminiConfigured()) return;
-    if (!formData.name) return;
-    let cancelled = false;
-    setAiIntelLoading(true);
-    setAiIntelError(null);
-    generateProspectIntelligence(
-      formData.name,
-      matchedCompany,
-      formData.context,
-      { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
-    ).then(async (result) => {
-      if (cancelled) return;
-      try {
-        await updateProspect(prospect.id, { "AI Summary": result.summary });
-        if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
-          const stepsText = result.suggestedNextSteps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n');
-          updateField('nextSteps', stepsText);
-          await updateProspect(prospect.id, { "Next Steps": stepsText });
-        }
-        if (prospect) prospect.aiSummary = result.summary;
-      } catch { /* silent — will show on next open */ }
-    }).catch((err: any) => {
-      if (!cancelled) setAiIntelError(err.message || 'Error al generar inteligencia IA');
-    }).finally(() => {
-      if (!cancelled) setAiIntelLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [prospect?.id]);
-
   const handleAiProcess = async () => {
     setAiLoading(true);
     setAiError(null);
@@ -598,6 +567,184 @@ export default function ProspectPanel({
 
         {/* Form */}
         <div style={{ flex: 1, padding: 28, overflow: 'auto' }}>
+
+          {/* ── AI Intelligence Section (top of panel for existing prospects) ── */}
+          {!isNew && (prospect?.aiSummary || matchedCompany) && (
+            <div style={{
+              marginBottom: 22, padding: 16,
+              background: (() => {
+                const isFalsePositive = (prospect?.aiSummary || '').includes('FALSO POSITIVO');
+                return isFalsePositive
+                  ? `linear-gradient(135deg, ${DK.red}10, ${DK.red}05)`
+                  : `linear-gradient(135deg, ${DK.purple}15, ${DK.accent}15)`;
+              })(),
+              borderRadius: RADIUS.md,
+              border: (() => {
+                const isFalsePositive = (prospect?.aiSummary || '').includes('FALSO POSITIVO');
+                return isFalsePositive
+                  ? `1px solid ${DK.red}60`
+                  : `1px solid ${DK.purple}40`;
+              })(),
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                marginBottom: 10,
+              }}>
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, fontWeight: 700, color: DK.purple,
+                  textTransform: 'uppercase', letterSpacing: '0.5px',
+                }}>
+                  <span style={{ fontSize: 14 }}>✦</span>
+                  Resumen de la relacion
+                  {(prospect?.aiSummary || '').includes('FALSO POSITIVO') && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, color: DK.red,
+                      background: `${DK.red}20`, borderRadius: 4,
+                      padding: '2px 6px', marginLeft: 4,
+                    }}>
+                      FALSO POSITIVO
+                    </span>
+                  )}
+                  {(prospect?.aiSummary || '').includes('Confianza baja') && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, color: DK.yellow,
+                      background: `${DK.yellow}20`, borderRadius: 4,
+                      padding: '2px 6px', marginLeft: 4,
+                    }}>
+                      REVISAR
+                    </span>
+                  )}
+                </label>
+                {prospect?.aiSummary && (
+                  <button
+                    onClick={async () => {
+                      if (!matchedCompany) return;
+                      setAiIntelLoading(true);
+                      setAiIntelError(null);
+                      try {
+                        const result = await generateProspectIntelligence(
+                          formData.name,
+                          matchedCompany,
+                          formData.context,
+                        );
+                        await updateProspect(prospect.id, { "AI Summary": result.summary });
+                        if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
+                          const stepsText = result.suggestedNextSteps.map((s, i) => `${i + 1}. ${s}`).join('\n');
+                          updateField('nextSteps', stepsText);
+                          await updateProspect(prospect.id, { "Next Steps": stepsText });
+                        }
+                        if (prospect) prospect.aiSummary = result.summary;
+                        showFeedback('success', 'Inteligencia IA actualizada');
+                      } catch (err: any) {
+                        setAiIntelError(err.message || 'Error al generar inteligencia IA');
+                      } finally {
+                        setAiIntelLoading(false);
+                      }
+                    }}
+                    disabled={aiIntelLoading || !matchedCompany}
+                    style={{
+                      padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                      color: DK.purple, background: `${DK.purple}15`,
+                      border: `1px solid ${DK.purple}30`, borderRadius: RADIUS.sm,
+                      cursor: aiIntelLoading ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit', transition: 'all 0.15s',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      opacity: aiIntelLoading ? 0.6 : 1,
+                    }}
+                  >
+                    {aiIntelLoading ? <><Spinner />Regenerando...</> : 'Regenerar'}
+                  </button>
+                )}
+              </div>
+
+              {prospect?.aiSummary ? (
+                <div style={{
+                  fontSize: 13, color: DK.text,
+                  whiteSpace: 'pre-wrap', lineHeight: 1.6,
+                  padding: '10px 12px',
+                  background: `${DK.bg}80`,
+                  borderRadius: RADIUS.sm,
+                  border: `1px solid ${DK.border}`,
+                }}>
+                  {prospect.aiSummary}
+                </div>
+              ) : (
+                <div>
+                  <p style={{
+                    fontSize: 12, color: DK.textSecondary,
+                    margin: '0 0 10px 0', lineHeight: 1.5,
+                  }}>
+                    Genera un analisis de inteligencia comercial basado en el historial CRM de esta empresa.
+                  </p>
+                  {aiIntelError && (
+                    <div style={{
+                      marginBottom: 8, fontSize: 12, color: DK.red,
+                      fontWeight: 500, padding: '6px 8px',
+                      background: `${DK.red}15`, borderRadius: 4,
+                    }}>
+                      {aiIntelError}
+                    </div>
+                  )}
+                  <button
+                    onClick={async () => {
+                      if (!matchedCompany) return;
+                      setAiIntelLoading(true);
+                      setAiIntelError(null);
+                      try {
+                        const result = await generateProspectIntelligence(
+                          formData.name,
+                          matchedCompany,
+                          formData.context,
+                        );
+                        if (!isNew && prospect?.id) {
+                          await updateProspect(prospect.id, { "AI Summary": result.summary });
+                          if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
+                            const stepsText = result.suggestedNextSteps.map((s, i) => `${i + 1}. ${s}`).join('\n');
+                            updateField('nextSteps', stepsText);
+                            await updateProspect(prospect.id, { "Next Steps": stepsText });
+                          }
+                          if (prospect) prospect.aiSummary = result.summary;
+                        }
+                        showFeedback('success', 'Inteligencia IA generada');
+                      } catch (err: any) {
+                        setAiIntelError(err.message || 'Error al generar inteligencia IA');
+                      } finally {
+                        setAiIntelLoading(false);
+                      }
+                    }}
+                    disabled={aiIntelLoading || !isGeminiConfigured()}
+                    style={{
+                      padding: '8px 16px', fontSize: 12, fontWeight: 700,
+                      color: '#FFFFFF',
+                      background: aiIntelLoading ? DK.textMuted : `linear-gradient(135deg, ${DK.purple}, ${DK.accent})`,
+                      border: 'none', borderRadius: RADIUS.sm,
+                      cursor: aiIntelLoading ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit', transition: 'all 0.15s',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}
+                  >
+                    {aiIntelLoading ? (
+                      <><Spinner />Analizando...</>
+                    ) : (
+                      <><span>✦</span>Generar Inteligencia IA</>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {aiIntelError && prospect?.aiSummary && (
+                <div style={{
+                  marginTop: 8, fontSize: 12, color: DK.red,
+                  fontWeight: 500, padding: '6px 8px',
+                  background: `${DK.red}15`, borderRadius: 4,
+                }}>
+                  {aiIntelError}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Prospect Name */}
           <DarkFormField label="Nombre de la empresa" required>
             <input
@@ -886,174 +1033,7 @@ export default function ProspectPanel({
             <CompanyActivitySection company={matchedCompany} />
           )}
 
-          {/* ── AI Intelligence Section ────────────────── */}
-          {!isNew && (
-            <div style={{
-              marginBottom: 22, padding: 16,
-              background: (() => {
-                const isFalsePositive = (prospect?.aiSummary || '').includes('FALSO POSITIVO');
-                return isFalsePositive
-                  ? `linear-gradient(135deg, ${DK.red}10, ${DK.red}05)`
-                  : `linear-gradient(135deg, ${DK.purple}15, ${DK.accent}15)`;
-              })(),
-              borderRadius: RADIUS.md,
-              border: (() => {
-                const isFalsePositive = (prospect?.aiSummary || '').includes('FALSO POSITIVO');
-                return isFalsePositive
-                  ? `1px solid ${DK.red}60`
-                  : `1px solid ${DK.purple}40`;
-              })(),
-            }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                marginBottom: 10,
-              }}>
-                <label style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  fontSize: 12, fontWeight: 700, color: DK.purple,
-                  textTransform: 'uppercase', letterSpacing: '0.5px',
-                }}>
-                  <span style={{ fontSize: 14 }}>✦</span>
-                  Inteligencia IA
-                  {(prospect?.aiSummary || '').includes('FALSO POSITIVO') && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 600, color: DK.red,
-                      background: `${DK.red}20`, borderRadius: 4,
-                      padding: '2px 6px', marginLeft: 4,
-                    }}>
-                      FALSO POSITIVO
-                    </span>
-                  )}
-                </label>
-                {prospect?.aiSummary && (
-                  <button
-                    onClick={async () => {
-                      setAiIntelLoading(true);
-                      setAiIntelError(null);
-                      try {
-                        const result = await generateProspectIntelligence(
-                          formData.name,
-                          matchedCompany,
-                          formData.context,
-                          { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
-                        );
-                        await updateProspect(prospect.id, { "AI Summary": result.summary });
-                        if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
-                          const stepsText = result.suggestedNextSteps.map((s, i) => `${i + 1}. ${s}`).join('\n');
-                          updateField('nextSteps', stepsText);
-                          await updateProspect(prospect.id, { "Next Steps": stepsText });
-                        }
-                        // Update local prospect data
-                        if (prospect) prospect.aiSummary = result.summary;
-                        showFeedback('success', 'Inteligencia IA actualizada');
-                      } catch (err: any) {
-                        setAiIntelError(err.message || 'Error al generar inteligencia IA');
-                      } finally {
-                        setAiIntelLoading(false);
-                      }
-                    }}
-                    disabled={aiIntelLoading}
-                    style={{
-                      padding: '4px 10px', fontSize: 11, fontWeight: 600,
-                      color: DK.purple, background: `${DK.purple}15`,
-                      border: `1px solid ${DK.purple}30`, borderRadius: RADIUS.sm,
-                      cursor: aiIntelLoading ? 'not-allowed' : 'pointer',
-                      fontFamily: 'inherit', transition: 'all 0.15s',
-                      display: 'flex', alignItems: 'center', gap: 4,
-                      opacity: aiIntelLoading ? 0.6 : 1,
-                    }}
-                  >
-                    {aiIntelLoading ? <><Spinner />Regenerando...</> : 'Regenerar'}
-                  </button>
-                )}
-              </div>
-
-              {prospect?.aiSummary ? (
-                <div style={{
-                  fontSize: 13, color: DK.text,
-                  whiteSpace: 'pre-wrap', lineHeight: 1.6,
-                  padding: '10px 12px',
-                  background: `${DK.bg}80`,
-                  borderRadius: RADIUS.sm,
-                  border: `1px solid ${DK.border}`,
-                }}>
-                  {prospect.aiSummary}
-                </div>
-              ) : (
-                <div>
-                  <p style={{
-                    fontSize: 12, color: DK.textSecondary,
-                    margin: '0 0 10px 0', lineHeight: 1.5,
-                  }}>
-                    Genera un analisis de inteligencia comercial basado en el historial CRM de esta empresa.
-                  </p>
-                  {aiIntelError && (
-                    <div style={{
-                      marginBottom: 8, fontSize: 12, color: DK.red,
-                      fontWeight: 500, padding: '6px 8px',
-                      background: `${DK.red}15`, borderRadius: 4,
-                    }}>
-                      {aiIntelError}
-                    </div>
-                  )}
-                  <button
-                    onClick={async () => {
-                      setAiIntelLoading(true);
-                      setAiIntelError(null);
-                      try {
-                        const result = await generateProspectIntelligence(
-                          formData.name,
-                          matchedCompany,
-                          formData.context,
-                          { product: formData.product, stage: formData.stage, contacts, notes: formData.context, amount: formData.amount, origin: formData.origin, assignedTo: formData.assignedTo },
-                        );
-                        if (!isNew && prospect?.id) {
-                          await updateProspect(prospect.id, { "AI Summary": result.summary });
-                          if (result.suggestedNextSteps.length > 0 && !formData.nextSteps) {
-                            const stepsText = result.suggestedNextSteps.map((s, i) => `${i + 1}. ${s}`).join('\n');
-                            updateField('nextSteps', stepsText);
-                            await updateProspect(prospect.id, { "Next Steps": stepsText });
-                          }
-                          if (prospect) prospect.aiSummary = result.summary;
-                        }
-                        showFeedback('success', 'Inteligencia IA generada');
-                      } catch (err: any) {
-                        setAiIntelError(err.message || 'Error al generar inteligencia IA');
-                      } finally {
-                        setAiIntelLoading(false);
-                      }
-                    }}
-                    disabled={aiIntelLoading || !isGeminiConfigured()}
-                    style={{
-                      padding: '8px 16px', fontSize: 12, fontWeight: 700,
-                      color: '#FFFFFF',
-                      background: aiIntelLoading ? DK.textMuted : `linear-gradient(135deg, ${DK.purple}, ${DK.accent})`,
-                      border: 'none', borderRadius: RADIUS.sm,
-                      cursor: aiIntelLoading ? 'not-allowed' : 'pointer',
-                      fontFamily: 'inherit', transition: 'all 0.15s',
-                      display: 'flex', alignItems: 'center', gap: 6,
-                    }}
-                  >
-                    {aiIntelLoading ? (
-                      <><Spinner />Analizando...</>
-                    ) : (
-                      <><span>✦</span>Generar Inteligencia IA</>
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {aiIntelError && prospect?.aiSummary && (
-                <div style={{
-                  marginTop: 8, fontSize: 12, color: DK.red,
-                  fontWeight: 500, padding: '6px 8px',
-                  background: `${DK.red}15`, borderRadius: 4,
-                }}>
-                  {aiIntelError}
-                </div>
-              )}
-            </div>
-          )}
+          {/* AI Intelligence section moved to top of form */}
 
           {/* ── AI Meeting Notes Section ────────────────── */}
           <div style={{
