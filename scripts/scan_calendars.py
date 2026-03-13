@@ -28,6 +28,7 @@
     python scripts/scan_calendars.py --check-docs       # solo verificar docs (sin calendar scan)
     python scripts/scan_calendars.py --generate-summaries  # generar AI summaries para prospects sin resumen
     python scripts/scan_calendars.py --sync-opportunities  # importar opportunities como prospects
+    python scripts/scan_calendars.py --cleanup-prospects   # archivar falsos positivos, no-prospects y duplicados
 ===============================================================
 """
 
@@ -331,15 +332,48 @@ def build_domain_index(prospects):
     return index
 
 
+def normalize_name(raw):
+    """Normalize a company name for dedup: lowercase, strip legal suffixes, remove punctuation/spaces."""
+    name = (raw or "").strip().lower()
+    for suffix in [" s.l.", " s.a.", " s.l.u.", " s.a.u.", " s.r.l.", " gmbh", " ltd", " inc"]:
+        if name.endswith(suffix):
+            name = name[:-len(suffix)]
+    return name.replace(",", "").replace(".", "").replace(" ", "")
+
+
 def build_name_index(prospects):
     """Build a dict: normalized_name -> prospect record for dedup checks."""
     index = {}
     for rec in prospects:
         f = rec.get("fields", {})
-        name = (f.get("Prospect Name") or "").strip().lower().replace(" ", "")
+        name = normalize_name(f.get("Prospect Name"))
         if name:
             index[name] = rec
     return index
+
+
+def fetch_archived_prospect_names():
+    """Fetch prospects with Record Status='Archived' and return set of normalized names."""
+    archived_names = set()
+    offset = None
+    formula = urllib.parse.quote('{Record Status}="Archived"')
+
+    while True:
+        url = f"{PROSPECTS_API}?filterByFormula={formula}&fields%5B%5D=Prospect+Name"
+        if offset:
+            url += f"&offset={offset}"
+        data = airtable_request(url)
+        if not data:
+            break
+        for rec in data.get("records", []):
+            name = normalize_name(rec.get("fields", {}).get("Prospect Name"))
+            if name:
+                archived_names.add(name)
+        offset = data.get("offset")
+        if not offset:
+            break
+
+    return archived_names
 
 
 def patch_prospect_stage(record_id, dry_run=False):
@@ -886,11 +920,12 @@ def fetch_all_opportunities():
     return all_records
 
 
-def sync_opportunities_to_prospects(prospects, dry_run=False):
+def sync_opportunities_to_prospects(prospects, dry_run=False, crm_companies=None):
     """Import early-stage Opportunities as Prospects.
 
     Fetches all active Transactions, filters to early stages, and creates
     prospect records for any that don't already exist.
+    Skips archived prospects (gate) and non-capital-seeker CRM companies.
     """
     print(f"\n{'='*50}")
     print("Syncing Opportunities → Prospects...")
@@ -902,8 +937,14 @@ def sync_opportunities_to_prospects(prospects, dry_run=False):
     # Build name index from existing prospects for dedup
     name_index = build_name_index(prospects)
 
+    # Gate: fetch archived prospect names to avoid resurrecting them
+    archived_names = fetch_archived_prospect_names()
+    print(f"  {len(archived_names)} archived prospect names loaded (gate)")
+
     created = 0
     skipped = 0
+    skipped_archived = 0
+    skipped_crm = 0
 
     for opp in opportunities:
         f = opp.get("fields", {})
@@ -917,10 +958,30 @@ def sync_opportunities_to_prospects(prospects, dry_run=False):
         prospect_stage = OPPORTUNITY_STAGE_MAP[stage]
 
         # Check if already exists as prospect (by normalized name)
-        normalized = opp_name.lower().replace(" ", "")
+        normalized = normalize_name(opp_name)
         if normalized in name_index:
             skipped += 1
             continue
+
+        # Gate: don't resurrect archived prospects
+        if normalized in archived_names:
+            print(f"  ⊘ Skipped '{opp_name}' — previously archived")
+            skipped_archived += 1
+            continue
+
+        # Gate: skip non-capital-seeker CRM companies
+        if crm_companies:
+            # Try to find domain from opportunity fields
+            opp_domain = None
+            opp_email = f.get("Contact Email") or f.get("Email") or ""
+            if opp_email and "@" in opp_email:
+                opp_domain = opp_email.split("@")[1].lower()
+            if opp_domain and opp_domain in crm_companies:
+                grp = crm_companies[opp_domain].get("enrichment", {}).get("grp", "")
+                if grp and grp not in PROSPECT_ELIGIBLE_GROUPS:
+                    print(f"  ⊘ Skipped '{opp_name}' ({opp_domain}) — CRM: {grp}")
+                    skipped_crm += 1
+                    continue
 
         # Map fields
         amount = f.get("Targeted Ticket Size") or f.get("Amount") or 0
@@ -973,7 +1034,7 @@ def sync_opportunities_to_prospects(prospects, dry_run=False):
         else:
             created += 1
 
-    print(f"  Opportunities synced: {created} created, {skipped} already exist")
+    print(f"  Opportunities synced: {created} created, {skipped} already exist, {skipped_archived} archived-gate, {skipped_crm} CRM-gate")
     if dry_run:
         print("  (DRY RUN — no changes made)")
     return created
@@ -1043,6 +1104,7 @@ def generate_summaries_for_prospects(prospects, crm_companies, dry_run=False):
         ai_result = analyze_prospect_intelligence(domain or name, crm_entry, event_summary)
 
         if ai_result:
+            is_prospect = ai_result.get("is_prospect", True)
             patch_fields = {}
             summary = ai_result.get("summary", "")
             if summary:
@@ -1051,7 +1113,14 @@ def generate_summaries_for_prospects(prospects, crm_companies, dry_run=False):
             if steps:
                 patch_fields["Next Steps"] = "\n".join(f"• {s}" for s in steps)
 
-            if patch_fields:
+            # Archive non-prospects automatically
+            if not is_prospect:
+                patch_fields["Record Status"] = "Archived"
+                prefix = "[DRY-RUN] " if dry_run else ""
+                print(f"  {prefix}  ✗ Archived {name} — not a prospect")
+                patch_prospect_fields(prospect["id"], patch_fields, dry_run=dry_run)
+                updated += 1
+            elif patch_fields:
                 prefix = "[DRY-RUN] " if dry_run else ""
                 print(f"  {prefix}  Updated AI Summary for {name}")
                 patch_prospect_fields(prospect["id"], patch_fields, dry_run=dry_run)
@@ -1083,6 +1152,182 @@ def save_scan_state(state):
 
 
 # ---------------------------------------------------------------------------
+# Cleanup: archive false positives, non-prospects, and duplicates
+# ---------------------------------------------------------------------------
+def cleanup_prospects(prospects, crm_companies, dry_run=False):
+    """Clean up prospects in 3 passes: false positives, non-prospects, duplicates.
+
+    Pass 1: Archive prospects whose AI Summary contains "FALSO POSITIVO".
+    Pass 2: For prospects without AI Summary, call analyze_prospect_intelligence().
+            If is_prospect=false → archive. If true → save summary.
+    Pass 3: Deduplicate by normalize_name(). Keep the best-scored record, archive the rest.
+    """
+    print(f"\n{'='*60}")
+    print("CLEANUP: Archiving false positives, non-prospects, and duplicates")
+    print(f"{'='*60}")
+
+    archived_ids = set()  # Track archived record IDs to skip in later passes
+
+    # ── Pass 1: Archive prospects with "FALSO POSITIVO" in AI Summary ──
+    print(f"\n--- Pass 1: Flagged false positives ---")
+    pass1_count = 0
+    for prospect in prospects:
+        pf = prospect.get("fields", {})
+        name = pf.get("Prospect Name", "?")
+        summary = pf.get("AI Summary", "")
+        if "FALSO POSITIVO" in summary.upper():
+            prefix = "[DRY-RUN] " if dry_run else ""
+            print(f"  {prefix}✗ {name} — AI Summary contains FALSO POSITIVO")
+            if not dry_run:
+                patch_prospect_fields(prospect["id"], {"Record Status": "Archived"})
+            archived_ids.add(prospect["id"])
+            pass1_count += 1
+    print(f"  Pass 1 archived: {pass1_count}")
+
+    # ── Pass 2: Analyze prospects without AI Summary ──
+    print(f"\n--- Pass 2: Prospects without AI Summary ---")
+    pass2_archived = 0
+    pass2_enriched = 0
+    for prospect in prospects:
+        if prospect["id"] in archived_ids:
+            continue
+        pf = prospect.get("fields", {})
+        name = pf.get("Prospect Name", "?")
+        existing_summary = pf.get("AI Summary", "")
+        if existing_summary:
+            continue
+
+        # Resolve domain
+        domain = None
+        contact_email = pf.get("Contact Email", "")
+        if contact_email and "@" in contact_email:
+            domain = contact_email.split("@")[1].lower()
+        if not domain:
+            contacts_raw = pf.get("Contacts", "")
+            if contacts_raw:
+                try:
+                    contacts = json.loads(contacts_raw)
+                    for c in contacts:
+                        email = c.get("email", "")
+                        if email and "@" in email:
+                            d = email.split("@")[1].lower()
+                            if d not in INTERNAL_DOMAINS and d not in PERSONAL_DOMAINS:
+                                domain = d
+                                break
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+        crm_entry = crm_companies.get(domain, {}) if domain else {}
+        if not crm_entry:
+            crm_entry = {
+                "name": name,
+                "context": pf.get("Context", ""),
+                "enrichment": {},
+                "dated_subjects": [],
+                "employees": {},
+            }
+
+        print(f"  Analyzing: {name} ({domain or 'no domain'})...")
+        ai_result = analyze_prospect_intelligence(domain or name, crm_entry, pf.get("Context", "")[:200])
+
+        if ai_result:
+            is_prospect = ai_result.get("is_prospect", False)
+            summary = ai_result.get("summary", "")
+            steps = ai_result.get("suggested_next_steps", [])
+
+            if not is_prospect:
+                prefix = "[DRY-RUN] " if dry_run else ""
+                print(f"  {prefix}✗ {name} — Gemini says not a prospect")
+                fields = {"Record Status": "Archived"}
+                if summary:
+                    fields["AI Summary"] = summary
+                if not dry_run:
+                    patch_prospect_fields(prospect["id"], fields)
+                archived_ids.add(prospect["id"])
+                pass2_archived += 1
+            else:
+                prefix = "[DRY-RUN] " if dry_run else ""
+                patch_fields = {}
+                if summary:
+                    patch_fields["AI Summary"] = summary
+                if steps:
+                    patch_fields["Next Steps"] = "\n".join(f"• {s}" for s in steps)
+                if patch_fields:
+                    print(f"  {prefix}✓ {name} — prospect confirmed, summary saved")
+                    if not dry_run:
+                        patch_prospect_fields(prospect["id"], patch_fields)
+                    pass2_enriched += 1
+
+        time.sleep(1)  # Rate limit Gemini
+
+    print(f"  Pass 2 archived: {pass2_archived}, enriched: {pass2_enriched}")
+
+    # ── Pass 3: Deduplicate by normalized name ──
+    print(f"\n--- Pass 3: Duplicates ---")
+    groups = {}
+    for prospect in prospects:
+        if prospect["id"] in archived_ids:
+            continue
+        pf = prospect.get("fields", {})
+        key = normalize_name(pf.get("Prospect Name"))
+        if key:
+            groups.setdefault(key, []).append(prospect)
+
+    pass3_count = 0
+    for key, group in groups.items():
+        if len(group) < 2:
+            continue
+
+        # Score each record: higher = better
+        def score(rec):
+            pf = rec.get("fields", {})
+            s = 0
+            if pf.get("AI Summary"):
+                s += 2
+            if pf.get("Contact Email"):
+                s += 1
+            contacts_raw = pf.get("Contacts", "")
+            if contacts_raw:
+                try:
+                    if json.loads(contacts_raw):
+                        s += 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            stage = pf.get("Stage", "")
+            # Later stages are better
+            stage_order = {"Lead": 0, "Interesado": 1, "Reunion": 2, "Doc. Pendiente": 3, "Term-Sheet": 4}
+            s += stage_order.get(stage, 0)
+            if pf.get("Amount"):
+                s += 1
+            return s
+
+        ranked = sorted(group, key=score, reverse=True)
+        best = ranked[0]
+        best_name = best.get("fields", {}).get("Prospect Name", "?")
+
+        for dup in ranked[1:]:
+            dup_name = dup.get("fields", {}).get("Prospect Name", "?")
+            prefix = "[DRY-RUN] " if dry_run else ""
+            print(f"  {prefix}✗ {dup_name} — duplicate of {best_name} (score {score(dup)} vs {score(best)})")
+            if not dry_run:
+                patch_prospect_fields(dup["id"], {"Record Status": "Archived"})
+            archived_ids.add(dup["id"])
+            pass3_count += 1
+
+    print(f"  Pass 3 archived: {pass3_count}")
+
+    total = pass1_count + pass2_archived + pass3_count
+    print(f"\n{'='*60}")
+    print(f"CLEANUP COMPLETE: {total} prospects archived")
+    print(f"  False positives (flagged): {pass1_count}")
+    print(f"  Non-prospects (Gemini): {pass2_archived}")
+    print(f"  Duplicates: {pass3_count}")
+    if dry_run:
+        print("  (DRY RUN — no changes made to Airtable)")
+    return total
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
@@ -1092,6 +1337,7 @@ def main():
     parser.add_argument("--check-docs", action="store_true", help="Review all prospect stages vs actual Airtable documentation")
     parser.add_argument("--generate-summaries", action="store_true", help="Generate AI summaries for prospects without one")
     parser.add_argument("--sync-opportunities", action="store_true", help="Import early-stage Opportunities as Prospects")
+    parser.add_argument("--cleanup-prospects", action="store_true", help="Archive false positives, non-prospects, and duplicates")
     args = parser.parse_args()
 
     if not AIRTABLE_PAT:
@@ -1120,7 +1366,11 @@ def main():
         return
 
     if args.sync_opportunities:
-        sync_opportunities_to_prospects(prospects, dry_run=args.dry_run)
+        sync_opportunities_to_prospects(prospects, dry_run=args.dry_run, crm_companies=crm_companies)
+        return
+
+    if args.cleanup_prospects:
+        cleanup_prospects(prospects, crm_companies, dry_run=args.dry_run)
         return
 
     if args.check_docs:
@@ -1129,6 +1379,10 @@ def main():
         return
 
     # --- Normal calendar scan flow ---
+    # Gate: load archived prospect names to prevent resurrection
+    archived_names = fetch_archived_prospect_names()
+    print(f"  {len(archived_names)} archived prospect names loaded (gate)")
+
     # Load mailboxes
     with open(MAILBOXES_FILE, "r", encoding="utf-8") as f:
         mailboxes = json.load(f)["mailboxes"]
@@ -1278,9 +1532,15 @@ def main():
                         # 3 external orgs but one is known → skip the unknowns
                         continue
 
+                    # Gate: don't recreate archived prospects
+                    crm_entry = crm_companies.get(domain)
+                    candidate_name = (crm_entry.get("name", "") if crm_entry else "") or domain.split(".")[0].capitalize()
+                    if normalize_name(candidate_name) in archived_names:
+                        print(f"  ⊘ Skipped '{candidate_name}' ({domain}) — previously archived")
+                        continue
+
                     # Check CRM classification: only create prospects for
                     # originacion companies (Capital Seekers) or unknown domains
-                    crm_entry = crm_companies.get(domain)
                     ai_result = None
                     if crm_entry:
                         grp = crm_entry.get("enrichment", {}).get("grp", "")
@@ -1367,7 +1627,7 @@ def main():
         print("\nRe-fetching prospects after calendar updates...")
         prospects = fetch_all_prospects()
 
-    sync_opportunities_to_prospects(prospects, dry_run=args.dry_run)
+    sync_opportunities_to_prospects(prospects, dry_run=args.dry_run, crm_companies=crm_companies)
 
     # Re-fetch again after opportunity sync
     prospects = fetch_all_prospects()
