@@ -9,7 +9,6 @@
 const BASE_ID = "appVu3TvSZ1E4tj0J";
 const TABLE_NAME = "ProspectingResults";
 const CAMPAIGN_TARGETS_TABLE = "CampaignTargets";
-const GITHUB_REPO = "salvac12/alter5-bi";
 const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
 const CAMPAIGN_API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(CAMPAIGN_TARGETS_TABLE)}`;
 
@@ -17,8 +16,8 @@ function getToken() {
   return import.meta.env.VITE_AIRTABLE_PAT || "";
 }
 
-function getGithubToken() {
-  return import.meta.env.VITE_GITHUB_TOKEN || "";
+function getProxySecret() {
+  return import.meta.env.VITE_CAMPAIGN_PROXY_SECRET || "";
 }
 
 function headers() {
@@ -313,33 +312,32 @@ export async function createProspectingJob(criteria, jobName, createdBy = "") {
 }
 
 /**
- * Trigger the GitHub Actions prospecting workflow.
+ * Trigger the GitHub Actions prospecting workflow via server-side proxy.
+ * The proxy uses GITHUB_TOKEN (fine-grained PAT) server-side.
  */
 export async function triggerGitHubAction(criteria, jobId) {
-  const githubToken = getGithubToken();
-  if (!githubToken) throw new Error("VITE_GITHUB_TOKEN not configured");
+  const proxySecret = getProxySecret();
+  if (!proxySecret) throw new Error("VITE_CAMPAIGN_PROXY_SECRET not configured");
 
   const criteriaWithJob = { ...criteria, job_id: jobId };
 
-  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/dispatches`, {
+  const res = await fetch("/api/github-dispatch", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${githubToken}`,
       "Content-Type": "application/json",
-      Accept: "application/vnd.github.v3+json",
+      "x-proxy-secret": proxySecret,
     },
     body: JSON.stringify({
-      event_type: "run-prospecting",
-      client_payload: {
-        criteria: JSON.stringify(criteriaWithJob),
-        jobId,
-      },
+      criteria: JSON.stringify(criteriaWithJob),
+      jobId,
     }),
   });
 
-  if (res.status !== 204) {
-    const err = await res.text();
-    throw new Error(`GitHub dispatch failed (status ${res.status}). Verifica que VITE_GITHUB_TOKEN tenga scope "repo". Detalle: ${err}`);
+  const data = await res.json();
+
+  if (!res.ok || !data.success) {
+    const detail = data.detail || data.error || `status ${res.status}`;
+    throw new Error(`GitHub dispatch failed: ${detail}`);
   }
 
   return { success: true, jobId };
