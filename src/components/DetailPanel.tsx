@@ -368,19 +368,29 @@ FORMATO (JSON valido, sin markdown):
       <div style={{ padding: 28 }}>
         {/* ═══ HERO HEADER ═══ */}
         <div style={{ marginBottom: 20 }}>
-          {/* Name + Close */}
+          {/* Name + Logo + Close */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <h2 style={{
-                margin: 0, fontSize: 26, fontWeight: 800, color: "#FFFFFF",
-                letterSpacing: "-1px", lineHeight: 1.2,
-              }}>{c.name}</h2>
+            <div style={{ display: "flex", gap: 14, alignItems: "center", flex: 1 }}>
               {c.domain && (
-                <a href={`https://${c.domain}`} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: 13, color: "#60A5FA", marginTop: 5, fontWeight: 400, display: "inline-block", textDecoration: "none" }}>
-                  {c.domain} ↗
-                </a>
+                <img
+                  src={`https://logo.clearbit.com/${c.domain}`}
+                  alt=""
+                  style={{ width: 44, height: 44, borderRadius: 10, background: "#1E293B", flexShrink: 0 }}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
               )}
+              <div>
+                <h2 style={{
+                  margin: 0, fontSize: 26, fontWeight: 800, color: "#FFFFFF",
+                  letterSpacing: "-1px", lineHeight: 1.2,
+                }}>{c.name}</h2>
+                {c.domain && (
+                  <a href={`https://${c.domain}`} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 13, color: "#60A5FA", marginTop: 5, fontWeight: 400, display: "inline-block", textDecoration: "none" }}>
+                    {c.domain} ↗
+                  </a>
+                )}
+              </div>
             </div>
             <button onClick={onClose} style={{
               background: "#132238", border: "1px solid #1B3A5C", color: "#6B7F94",
