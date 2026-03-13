@@ -75,7 +75,7 @@ def run(criteria: dict) -> dict:
 
     model = genai.GenerativeModel(
         model_name="gemini-2.5-flash",
-        tools=["google_search_retrieval"],
+        tools=["google_search"],
     )
 
     print("[sources_seeker] Calling Gemini 2.0 Flash with Google Search grounding...")
