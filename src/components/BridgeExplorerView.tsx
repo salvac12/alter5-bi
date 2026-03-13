@@ -93,30 +93,22 @@ function cleanContacts(contacts) {
     .map(ct => ({ ...ct, email: ct.email.toLowerCase(), name: normalizeName(ct.name) }));
 }
 
-// ── Bridge email templates (A/B variants) ───────────────────────────
-const BRIDGE_EMAIL_TEMPLATE = `<p>Estimado/a {{nombre}},</p>
-<p>Le escribo en relación con el <strong>Bridge Debt Energy Program</strong> de Alter5.</p>
-<p>Ofrecemos financiación puente para proyectos de energía renovable utility-scale con las siguientes condiciones:</p>
+// ── Bridge email template (real Leticia email — variant A with link) ─
+const BRIDGE_EMAIL_TEMPLATE = `<p>Hola {{nombre}},</p>
+<p>Ante la coyuntura actual del mercado —caracterizada por precios del pool en mínimos históricos, niveles de PPA que comprometen la rentabilidad y una restricción severa en la financiación merchant tradicional— hemos diseñado una alternativa estratégica para desbloquear el valor de proyectos renovables.</p>
+<p>En colaboración con diversas instituciones financieras y el respaldo del Fondo Europeo de Inversiones (FEI), hemos lanzado el <strong>Bridge Debt Energy Program</strong>. Este programa está específicamente dirigido a promotores con proyectos Ready-to-Build o ya construidos con equity que, debido a la volatilidad del mercado, carecen hoy de una estructura de deuda.</p>
+<p>El programa permite ejecutar la construcción de forma inmediata, evitando la necesidad de desinvertir en un mercado a la baja o de comprometer el activo con un PPA a precios deprimidos. Se resume en los siguientes términos clave:</p>
 <ul>
-  <li>Préstamo bullet a 18-24 meses</li>
-  <li>Sin garantía corporativa</li>
-  <li>Ticket desde 2M EUR</li>
-  <li>Respaldado por garantías InvestEU/EIF</li>
+  <li><strong>Instrumento:</strong> Préstamo tipo bullet a 5 años.</li>
+  <li><strong>Coste:</strong> Desde Euribor + 3,00%.</li>
+  <li><strong>Apalancamiento:</strong> Hasta el 100% del Capex/Inversión.</li>
+  <li><strong>Estructura:</strong> Financiación a nivel de SPV con garantía corporativa limitada (activable únicamente en escenarios de default para cura del préstamo).</li>
+  <li><strong>Instrumentación:</strong> Según el perfil del activo, la financiación puede instrumentarse de forma tradicional o mediante la emisión de un Bono garantizado parcialmente por el FEI.</li>
+  <li><strong>Tipos de activos:</strong> Solar fotovoltaico, eólico, BESS, biomasa e hidrógeno verde.</li>
 </ul>
-<p>Si {{empresa}} tiene proyectos en fase de desarrollo o construcción que necesiten financiación puente, estaré encantada de compartir más detalles.</p>
-<p>¿Le vendría bien una llamada breve esta semana?</p>
-<p>Un saludo,<br/>Leticia Menéndez<br/>Alter5</p>`;
-
-const BRIDGE_EMAIL_TEMPLATE_B = `<p>Hola {{nombre}},</p>
-<p>Desde Alter5 hemos lanzado un programa de <strong>financiación puente</strong> específico para proyectos renovables utility-scale.</p>
-<p>Las condiciones principales:</p>
-<ul>
-  <li>18-24 meses, estructura bullet</li>
-  <li>Desde 2M EUR, sin garantía corporativa</li>
-  <li>Garantías InvestEU/EIF</li>
-</ul>
-<p>Creo que podría ser interesante para {{empresa}}. ¿Tiene unos minutos para una llamada esta semana?</p>
-<p>Quedo a su disposición,<br/>Leticia Menéndez<br/>Alter5</p>`;
+<p>Si considera que este programa puede resultar de interés para {{empresa}}, puede consultar los detalles completos y solicitar un term sheet indicativo de forma 100% online en:</p>
+<p><a href="https://alto.alter-5.com/bridge">Bridge Debt Energy Program</a></p>
+<p>Quedamos a su disposición para cualquier aclaración.<br/>Un cordial saludo,<br/>Leticia<br/>Structured Finance — Alter5</p>`;
 
 function bridgeScore(c) {
   let score = 0;
@@ -208,11 +200,9 @@ export default function BridgeExplorerView({ allCompanies, campaignRef, previous
   // Send wizard
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
-  // Step 2: variant selection
-  const [selectedVariant, setSelectedVariant] = useState('A');
-  // Step 3: wizard recipients (editable list)
+  // Step 2: wizard recipients (editable list)
   const [wizardRecipients, setWizardRecipients] = useState([]);
-  // Step 3: action states
+  // Step 2: action states
   const [testEmailSent, setTestEmailSent] = useState(false);
   const [testEmailLoading, setTestEmailLoading] = useState(false);
   const [preparingLoading, setPreparingLoading] = useState(false);
@@ -655,11 +645,6 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
     const recipients = buildWizardRecipients();
     setWizardRecipients(recipients);
     setWizardStep(1);
-    // Default to winner variant, or A if no clear winner
-    const mA = campaignMetrics?.A || {};
-    const mB = campaignMetrics?.B || {};
-    const defaultVariant = (mB.tasaApertura || 0) > (mA.tasaApertura || 0) ? 'B' : 'A';
-    setSelectedVariant(defaultVariant);
     setTestEmailSent(false);
     setPreparedOk(false);
     setSentOk(false);
@@ -681,11 +666,11 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
           type: 'mass',
           senderEmail: 'leticia.menendez@alter-5.com',
           senderName: 'Leticia Menéndez',
-          subjectA: 'Bridge Debt Energy Program — Financiación puente para proyectos renovables utility-scale',
+          subjectA: 'Financiación Merchant para proyectos renovables',
           bodyA: BRIDGE_EMAIL_TEMPLATE,
-          subjectB: 'Financiación puente para proyectos renovables — Bridge Debt Energy Program',
-          bodyB: BRIDGE_EMAIL_TEMPLATE_B,
-          abTestPercent: 50,
+          subjectB: '',
+          bodyB: '',
+          abTestPercent: 0,
           recipients: [],
         });
         setGasCampaignId(result.id);
@@ -1099,14 +1084,14 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                 Añadir a la campaña Bridge
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                {[1, 2, 3].map(s => (
+                {[1, 2].map(s => (
                   <div key={s} style={{
                     padding: '3px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600,
                     fontFamily: T.sans,
                     background: wizardStep === s ? T.primary : wizardStep > s ? T.emeraldBg : T.sidebar,
                     color: wizardStep === s ? T.white : wizardStep > s ? T.emerald : T.muted,
                   }}>
-                    {s === 1 ? '1. Candidatos' : s === 2 ? '2. Variante' : '3. Confirmar'}
+                    {s === 1 ? '1. Candidatos' : '2. Confirmar'}
                   </div>
                 ))}
               </div>
@@ -1168,91 +1153,8 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
               </div>
             )}
 
-            {/* Step 2: Variant selection */}
-            {wizardStep === 2 && (() => {
-              const mA = campaignMetrics?.A || {};
-              const mB = campaignMetrics?.B || {};
-              const aRate = mA.tasaApertura || 0;
-              const bRate = mB.tasaApertura || 0;
-              const hasData = (mA.enviados || 0) >= 3 && (mB.enviados || 0) >= 3;
-              const winner = hasData ? (aRate > bRate ? 'A' : bRate > aRate ? 'B' : null) : null;
-              const pct = (v) => `${(v * 100).toFixed(1)}%`;
-
-              function VariantCard({ variant, metrics, isWinner }) {
-                const isSelected = selectedVariant === variant;
-                return (
-                  <div
-                    onClick={() => setSelectedVariant(variant)}
-                    style={{
-                      flex: 1, padding: '16px 18px', borderRadius: 10, cursor: 'pointer',
-                      border: `2px solid ${isSelected ? T.primary : T.border}`,
-                      background: isSelected ? T.primaryBg : T.white,
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <div style={{
-                        width: 18, height: 18, borderRadius: '50%',
-                        border: `2px solid ${isSelected ? T.primary : T.dim}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        {isSelected && <div style={{ width: 10, height: 10, borderRadius: '50%', background: T.primary }} />}
-                      </div>
-                      <span style={{ fontFamily: T.sans, fontWeight: 700, fontSize: 15, color: T.title }}>
-                        Variante {variant}
-                      </span>
-                      {isWinner && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, color: T.emerald, background: T.emeraldBg,
-                          padding: '2px 8px', borderRadius: 999,
-                        }}>GANADORA</span>
-                      )}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                      {[
-                        { label: 'Apertura', value: pct(metrics.tasaApertura || 0) },
-                        { label: 'Clics', value: pct(metrics.tasaClics || 0) },
-                        { label: 'Respuestas', value: pct(metrics.tasaRespuesta || 0) },
-                      ].map(m => (
-                        <div key={m.label} style={{ textAlign: 'center' }}>
-                          <div style={{ fontFamily: T.sans, fontSize: 18, fontWeight: 700, color: T.title }}>{m.value}</div>
-                          <div style={{ fontFamily: T.sans, fontSize: 11, color: T.muted }}>{m.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: 10, fontFamily: T.sans, fontSize: 11, color: T.dim, textAlign: 'center' }}>
-                      {metrics.enviados || 0} enviados · {metrics.abiertos || 0} abiertos · {metrics.respondidos || 0} respuestas
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div>
-                  <div style={{ fontFamily: T.sans, fontWeight: 600, fontSize: 14, color: T.title, marginBottom: 6 }}>
-                    Selecciona la variante del email
-                  </div>
-                  <div style={{ fontFamily: T.sans, fontSize: 12, color: T.muted, marginBottom: 16 }}>
-                    Los nuevos candidatos recibirán el mismo email (asunto + contenido + tracking) que la campaña original.
-                  </div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <VariantCard variant="A" metrics={mA} isWinner={winner === 'A'} />
-                    <VariantCard variant="B" metrics={mB} isWinner={winner === 'B'} />
-                  </div>
-                  {!hasData && (
-                    <div style={{
-                      marginTop: 12, padding: '8px 12px', background: T.amberBg, borderRadius: 6,
-                      fontSize: 12, color: T.amber, fontFamily: T.sans,
-                    }}>
-                      Pocos datos A/B disponibles. Las métricas se actualizarán cuando haya más envíos.
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Step 3: Confirm + send */}
-            {wizardStep === 3 && (
+            {/* Step 2: Confirm + send */}
+            {wizardStep === 2 && (
               <div>
                 {/* Summary */}
                 <div style={{
@@ -1264,10 +1166,6 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: T.muted }}>Candidatos</span>
                       <span style={{ fontWeight: 600 }}>{wizardRecipients.length} contactos en {selectedForSend.size} empresa{selectedForSend.size !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: T.muted }}>Variante</span>
-                      <span style={{ fontWeight: 600 }}>Variante {selectedVariant}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: T.muted }}>Remitente</span>
@@ -1318,7 +1216,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                       opacity: (!bridgeReady || !gasCampaignId) ? 0.5 : 1,
                     }}
                   >
-                    {testEmailLoading ? '⏳ Enviando prueba...' : testEmailSent ? `✅ Prueba enviada (variante ${selectedVariant})` : `📧 Enviar prueba (variante ${selectedVariant})`}
+                    {testEmailLoading ? '⏳ Enviando prueba...' : testEmailSent ? '✅ Prueba enviada' : '📧 Enviar prueba'}
                     {!testEmailLoading && !testEmailSent && (
                       <span style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>→ salvador.carrillo@alter-5.com</span>
                     )}
@@ -1347,7 +1245,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                         background: T.primaryBg,
                       }}>
                         <div style={{ fontFamily: T.sans, fontSize: 13, color: T.primary, fontWeight: 600, marginBottom: 10 }}>
-                          Se crearán {wizardRecipients.length} borradores en Gmail de Leticia (variante {selectedVariant}).
+                          Se crearán {wizardRecipients.length} borradores en Gmail de Leticia.
                           Podrás revisarlos antes de enviar.
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -1472,7 +1370,7 @@ Incluye todas las empresas de la lista. Score de 0 a 100.`;
                 background: T.white, color: T.muted, fontSize: 13, cursor: 'pointer', fontFamily: T.sans,
               }}
             >{wizardStep > 1 ? '← Volver' : 'Cancelar'}</button>
-            {wizardStep < 3 && (
+            {wizardStep < 2 && (
               <button
                 onClick={() => setWizardStep(wizardStep + 1)}
                 style={{
