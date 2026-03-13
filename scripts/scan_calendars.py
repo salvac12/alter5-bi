@@ -25,6 +25,7 @@
     python scripts/scan_calendars.py                    # scan desde last_scan + sync opps + check docs
     python scripts/scan_calendars.py --dry-run          # log sin PATCH
     python scripts/scan_calendars.py --days 7           # override: ultimos 7 dias
+    python scripts/scan_calendars.py --max-age 60       # max antiguedad eventos para nuevos prospects
     python scripts/scan_calendars.py --check-docs       # solo verificar docs (sin calendar scan)
     python scripts/scan_calendars.py --generate-summaries  # generar AI summaries para prospects sin resumen
     python scripts/scan_calendars.py --sync-opportunities  # importar opportunities como prospects
@@ -115,6 +116,9 @@ MAX_EXTERNAL_DOMAINS = 3
 # "Capital Seeker" = originacion (developers, IPPs, utilities que buscan deuda/equity)
 # Domains not in CRM are also allowed (unknown company with a real meeting)
 PROSPECT_ELIGIBLE_GROUPS = {"Capital Seeker"}
+
+# Max age (in days) for events to create NEW prospects — older events are skipped
+MAX_EVENT_AGE_DAYS = 60
 
 # Gemini config for smart CRM filter (analyzes email context)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -251,6 +255,17 @@ def event_has_ended(event, now):
     else:
         end_dt = datetime.fromisoformat(end_str)
     return end_dt <= now
+
+
+def get_event_start(event):
+    """Parse event start time into an aware datetime."""
+    start = event.get("start", {})
+    start_str = start.get("dateTime") or start.get("date")
+    if not start_str:
+        return None
+    if "T" not in start_str:
+        return datetime.strptime(start_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    return datetime.fromisoformat(start_str)
 
 
 # ---------------------------------------------------------------------------
@@ -452,11 +467,13 @@ def merge_contacts_to_prospect(prospect, new_attendees, dry_run=False):
 
 def create_prospect_from_meeting(domain, employee_email, event_summary,
                                   company_name=None, attendees=None,
-                                  ai_result=None, dry_run=False):
+                                  ai_result=None, meeting_date=None,
+                                  dry_run=False):
     """Create a new prospect in stage 'Reunion' from a calendar meeting.
 
     attendees: list of {name, email, domain} for this domain's attendees.
     ai_result: dict from analyze_prospect_intelligence() with summary and next steps.
+    meeting_date: str (YYYY-MM-DD) of the event start date.
     """
     manager = MAILBOX_TO_MANAGER.get(employee_email, "")
     name = company_name or domain.split(".")[0].capitalize()
@@ -464,6 +481,8 @@ def create_prospect_from_meeting(domain, employee_email, event_summary,
         context = f"Reunion detectada automaticamente desde calendario: {event_summary}"
     else:
         context = "Reunion detectada automaticamente desde calendario"
+    if meeting_date:
+        context += f"\nFecha reunion: {meeting_date}"
 
     # Build contacts from attendees
     contacts = []
@@ -1338,6 +1357,7 @@ def main():
     parser.add_argument("--generate-summaries", action="store_true", help="Generate AI summaries for prospects without one")
     parser.add_argument("--sync-opportunities", action="store_true", help="Import early-stage Opportunities as Prospects")
     parser.add_argument("--cleanup-prospects", action="store_true", help="Archive false positives, non-prospects, and duplicates")
+    parser.add_argument("--max-age", type=int, default=None, help="Max event age in days for new prospects (default: 60)")
     args = parser.parse_args()
 
     if not AIRTABLE_PAT:
@@ -1393,11 +1413,13 @@ def main():
 
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
+    max_age = args.max_age if args.max_age is not None else MAX_EVENT_AGE_DAYS
 
     total_events = 0
     total_advanced = 0
     total_created = 0
     total_skipped = 0
+    total_skipped_old = 0
     total_filtered_crm = 0
     total_contacts_added = 0
 
@@ -1481,6 +1503,10 @@ def main():
                         pname = pf.get("Prospect Name", "?")
 
                         if stage in ADVANCEABLE_STAGES:
+                            # Warn if advancing based on an old event
+                            event_start = get_event_start(event)
+                            if event_start and (now - event_start).days > max_age:
+                                print(f"  ⚠ Warning: advancing {pname} based on event {(now - event_start).days} days old")
                             prefix = "[DRY-RUN] " if args.dry_run else ""
                             print(f"  {prefix}↑ {pname} ({stage} → Reunion) — {summary}")
                             ok = patch_prospect_stage(prospect["id"], dry_run=args.dry_run)
@@ -1532,6 +1558,15 @@ def main():
                         # 3 external orgs but one is known → skip the unknowns
                         continue
 
+                    # Gate: skip old events to avoid creating stale prospects
+                    event_start = get_event_start(event)
+                    if event_start:
+                        age_days = (now - event_start).days
+                        if age_days > max_age:
+                            print(f"  ⊘ Skipped '{domain}' — event is {age_days} days old (max {max_age})")
+                            total_skipped_old += 1
+                            continue
+
                     # Gate: don't recreate archived prospects
                     crm_entry = crm_companies.get(domain)
                     candidate_name = (crm_entry.get("name", "") if crm_entry else "") or domain.split(".")[0].capitalize()
@@ -1575,11 +1610,13 @@ def main():
                     prefix = "[DRY-RUN] " if args.dry_run else ""
                     crm_name = crm_entry.get("name", domain.split(".")[0].capitalize()) if crm_entry else None
                     print(f"  {prefix}+ New prospect from domain '{domain}' — {summary}")
+                    meeting_date_str = event_start.strftime("%Y-%m-%d") if event_start else None
                     ok = create_prospect_from_meeting(
                         domain, email, summary,
                         company_name=crm_name,
                         attendees=domain_attendees,
                         ai_result=ai_result,
+                        meeting_date=meeting_date_str,
                         dry_run=args.dry_run,
                     )
                     if ok:
@@ -1614,6 +1651,7 @@ def main():
     print(f"Calendar scan complete:")
     print(f"  Events processed: {total_events}")
     print(f"  Events skipped (conferences): {total_skipped}")
+    print(f"  Events skipped (too old, >{max_age}d): {total_skipped_old}")
     print(f"  Domains skipped (not originacion): {total_filtered_crm}")
     print(f"  Prospects advanced to Reunion: {total_advanced}")
     print(f"  New prospects created: {total_created}")
