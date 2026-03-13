@@ -108,6 +108,7 @@ export default function ProspectPanel({
   // AI Intelligence state
   const [aiIntelLoading, setAiIntelLoading] = useState(false);
   const [aiIntelError, setAiIntelError] = useState<string | null>(null);
+  const [nextStepsOpen, setNextStepsOpen] = useState(false);
   const [tasks, setTasks] = useState([]);
 
   useEffect(() => {
@@ -1014,19 +1015,47 @@ export default function ProspectPanel({
             />
           </DarkFormField>
 
-          {/* Next Steps */}
-          <DarkFormField label="Proximos pasos">
-            <textarea
-              value={formData.nextSteps}
-              onChange={(e) => updateField('nextSteps', e.target.value)}
-              placeholder="Tareas pendientes, siguiente reunion..."
-              disabled={loading}
-              rows={3}
-              style={darkTextareaStyle(loading)}
-              onFocus={darkFocus}
-              onBlur={darkBlur}
-            />
-          </DarkFormField>
+          {/* Next Steps — collapsible */}
+          <div style={{ marginBottom: 18 }}>
+            <div
+              onClick={() => setNextStepsOpen(v => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                cursor: 'pointer', userSelect: 'none',
+                padding: '6px 0',
+              }}
+            >
+              <span style={{
+                fontSize: 10, color: DK.textSecondary,
+                transition: 'transform 0.15s',
+                transform: nextStepsOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+              }}>▶</span>
+              <label style={{
+                fontSize: 12, fontWeight: 600, color: DK.textSecondary,
+                cursor: 'pointer',
+              }}>
+                Proximos pasos
+                {formData.nextSteps && !nextStepsOpen && (
+                  <span style={{ fontWeight: 400, marginLeft: 6, color: DK.textMuted, fontSize: 11 }}>
+                    ({formData.nextSteps.split('\n').filter(l => l.trim()).length} items)
+                  </span>
+                )}
+              </label>
+            </div>
+            {nextStepsOpen && (
+              <textarea
+                value={formData.nextSteps}
+                onChange={(e) => updateField('nextSteps', e.target.value)}
+                placeholder="Tareas pendientes, siguiente reunion..."
+                disabled={loading}
+                rows={3}
+                style={{ ...darkTextareaStyle(loading), marginTop: 4 }}
+                onFocus={darkFocus}
+                onBlur={darkBlur}
+              />
+            )}
+          </div>
 
           {/* ── Company Activity Section (multi-mailbox timeline) ── */}
           {matchedCompany && (
