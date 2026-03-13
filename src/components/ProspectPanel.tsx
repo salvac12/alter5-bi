@@ -1035,7 +1035,7 @@ export default function ProspectPanel({
                 fontSize: 12, fontWeight: 600, color: DK.textSecondary,
                 cursor: 'pointer',
               }}>
-                Proximos pasos
+                Sugerencias de avance
                 {formData.nextSteps && !nextStepsOpen && (
                   <span style={{ fontWeight: 400, marginLeft: 6, color: DK.textMuted, fontSize: 11 }}>
                     ({formData.nextSteps.split('\n').filter(l => l.trim()).length} items)
