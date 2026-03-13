@@ -206,14 +206,8 @@ export default function ProspectingView({ currentUser }) {
                 isLast={idx === jobs.length - 1}
                 onReview={() => { setSelectedJobId(job.jobId); setSelectedJobName(job.jobName); }}
                 onRetry={async () => {
-                  try {
-                    await retryProspectingJob(job.jobId, job.criteria);
-                    loadJobs();
-                  } catch (err) {
-                    console.warn('Retry failed:', err.message);
-                    await updateJobStatusByJobId(job.jobId, "failed", `Reintento falló: ${err.message}`);
-                    loadJobs();
-                  }
+                  await retryProspectingJob(job.jobId, job.criteria);
+                  loadJobs();
                 }}
                 onCancel={async () => {
                   await updateJobStatusByJobId(job.jobId, "failed", "Cancelado manualmente");
@@ -241,6 +235,7 @@ export default function ProspectingView({ currentUser }) {
 }
 
 function JobRow({ job, isLast, onReview, onRetry, onCancel }) {
+  const [retrying, setRetrying] = useState(false);
   const stuck = isJobStuck(job);
   const criteriaStr = [
     job.criteria?.description,
@@ -299,14 +294,25 @@ function JobRow({ job, isLast, onReview, onRetry, onCancel }) {
         )}
         {(job.status === 'failed' || stuck) && (
           <button
-            onClick={onRetry}
+            disabled={retrying}
+            onClick={async () => {
+              setRetrying(true);
+              try {
+                await onRetry();
+              } catch (err) {
+                alert(`Error al reintentar: ${err.message}`);
+              } finally {
+                setRetrying(false);
+              }
+            }}
             style={{
               padding: '5px 12px', borderRadius: 6, border: `1px solid ${COLORS.amber}`,
               background: '#FFFBEB', color: '#92400E',
-              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              fontSize: 11, fontWeight: 700, cursor: retrying ? 'wait' : 'pointer', fontFamily: 'inherit',
+              opacity: retrying ? 0.6 : 1,
             }}
           >
-            Reintentar
+            {retrying ? 'Enviando...' : 'Reintentar'}
           </button>
         )}
         {stuck && (
