@@ -21,6 +21,7 @@ import { HelpOverlay } from './components/shared/HelpOverlay';
 import { getCampaigns } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
 import { fetchAllVerified, saveVerification, invalidateVerifiedCache, verifiedToEnrichmentOverride } from './utils/airtableVerified';
+import { fetchAllInvestorNotes } from './utils/airtableInvestorNotes';
 import { getCurrentUser } from './utils/userConfig';
 import CleanupToolbar from './components/CleanupToolbar';
 import AppShell from './components/layout/AppShell';
@@ -32,6 +33,7 @@ export default function App() {
   const [hiddenCompanies, setHiddenCompanies] = useState(() => getHiddenCompanies());
   const [enrichmentOverrides, setEnrichmentOverrides] = useState(() => getAllEnrichmentOverrides());
   const [verifiedCompanies, setVerifiedCompanies] = useState(new Map());
+  const [investorNotes, setInvestorNotes] = useState(new Map());
 
   // Load verified companies from Airtable on mount and auto-apply as enrichment overrides
   useEffect(() => {
@@ -61,6 +63,7 @@ export default function App() {
         }
       })
       .catch(() => {});
+    fetchAllInvestorNotes().then(map => setInvestorNotes(map)).catch(() => {});
   }, []);
 
   // ── User identity ──
@@ -1045,6 +1048,7 @@ export default function App() {
             currentUser={currentUser}
             verifiedCompanies={verifiedCompanies}
             onVerifiedUpdate={() => fetchAllVerified().then(map => setVerifiedCompanies(map)).catch(() => {})}
+            investorNotes={investorNotes}
           />
         </>
       )}

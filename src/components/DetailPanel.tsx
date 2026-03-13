@@ -29,7 +29,7 @@ function contactPriorityInfo(role) {
   return { rank: 4, label: role, color: "#94A3B8" };
 }
 
-export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSave, productMatches, currentUser, verifiedCompanies, onVerifiedUpdate }) {
+export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSave, productMatches, currentUser, verifiedCompanies, onVerifiedUpdate, investorNotes }) {
   if (!company) return null;
   const c = company;
   const det = c.detail;
@@ -366,70 +366,210 @@ FORMATO (JSON valido, sin markdown):
       overflow: "auto", boxShadow: "-12px 0 40px rgba(10,22,40,0.4)",
     }}>
       <div style={{ padding: 28 }}>
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-          <div style={{ flex: 1 }}>
-            <h2 style={{
-              margin: 0, fontSize: 26, fontWeight: 800, color: "#FFFFFF",
-              letterSpacing: "-1px", lineHeight: 1.2,
-            }}>{c.name}</h2>
-            <div style={{ fontSize: 14, color: "#6B7F94", marginTop: 6, fontWeight: 400 }}>{c.domain}</div>
+        {/* ═══ HERO HEADER ═══ */}
+        <div style={{ marginBottom: 20 }}>
+          {/* Name + Close */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <h2 style={{
+                margin: 0, fontSize: 26, fontWeight: 800, color: "#FFFFFF",
+                letterSpacing: "-1px", lineHeight: 1.2,
+              }}>{c.name}</h2>
+              {c.domain && (
+                <a href={`https://${c.domain}`} target="_blank" rel="noopener noreferrer"
+                  style={{ fontSize: 13, color: "#60A5FA", marginTop: 5, fontWeight: 400, display: "inline-block", textDecoration: "none" }}>
+                  {c.domain} ↗
+                </a>
+              )}
+            </div>
+            <button onClick={onClose} style={{
+              background: "#132238", border: "1px solid #1B3A5C", color: "#6B7F94",
+              width: 36, height: 36, borderRadius: 8, cursor: "pointer", fontSize: 16,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "inherit", transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#1B3A5C"; e.currentTarget.style.color = "#FFFFFF"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "#132238"; e.currentTarget.style.color = "#6B7F94"; }}
+            >✕</button>
           </div>
-          <button onClick={onClose} style={{
-            background: "#132238", border: "1px solid #1B3A5C", color: "#6B7F94",
-            width: 36, height: 36, borderRadius: 8, cursor: "pointer", fontSize: 16,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: "inherit",
-            transition: "all 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#1B3A5C";
-            e.currentTarget.style.color = "#FFFFFF";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#132238";
-            e.currentTarget.style.color = "#6B7F94";
-          }}
-          >✕</button>
-        </div>
 
-        {/* Tags */}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
-          <StatusBadge status={c.status} />
-          {/* Group badge */}
-          <span style={{
-            padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-            background: groupColor + "20", color: groupColor, border: `1px solid ${groupColor}40`,
-          }}>{c.group}</span>
-          {/* Type badge */}
-          {c.companyType && (
-            <span style={{
-              padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-              background: "#8B5CF620", color: "#A78BFA", border: "1px solid #8B5CF640",
-            }}>{c.companyType}</span>
+          {/* Role / Type / Segment badges */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            {c.role && (() => {
+              const roleBadgeColors: Record<string, { bg: string; text: string; border: string }> = {
+                "Originación": { bg: "#1D4ED8", text: "#DBEAFE", border: "#3B82F640" },
+                "Inversión": { bg: "#065F46", text: "#D1FAE5", border: "#10B98140" },
+                "Services": { bg: "#4C1D95", text: "#EDE9FE", border: "#8B5CF640" },
+              };
+              const rc = roleBadgeColors[c.role] || { bg: "#374151", text: "#D1D5DB", border: "#6B728040" };
+              return (
+                <span style={{
+                  padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 800,
+                  background: rc.bg, color: rc.text, border: `1px solid ${rc.border}`,
+                  textTransform: "uppercase", letterSpacing: "0.5px",
+                }}>{c.role}</span>
+              );
+            })()}
+            {c.segment && (
+              <span style={{
+                padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                background: "#1B3A5C", color: "#94A3B8", border: "1px solid #2A4A6C",
+              }}>{c.segment}</span>
+            )}
+            {c.companyType && (
+              <span style={{
+                padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
+                background: "#8B5CF618", color: "#A78BFA", border: "1px solid #8B5CF640",
+              }}>{c.companyType}</span>
+            )}
+            {c.projectScale && (
+              <span style={{
+                padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: c.projectScale === "Utility-scale" ? "#3B82F618" : c.projectScale === "Distribuido" ? "#F59E0B18" : "#8B5CF618",
+                color: c.projectScale === "Utility-scale" ? "#3B82F6" : c.projectScale === "Distribuido" ? "#F59E0B" : "#8B5CF6",
+                border: `1px solid ${c.projectScale === "Utility-scale" ? "#3B82F630" : c.projectScale === "Distribuido" ? "#F59E0B30" : "#8B5CF630"}`,
+              }}>{c.projectScale}</span>
+            )}
+            {/* Quality score */}
+            {c.qualityScore > 0 && (
+              <span style={{
+                marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: "#0A1628", border: "1px solid #1B3A5C",
+              }}>
+                <span style={{ color: "#6B7F94" }}>Quality</span>
+                <div style={{
+                  width: 50, height: 6, background: "#1B3A5C", borderRadius: 3, overflow: "hidden",
+                }}>
+                  <div style={{
+                    height: "100%", width: `${c.qualityScore}%`, borderRadius: 3,
+                    background: c.qualityScore >= 70 ? "#10B981" : c.qualityScore >= 40 ? "#F59E0B" : "#6B7F94",
+                  }} />
+                </div>
+                <span style={{ color: c.qualityScore >= 70 ? "#10B981" : c.qualityScore >= 40 ? "#F59E0B" : "#6B7F94", fontWeight: 700 }}>
+                  {c.qualityScore}
+                </span>
+              </span>
+            )}
+          </div>
+
+          {/* Investor metrics row — only for Inversión */}
+          {(c.role === "Inversión" && (c.aumRange || c.ticketSize || c.renewableExperience || c.sentiment)) && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              {c.aumRange && (
+                <span style={{
+                  padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: "#10B98118", color: "#10B981", border: "1px solid #10B98130",
+                }}>AUM: {c.aumRange}</span>
+              )}
+              {c.ticketSize && (
+                <span style={{
+                  padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: "#8B5CF618", color: "#A78BFA", border: "1px solid #8B5CF630",
+                }}>Ticket: {c.ticketSize}</span>
+              )}
+              {c.renewableExperience && (
+                <span style={{
+                  padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: c.renewableExperience === "Especialista renovables" ? "#F59E0B18" : "#6B7F9418",
+                  color: c.renewableExperience === "Especialista renovables" ? "#F59E0B" : "#94A3B8",
+                  border: `1px solid ${c.renewableExperience === "Especialista renovables" ? "#F59E0B30" : "#6B7F9430"}`,
+                }}>Exp: {c.renewableExperience}</span>
+              )}
+              {c.sentiment && (() => {
+                const sentCfg: Record<string, { label: string; bg: string; color: string }> = {
+                  muy_interesado: { label: "MUY INTERESADO", bg: "#10B98125", color: "#10B981" },
+                  interesado: { label: "INTERESADO", bg: "#3B82F625", color: "#3B82F6" },
+                  tibio: { label: "TIBIO", bg: "#F59E0B25", color: "#F59E0B" },
+                  solo_info: { label: "SOLO INFO", bg: "#6B7F9425", color: "#6B7F94" },
+                  no_interesado: { label: "NO INTERESADO", bg: "#EF444425", color: "#EF4444" },
+                };
+                const sc = sentCfg[c.sentiment] || { label: c.sentiment, bg: "#6B7F9425", color: "#6B7F94" };
+                return (
+                  <span style={{
+                    padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 800,
+                    background: sc.bg, color: sc.color, border: `1px solid ${sc.color}40`,
+                    letterSpacing: "0.5px",
+                  }}>{sc.label}</span>
+                );
+              })()}
+            </div>
           )}
-          {/* Market role badges */}
-          {c.marketRoles?.map((role, i) => {
-            const mrDef = MARKET_ROLES.find(m => m.id === role);
-            const col = mrDef?.color || "#6B7F94";
+
+          {/* Description */}
+          {(() => {
+            const desc = c.websiteDescription || verifiedRecord?.webDescription || (det?.context ? det.context.slice(0, 180) + (det.context.length > 180 ? "..." : "") : "");
+            if (!desc) return null;
             return (
-              <span key={`mr${i}`} style={{
-                padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-                background: col + "20", color: col, border: `1px solid ${col}40`,
-              }}>{role}</span>
+              <p style={{
+                fontSize: 12, color: "#94A3B8", lineHeight: 1.6, margin: "0 0 12px 0",
+                fontWeight: 400,
+                display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+              }}>{desc}</p>
             );
-          })}
-          {/* Airtable pipeline badge */}
-          {c.opportunity && (
-            <span style={{
-              padding: "3px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-              background: "#8B5CF620", color: "#A78BFA", border: "1px solid #8B5CF640",
-              display: "inline-flex", alignItems: "center", gap: 4,
-            }}>
-              <span style={{ fontSize: 9 }}>AT</span>
-              {c.opportunity.stage}
-            </span>
-          )}
+          })()}
+
+          {/* Activity bar */}
+          {(() => {
+            const lastD = c.lastDate ? new Date(c.lastDate) : null;
+            const now = new Date();
+            const daysSinceLast = lastD ? Math.floor((now.getTime() - lastD.getTime()) / (1000 * 60 * 60 * 24)) : null;
+            let activityStatus: { label: string; color: string; pulse: boolean };
+            if (daysSinceLast === null || c.interactions === 0) {
+              activityStatus = { label: "SIN ACTIVIDAD", color: "#475569", pulse: false };
+            } else if (daysSinceLast < 30) {
+              activityStatus = { label: "ACTIVA", color: "#10B981", pulse: true };
+            } else if (daysSinceLast < 90) {
+              activityStatus = { label: "RECIENTE", color: "#F59E0B", pulse: false };
+            } else {
+              activityStatus = { label: "DORMIDA", color: "#6B7F94", pulse: false };
+            }
+            return (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "10px 14px", borderRadius: 8,
+                background: "#0A1628", border: "1px solid #1B3A5C",
+              }}>
+                {/* Status dot */}
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: activityStatus.color,
+                  boxShadow: activityStatus.pulse ? `0 0 8px ${activityStatus.color}80` : "none",
+                  animation: activityStatus.pulse ? "pulse 2s infinite" : "none",
+                  flexShrink: 0,
+                }} />
+                <span style={{
+                  fontSize: 10, fontWeight: 800, color: activityStatus.color,
+                  letterSpacing: "1px", textTransform: "uppercase",
+                }}>{activityStatus.label}</span>
+                <span style={{ width: 1, height: 14, background: "#1B3A5C" }} />
+                {lastD && (
+                  <span style={{ fontSize: 11, color: "#6B7F94" }}>
+                    Ultima interaccion: hace {daysSinceLast} dias
+                  </span>
+                )}
+                <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, color: "#94A3B8" }}>
+                  {c.interactions.toLocaleString()} emails
+                </span>
+                {/* Market role badges (compact) */}
+                {c.marketRoles?.length > 0 && (
+                  <>
+                    <span style={{ width: 1, height: 14, background: "#1B3A5C" }} />
+                    {c.marketRoles.map((role, i) => {
+                      const mrDef = MARKET_ROLES.find(m => m.id === role);
+                      const col = mrDef?.color || "#6B7F94";
+                      return (
+                        <span key={`mr${i}`} style={{
+                          padding: "2px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700,
+                          background: col + "15", color: col,
+                        }}>{role}</span>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Tab Bar */}
@@ -440,7 +580,8 @@ FORMATO (JSON valido, sin markdown):
           {[
             { id: 'resumen', label: 'Resumen' },
             { id: 'timeline', label: 'Timeline' },
-            { id: 'detalles', label: 'Detalles' },
+            { id: 'contactos', label: 'Contactos' },
+            { id: 'detalles', label: 'Datos' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -472,13 +613,79 @@ FORMATO (JSON valido, sin markdown):
         {/* ═══ TAB: Resumen ═══ */}
         {activeTab === 'resumen' && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {/* Company Type */}
-            {c.companyType && (
-              <SummaryRow label="Tipo de empresa" value={c.companyType} />
+
+            {/* ── Strategic Notes (Inversión only, priority 1) ── */}
+            {c.role === "Inversión" && (investorNotes?.get?.(c.name) || c.investmentCriteria || c.nextAction || c.dealsMentioned?.length > 0) && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "14px 16px",
+                border: "1px solid #10B98140", borderLeft: "4px solid #10B981",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#10B981", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 10,
+                }}>Notas Estrategicas</div>
+
+                {/* Investor Strategic Notes from Airtable */}
+                {investorNotes?.get?.(c.name) && (
+                  <div style={{ marginBottom: (c.investmentCriteria || c.nextAction || c.dealsMentioned?.length) ? 12 : 0 }}>
+                    {investorNotes.get(c.name).map((note: string, i: number) => (
+                      <p key={i} style={{
+                        fontSize: 12, color: "#D1FAE5", lineHeight: 1.6, margin: i > 0 ? "8px 0 0 0" : 0,
+                        fontWeight: 400,
+                      }}>{note}</p>
+                    ))}
+                  </div>
+                )}
+
+                {/* Investment criteria */}
+                {c.investmentCriteria && (
+                  <div style={{ marginBottom: (c.nextAction || c.dealsMentioned?.length) ? 10 : 0 }}>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
+                      Criterios de inversion
+                    </div>
+                    <p style={{
+                      fontSize: 12, color: "#CBD5E1", lineHeight: 1.6, margin: 0,
+                      background: "#0A1628", borderRadius: 6, padding: "8px 10px",
+                      border: "1px solid #1B3A5C",
+                    }}>{c.investmentCriteria}</p>
+                  </div>
+                )}
+
+                {/* Next action */}
+                {c.nextAction && (
+                  <div style={{ marginBottom: c.dealsMentioned?.length ? 10 : 0 }}>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
+                      Siguiente accion
+                    </div>
+                    <div style={{
+                      fontSize: 12, color: "#10B981", lineHeight: 1.5,
+                      background: "#10B98110", borderRadius: 6, padding: "8px 10px",
+                      border: "1px solid #10B98130", fontWeight: 500,
+                    }}>{c.nextAction}</div>
+                  </div>
+                )}
+
+                {/* Deals mentioned */}
+                {c.dealsMentioned?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
+                      Deals mencionados
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                      {c.dealsMentioned.map((d: string) => (
+                        <span key={d} style={{
+                          padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                          background: "#F59E0B15", color: "#FBBF24", border: "1px solid #F59E0B30",
+                        }}>{d}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
-            {/* Market Roles */}
-            {c.marketRoles?.length > 0 && (
+            {/* ── Investor Profile (Inversión only) ── */}
+            {c.role === "Inversión" && (c.investorFocus?.length > 0 || c.investorPhase || c.assetTypes?.length > 0 || c.investorGeoFocus?.length > 0) && (
               <div style={{
                 background: "#132238", borderRadius: 10, padding: "12px 16px",
                 border: "1px solid #1B3A5C",
@@ -486,34 +693,109 @@ FORMATO (JSON valido, sin markdown):
                 <div style={{
                   fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
                   letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
-                }}>Market Roles</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {c.marketRoles.map((role, i) => {
-                    const mrDef = MARKET_ROLES.find(m => m.id === role);
-                    const col = mrDef?.color || "#6B7F94";
-                    return (
+                }}>Perfil inversor</div>
+
+                {/* Focus areas */}
+                {c.investorFocus?.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+                    {c.investorFocus.map((f: string, i: number) => (
                       <span key={i} style={{
-                        padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-                        background: col + "20", color: col, border: `1px solid ${col}40`,
-                      }}>{role}</span>
-                    );
-                  })}
+                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                        background: "#10B98115", color: "#10B981", border: "1px solid #10B98130",
+                      }}>{f}</span>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: (c.assetTypes?.length > 0 || c.investorGeoFocus?.length > 0 || c.notableRenewableDeals?.length > 0) ? 8 : 0 }}>
+                  {c.investorPhase && (
+                    <span style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                      background: "#0A1628", color: "#CBD5E1", border: "1px solid #1B3A5C",
+                    }}>{c.investorPhase}</span>
+                  )}
+                  {c.investorSubtype && (
+                    <span style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                    }}>{c.investorSubtype}</span>
+                  )}
                 </div>
+
+                {/* Asset types */}
+                {c.assetTypes?.length > 0 && (
+                  <div style={{ marginBottom: (c.investorGeoFocus?.length > 0 || c.notableRenewableDeals?.length > 0) ? 8 : 0 }}>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 4 }}>Tipo de activo</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {c.assetTypes.map((at: string) => (
+                        <span key={at} style={{
+                          padding: "2px 7px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+                          background: "#3B82F615", color: "#60A5FA", border: "1px solid #3B82F630",
+                        }}>{at}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Geo focus */}
+                {c.investorGeoFocus?.length > 0 && (
+                  <div style={{ marginBottom: c.notableRenewableDeals?.length > 0 ? 8 : 0 }}>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 4 }}>Geografia</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {c.investorGeoFocus.map((g: string, i: number) => (
+                        <span key={i} style={{
+                          padding: "2px 7px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+                          background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                        }}>{g}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notable deals */}
+                {c.notableRenewableDeals?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 4 }}>Deals renovables</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {c.notableRenewableDeals.map((d: string, i: number) => (
+                        <div key={i} style={{ fontSize: 11, color: "#94A3B8", paddingLeft: 8, borderLeft: "2px solid #1B3A5C" }}>{d}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Contactos (solo nombres) */}
-            {editedContacts.length > 0 && (
-              <SummaryRow
-                label="Contactos"
-                value={editedContacts.map(ct => ct.name).join(", ")}
-              />
+            {/* ── Business Profile (Originación) ── */}
+            {(c.businessLines?.length > 0 || c.knownPipelineMw) && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                }}>Perfil de negocio</div>
+                {c.businessLines?.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: c.knownPipelineMw ? 8 : 0 }}>
+                    {c.businessLines.map((bl: string, i: number) => (
+                      <span key={i} style={{
+                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                        background: "#F59E0B18", color: "#F59E0B", border: "1px solid #F59E0B30",
+                      }}>{bl}</span>
+                    ))}
+                  </div>
+                )}
+                {c.knownPipelineMw > 0 && (
+                  <span style={{
+                    padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                    background: "#10B98118", color: "#10B981", border: "1px solid #10B98130",
+                  }}>{c.knownPipelineMw} MW pipeline</span>
+                )}
+              </div>
             )}
 
-            {/* Total Interacciones */}
-            <SummaryRow label="Total interacciones" value={c.interactions.toLocaleString()} />
-
-            {/* Airtable Pipeline */}
+            {/* ── Airtable Pipeline ── */}
             {c.opportunity && (
               <div style={{
                 background: "#132238", borderRadius: 10, padding: "12px 16px",
@@ -548,8 +830,8 @@ FORMATO (JSON valido, sin markdown):
               </div>
             )}
 
-            {/* Productos IA */}
-            {c.productosIA?.length > 0 && (
+            {/* ── AI Signals ── */}
+            {(c.productosIA?.length > 0 || c.senales?.length > 0) && (
               <div style={{
                 background: "#132238", borderRadius: 10, padding: "12px 16px",
                 border: "1px solid #1B3A5C",
@@ -557,128 +839,105 @@ FORMATO (JSON valido, sin markdown):
                 <div style={{
                   fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
                   letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
-                }}>Productos potenciales</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {c.productosIA.map((p, i) => {
-                    const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7F94" };
-                    const col = confColors[p.c] || "#6B7F94";
-                    return (
+                }}>Senales comerciales IA</div>
+                {c.productosIA?.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: c.senales?.length ? 10 : 0 }}>
+                    {c.productosIA.map((p, i) => {
+                      const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7F94" };
+                      const col = confColors[p.c] || "#6B7F94";
+                      return (
+                        <span key={i} style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                          background: col + "15", color: "#FFFFFF", border: `1px solid ${col}40`,
+                        }}>
+                          {p.p}
+                          <span style={{
+                            fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
+                            background: col + "30", color: col, textTransform: "uppercase",
+                          }}>{p.c}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {c.senales?.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                    {c.senales.map((s, i) => (
                       <span key={i} style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                        background: col + "15", color: "#FFFFFF", border: `1px solid ${col}40`,
+                        padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                        background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                      }}>{s}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Technologies ── */}
+            {(c.technologies || []).filter(Boolean).length > 0 && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
+                }}>Tecnologias</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {TECHNOLOGIES.filter(t => (c.technologies || []).includes(t.id)).map(t => (
+                    <span key={t.id} style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                      background: "#3B82F620", color: "#60A5FA", border: "1px solid #3B82F640",
+                    }}>{t.icon} {t.label}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Top 2 contacts preview ── */}
+            {editedContacts.length > 0 && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "12px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8,
+                }}>
+                  <div style={{
+                    fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                    letterSpacing: "1.5px", fontWeight: 700,
+                  }}>Contactos clave</div>
+                  {editedContacts.length > 2 && (
+                    <button onClick={() => setActiveTab('contactos')} style={{
+                      background: "none", border: "none", color: "#60A5FA",
+                      fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    }}>Ver todos ({editedContacts.length}) →</button>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {[...editedContacts].sort((a, b) => contactPriorityRank(a.role) - contactPriorityRank(b.role)).slice(0, 2).map((ct, i) => {
+                    const { label, color } = contactPriorityInfo(ct.role);
+                    return (
+                      <div key={i} style={{
+                        flex: 1, padding: "8px 10px", background: "#0A1628",
+                        borderRadius: 6, border: "1px solid #1B3A5C",
                       }}>
-                        {p.p}
-                        <span style={{
-                          fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
-                          background: col + "30", color: col, textTransform: "uppercase",
-                        }}>{p.c}</span>
-                      </span>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#FFFFFF", marginBottom: 2 }}>
+                          {ct.nombre ? `${ct.nombre} ${ct.apellido || ""}` : ct.name}
+                        </div>
+                        <div style={{ fontSize: 10, color: color, fontWeight: 600 }}>{label}</div>
+                        {ct.email && (
+                          <div style={{ fontSize: 10, color: "#6B7F94", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ct.email}</div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
               </div>
             )}
 
-            {/* Senales */}
-            {c.senales?.length > 0 && (
-              <div style={{
-                background: "#132238", borderRadius: 10, padding: "12px 16px",
-                border: "1px solid #1B3A5C",
-              }}>
-                <div style={{
-                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
-                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
-                }}>Senales clave</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  {c.senales.map((s, i) => (
-                    <span key={i} style={{
-                      padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
-                    }}>{s}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Perfil de negocio (Originacion enrichment) */}
-            {(c.businessLines?.length > 0 || c.projectScale || c.knownPipelineMw || c.websiteUrl) && (
-              <div style={{
-                background: "#132238", borderRadius: 10, padding: "12px 16px",
-                border: "1px solid #1B3A5C",
-              }}>
-                <div style={{
-                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
-                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 8,
-                }}>Perfil de negocio</div>
-
-                {/* Business lines */}
-                {c.businessLines?.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
-                    {c.businessLines.map((bl, i) => (
-                      <span key={i} style={{
-                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
-                        background: "#F59E0B18", color: "#F59E0B", border: "1px solid #F59E0B30",
-                      }}>{bl}</span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Scale + Pipeline MW */}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: c.websiteUrl || c.websiteDescription ? 8 : 0 }}>
-                  {c.projectScale && (() => {
-                    const scaleColors = { "Utility-scale": "#3B82F6", "Distribuido": "#F59E0B", "Mixto": "#8B5CF6" };
-                    const col = scaleColors[c.projectScale] || "#6B7F94";
-                    return (
-                      <span style={{
-                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
-                        background: col + "18", color: col, border: `1px solid ${col}30`,
-                      }}>{c.projectScale}</span>
-                    );
-                  })()}
-                  {c.knownPipelineMw > 0 && (
-                    <span style={{
-                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
-                      background: "#10B98118", color: "#10B981", border: "1px solid #10B98130",
-                    }}>{c.knownPipelineMw} MW pipeline</span>
-                  )}
-                </div>
-
-                {/* Website */}
-                {c.websiteUrl && (
-                  <div style={{ fontSize: 11, marginBottom: c.websiteDescription ? 6 : 0 }}>
-                    <a href={c.websiteUrl.startsWith("http") ? c.websiteUrl : `https://${c.websiteUrl}`}
-                      target="_blank" rel="noopener noreferrer"
-                      style={{ color: "#3B82F6", textDecoration: "none" }}>
-                      {c.websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
-                    </a>
-                  </div>
-                )}
-
-                {/* Website description */}
-                {c.websiteDescription && (
-                  <div style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.5 }}>
-                    {c.websiteDescription}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Historico trimestral compacto */}
-            {det?.timeline?.length > 0 && (
-              <SummaryRow
-                label="Historico trimestral"
-                value={det.timeline.map(t => `${t.quarter}: ${t.emails}`).join(" | ")}
-              />
-            )}
-
-            {/* Primera / Ultima fecha */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <SummaryRow label="Primera fecha" value={c.firstDate || "—"} />
-              <SummaryRow label="Ultima fecha" value={c.lastDate || "—"} />
-            </div>
-
-            {/* Resumen de la relacion — cronologico con fechas */}
+            {/* ── Relationship summary ── */}
             {(det?.datedSubjects?.length > 0 || det?.context) && (
               <div style={{
                 background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
@@ -691,25 +950,20 @@ FORMATO (JSON valido, sin markdown):
                 }}>Resumen de la relacion</div>
                 {det.datedSubjects?.length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {[...det.datedSubjects].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((ds, i) => {
+                    {[...det.datedSubjects].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 8).map((ds, i) => {
                       const isExpanded = expandedSubject === i;
                       const hasExtract = !!ds.extract;
                       return (
                         <div key={i}
                           onClick={() => hasExtract && setExpandedSubject(isExpanded ? null : i)}
                           style={{
-                            padding: "8px 10px",
-                            borderRadius: 6,
+                            padding: "6px 10px", borderRadius: 6,
                             cursor: hasExtract ? "pointer" : "default",
                             background: isExpanded ? "#0A162840" : "transparent",
                             transition: "background 0.15s ease",
                           }}
-                          onMouseEnter={(e) => {
-                            if (hasExtract && !isExpanded) e.currentTarget.style.background = "#0A162820";
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isExpanded) e.currentTarget.style.background = "transparent";
-                          }}
+                          onMouseEnter={(e) => { if (hasExtract && !isExpanded) e.currentTarget.style.background = "#0A162820"; }}
+                          onMouseLeave={(e) => { if (!isExpanded) e.currentTarget.style.background = "transparent"; }}
                         >
                           <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
                             <span style={{
@@ -718,8 +972,7 @@ FORMATO (JSON valido, sin markdown):
                               fontFamily: "'DM Sans', monospace",
                             }}>{ds.date}</span>
                             <span style={{
-                              fontSize: 12, color: "#FFFFFF", fontWeight: 400, lineHeight: 1.5,
-                              flex: 1,
+                              fontSize: 12, color: "#FFFFFF", fontWeight: 400, lineHeight: 1.5, flex: 1,
                             }}>{ds.subject}</span>
                             {hasExtract && (
                               <span style={{
@@ -731,11 +984,10 @@ FORMATO (JSON valido, sin markdown):
                           </div>
                           {isExpanded && ds.extract && (
                             <div style={{
-                              marginTop: 8, marginLeft: 90, padding: "10px 12px",
+                              marginTop: 6, marginLeft: 90, padding: "8px 10px",
                               background: "#0A1628", borderRadius: 6,
                               border: "1px solid #1B3A5C",
                               fontSize: 12, color: "#94A3B8", lineHeight: 1.6,
-                              fontWeight: 400,
                             }}>{ds.extract}</div>
                           )}
                         </div>
@@ -929,7 +1181,187 @@ FORMATO (JSON valido, sin markdown):
           </div>
         )}
 
-        {/* ═══ TAB: Detalles ═══ */}
+        {/* ═══ TAB: Contactos ═══ */}
+        {activeTab === 'contactos' && (
+          <div>
+            {(editedContacts.length > 0 || isEditingContacts) ? (
+              <div style={{
+                background: "#132238", borderRadius: 12, padding: 18,
+                border: isEditingContacts ? "2px solid #3B82F6" : "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
+                }}>
+                  <DarkSectionTitle style={{ marginBottom: 0, color: isEditingContacts ? "#60A5FA" : "#6B7F94" }}>
+                    Contactos clave
+                  </DarkSectionTitle>
+                  <span style={{ marginLeft: "auto", fontSize: 11, color: "#6B7F94", fontWeight: 600 }}>
+                    {editedContacts.length} contactos
+                  </span>
+                  {!isEditingContacts ? (
+                    <button onClick={() => setIsEditingContacts(true)} style={{
+                      background: "linear-gradient(135deg, #3B82F6, #10B981)",
+                      border: "none", color: "#FFFFFF",
+                      padding: "5px 10px", borderRadius: 6,
+                      fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    }}>Editar</button>
+                  ) : (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={handleCancelContactsEdit} style={{
+                        background: "#1B3A5C", border: "1px solid #2A4A6C",
+                        color: "#94A3B8", padding: "5px 10px", borderRadius: 6,
+                        fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                      }}>Cancelar</button>
+                      <button onClick={handleSaveContacts} style={{
+                        background: "linear-gradient(135deg, #3B82F6, #10B981)",
+                        border: "none", color: "#FFFFFF",
+                        padding: "5px 10px", borderRadius: 6,
+                        fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                      }}>Guardar</button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Contact list - READ */}
+                {!isEditingContacts ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {[...editedContacts]
+                      .sort((a, b) => contactPriorityRank(a.role) - contactPriorityRank(b.role))
+                      .map((ct, i) => {
+                        const { rank, label, color } = contactPriorityInfo(ct.role);
+                        return (
+                          <div key={i} style={{
+                            padding: "12px 14px",
+                            background: rank <= 3 ? color + "10" : "#0A1628",
+                            borderRadius: 8,
+                            border: `1px solid ${rank <= 3 ? color + "40" : "#1B3A5C"}`,
+                            transition: "all 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = rank <= 3 ? color + "20" : "#132238"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = rank <= 3 ? color + "10" : "#0A1628"; e.currentTarget.style.transform = "translateY(0)"; }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                              <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF", flex: 1, lineHeight: 1.3 }}>
+                                {ct.nombre ? <>{ct.nombre} <span style={{ fontWeight: 400 }}>{ct.apellido}</span></> : ct.name}
+                              </span>
+                              <span style={{
+                                fontSize: 9, fontWeight: 700, letterSpacing: "0.5px",
+                                padding: "3px 7px", borderRadius: 4,
+                                background: color + "30", color,
+                                textTransform: "uppercase", whiteSpace: "nowrap", marginLeft: 8,
+                              }}>{label}</span>
+                            </div>
+                            <div style={{ fontSize: 10, color: "#6B7F94", marginBottom: ct.email ? 4 : 0, fontWeight: 600 }}>
+                              {ct.role || "Cargo desconocido"}
+                            </div>
+                            {ct.email && (
+                              <div style={{ fontSize: 11, color: "#60A5FA", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {ct.email}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  /* Contact list - EDIT */
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {editedContacts.map((ct, i) => (
+                      <div key={i} style={{
+                        background: "#0A1628", borderRadius: 8, padding: "12px 14px", border: "1px solid #2A4A6C",
+                      }}>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                          <input type="text"
+                            value={ct.nombre || ct.name?.split(' ')[0] || ''}
+                            onChange={(e) => { handleUpdateContact(i, 'nombre', e.target.value); handleUpdateContact(i, 'name', `${e.target.value} ${ct.apellido || ''}`.trim()); }}
+                            placeholder="Nombre"
+                            style={{ flex: 1, background: "#132238", border: "1px solid #2A4A6C", borderRadius: 4, padding: "6px 8px", color: "#FFFFFF", fontSize: 13, fontFamily: "inherit", fontWeight: 600, outline: "none" }}
+                          />
+                          <input type="text"
+                            value={ct.apellido || ct.name?.split(' ').slice(1).join(' ') || ''}
+                            onChange={(e) => { handleUpdateContact(i, 'apellido', e.target.value); handleUpdateContact(i, 'name', `${ct.nombre || ''} ${e.target.value}`.trim()); }}
+                            placeholder="Apellido"
+                            style={{ flex: 1, background: "#132238", border: "1px solid #2A4A6C", borderRadius: 4, padding: "6px 8px", color: "#FFFFFF", fontSize: 13, fontFamily: "inherit", fontWeight: 400, outline: "none" }}
+                          />
+                          <button onClick={() => handleDeleteContact(i)} style={{
+                            background: "#7F1D1D", border: "1px solid #991B1B", color: "#FCA5A5",
+                            padding: "6px 10px", borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                          }} title="Eliminar contacto">X</button>
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input type="text" value={ct.role || ''} onChange={(e) => handleUpdateContact(i, 'role', e.target.value)} placeholder="Cargo"
+                            style={{ flex: 1, background: "#132238", border: "1px solid #2A4A6C", borderRadius: 4, padding: "6px 8px", color: "#94A3B8", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                          />
+                          <input type="email" value={ct.email || ''} onChange={(e) => handleUpdateContact(i, 'email', e.target.value)} placeholder="Email"
+                            style={{ flex: 1, background: "#132238", border: "1px solid #2A4A6C", borderRadius: 4, padding: "6px 8px", color: "#60A5FA", fontSize: 11, fontFamily: "inherit", outline: "none" }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Add new contact */}
+                    {!showAddContact ? (
+                      <button onClick={() => setShowAddContact(true)} style={{
+                        background: "#132238", border: "1px dashed #2A4A6C", color: "#60A5FA",
+                        padding: "10px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                        cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      }}>+ Anadir contacto</button>
+                    ) : (
+                      <div style={{ background: "#0A1628", borderRadius: 8, padding: "12px 14px", border: "2px solid #10B981" }}>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                          <input type="text" value={newContact.name}
+                            onChange={(e) => setNewContact(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Nombre *"
+                            style={{ flex: 1, background: "#132238", border: "1px solid #2A4A6C", borderRadius: 4, padding: "6px 8px", color: "#FFFFFF", fontSize: 13, fontFamily: "inherit", fontWeight: 600, outline: "none" }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                          <input type="text" value={newContact.role}
+                            onChange={(e) => setNewContact(prev => ({ ...prev, role: e.target.value }))}
+                            placeholder="Cargo"
+                            style={{ flex: 1, background: "#132238", border: "1px solid #2A4A6C", borderRadius: 4, padding: "6px 8px", color: "#94A3B8", fontSize: 12, fontFamily: "inherit", outline: "none" }}
+                          />
+                          <input type="email" value={newContact.email}
+                            onChange={(e) => setNewContact(prev => ({ ...prev, email: e.target.value }))}
+                            placeholder="Email"
+                            style={{ flex: 1, background: "#132238", border: "1px solid #2A4A6C", borderRadius: 4, padding: "6px 8px", color: "#60A5FA", fontSize: 11, fontFamily: "inherit", outline: "none" }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => { setShowAddContact(false); setNewContact({ name: '', role: '', email: '' }); }}
+                            style={{ flex: 1, background: "#1B3A5C", border: "1px solid #2A4A6C", color: "#94A3B8", padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                            Cancelar
+                          </button>
+                          <button onClick={handleAddContact} disabled={!newContact.name.trim()}
+                            style={{ flex: 1, background: newContact.name.trim() ? "linear-gradient(135deg, #10B981, #059669)" : "#1B3A5C", border: "none", color: newContact.name.trim() ? "#FFFFFF" : "#6B7F94", padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: newContact.name.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+                            Anadir
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{
+                background: "#132238", borderRadius: 12, padding: 30,
+                border: "1px solid #1B3A5C", textAlign: "center",
+              }}>
+                <div style={{ fontSize: 11, color: "#475569", fontStyle: "italic", marginBottom: 12 }}>
+                  No hay contactos registrados
+                </div>
+                <button onClick={() => { setIsEditingContacts(true); setShowAddContact(true); }} style={{
+                  background: "linear-gradient(135deg, #3B82F6, #10B981)",
+                  border: "none", color: "#FFFFFF",
+                  padding: "8px 16px", borderRadius: 6,
+                  fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                }}>+ Anadir contacto</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ TAB: Datos ═══ */}
         {activeTab === 'detalles' && (<>
         {/* Clasificación — Editable */}
         <div style={{
@@ -1187,234 +1619,6 @@ FORMATO (JSON valido, sin markdown):
           </div>
 
         </div>
-
-        {/* ═══ Investor Web Profile Section ═══ */}
-        {(c.investorTypeWeb || c.investorFocus?.length > 0 || c.aumRange || c.notableRenewableDeals?.length > 0) && (
-          <div style={{
-            background: "#132238", borderRadius: 12, padding: 18,
-            marginBottom: 20,
-            border: "1px solid #1B3A5C",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-              <span style={{ fontSize: 16 }}>{"\uD83C\uDFE6"}</span>
-              <DarkSectionTitle style={{ marginBottom: 0 }}>
-                Perfil del inversor
-              </DarkSectionTitle>
-            </div>
-
-            {/* Investor type + AUM + Experience */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-              {c.investorTypeWeb && (
-                <span style={{
-                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: "#3B82F618", color: "#3B82F6", border: "1px solid #3B82F630",
-                }}>{c.investorTypeWeb}</span>
-              )}
-              {c.aumRange && (
-                <span style={{
-                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: "#10B98118", color: "#10B981", border: "1px solid #10B98130",
-                }}>AUM: {c.aumRange}</span>
-              )}
-              {c.renewableExperience && (
-                <span style={{
-                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: c.renewableExperience === "Especialista renovables" ? "#F59E0B18" : "#6B7F9418",
-                  color: c.renewableExperience === "Especialista renovables" ? "#F59E0B" : "#6B7F94",
-                  border: `1px solid ${c.renewableExperience === "Especialista renovables" ? "#F59E0B30" : "#6B7F9430"}`,
-                }}>{c.renewableExperience}</span>
-              )}
-            </div>
-
-            {/* Investor focus */}
-            {c.investorFocus?.length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>Foco de inversión</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                  {c.investorFocus.map((f, i) => (
-                    <span key={i} style={{
-                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
-                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
-                    }}>{f}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Geographic focus */}
-            {c.investorGeoFocus?.length > 0 && (
-              <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>Geografía</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                  {c.investorGeoFocus.map((g, i) => (
-                    <span key={i} style={{
-                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
-                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
-                    }}>{g}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Notable deals */}
-            {c.notableRenewableDeals?.length > 0 && (
-              <div style={{ marginBottom: c.websiteDescription ? 10 : 0 }}>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>Deals renovables conocidos</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  {c.notableRenewableDeals.map((d, i) => (
-                    <div key={i} style={{ fontSize: 11, color: "#94A3B8", paddingLeft: 8, borderLeft: "2px solid #1B3A5C" }}>{d}</div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Website description (if not shown in business profile) */}
-            {c.websiteDescription && !c.businessLines?.length && (
-              <div style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.5 }}>
-                {c.websiteDescription}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ═══ Investor Preferences Section ═══ */}
-        {(c.role === "Inversión" || c.sentiment || c.investorPhase || c.ticketSize || (c.assetTypes && c.assetTypes.length > 0)) && (
-          <div style={{
-            background: "#132238", borderRadius: 12, padding: 18,
-            marginBottom: 20,
-            border: "1px solid #1B3A5C",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-              <span style={{ fontSize: 16 }}>{"\uD83D\uDCCA"}</span>
-              <DarkSectionTitle style={{ marginBottom: 0 }}>
-                Preferencias de inversion
-              </DarkSectionTitle>
-            </div>
-
-            {/* Sentiment + Phase + Ticket */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-              {c.sentiment && (() => {
-                const sentimentConfig: Record<string, { label: string; bg: string; color: string }> = {
-                  muy_interesado: { label: "Muy interesado", bg: "#10B98125", color: "#10B981" },
-                  interesado: { label: "Interesado", bg: "#3B82F625", color: "#3B82F6" },
-                  tibio: { label: "Tibio", bg: "#F59E0B25", color: "#F59E0B" },
-                  solo_info: { label: "Solo info", bg: "#6B7F9425", color: "#6B7F94" },
-                  no_interesado: { label: "No interesado", bg: "#EF444425", color: "#EF4444" },
-                };
-                const cfg = sentimentConfig[c.sentiment] || { label: c.sentiment, bg: "#6B7F9425", color: "#6B7F94" };
-                return (
-                  <span style={{
-                    padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700,
-                    background: cfg.bg, color: cfg.color,
-                    border: `1px solid ${cfg.color}40`,
-                  }}>
-                    {cfg.label}
-                  </span>
-                );
-              })()}
-              {c.investorPhase && (
-                <span style={{
-                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: "#0A1628", color: "#CBD5E1",
-                  border: "1px solid #1B3A5C",
-                }}>
-                  {c.investorPhase}
-                </span>
-              )}
-              {c.ticketSize && (
-                <span style={{
-                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: "#0A1628", color: "#8B5CF6",
-                  border: "1px solid #8B5CF640",
-                }}>
-                  {c.ticketSize}
-                </span>
-              )}
-              {c.investorSubtype && (
-                <span style={{
-                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
-                  background: "#0A1628", color: "#94A3B8",
-                  border: "1px solid #1B3A5C",
-                }}>
-                  {c.investorSubtype}
-                </span>
-              )}
-            </div>
-
-            {/* Asset Types */}
-            {c.assetTypes && c.assetTypes.length > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
-                  Tipo de activo
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                  {c.assetTypes.map((at: string) => (
-                    <span key={at} style={{
-                      padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
-                      background: "#3B82F615", color: "#60A5FA",
-                      border: "1px solid #3B82F630",
-                    }}>
-                      {at}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Deals Mentioned */}
-            {c.dealsMentioned && c.dealsMentioned.length > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
-                  Deals mencionados
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                  {c.dealsMentioned.map((d: string) => (
-                    <span key={d} style={{
-                      padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
-                      background: "#F59E0B15", color: "#FBBF24",
-                      border: "1px solid #F59E0B30",
-                    }}>
-                      {d}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Investment Criteria */}
-            {c.investmentCriteria && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
-                  Criterios de inversion
-                </div>
-                <p style={{
-                  fontSize: 12, color: "#CBD5E1", lineHeight: 1.6, margin: 0,
-                  background: "#0A1628", borderRadius: 8, padding: "10px 12px",
-                  border: "1px solid #1B3A5C",
-                }}>
-                  {c.investmentCriteria}
-                </p>
-              </div>
-            )}
-
-            {/* Next Action */}
-            {c.nextAction && (
-              <div>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
-                  Siguiente accion
-                </div>
-                <div style={{
-                  fontSize: 12, color: "#10B981", lineHeight: 1.6,
-                  background: "#10B98110", borderRadius: 8, padding: "10px 12px",
-                  border: "1px solid #10B98130",
-                  fontWeight: 500,
-                }}>
-                  {c.nextAction}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ═══ Verification Section ═══ */}
         <div style={{
@@ -1680,90 +1884,6 @@ FORMATO (JSON valido, sin markdown):
           )}
         </div>
 
-        {/* Enrichment: Productos IA & Senales */}
-        {(c.productosIA?.length > 0 || c.senales?.length > 0) && (
-          <div style={{
-            background: "#132238", borderRadius: 12, padding: 18,
-            marginBottom: 20, border: "1px solid #8B5CF640",
-          }}>
-            {c.productosIA?.length > 0 && (
-              <>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <span style={{ fontSize: 16 }}>🤖</span>
-                  <DarkSectionTitle style={{ marginBottom: 0 }}>Productos IA (Gemini)</DarkSectionTitle>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: c.senales?.length ? 16 : 0 }}>
-                  {c.productosIA.map((p, i) => {
-                    const confColors = { alta: "#10B981", media: "#F59E0B", baja: "#6B7F94" };
-                    const col = confColors[p.c] || "#6B7F94";
-                    return (
-                      <span key={i} style={{
-                        display: "inline-flex", alignItems: "center", gap: 6,
-                        padding: "5px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                        background: col + "15", color: "#FFFFFF", border: `1px solid ${col}40`,
-                      }}>
-                        {p.p}
-                        <span style={{
-                          fontSize: 9, fontWeight: 800, padding: "1px 5px", borderRadius: 4,
-                          background: col + "30", color: col, textTransform: "uppercase",
-                        }}>{p.c}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-            {c.senales?.length > 0 && (
-              <>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 16 }}>📡</span>
-                  <DarkSectionTitle style={{ marginBottom: 0 }}>Senales clave</DarkSectionTitle>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                  {c.senales.map((s, i) => (
-                    <span key={i} style={{
-                      padding: "4px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
-                    }}>{s}</span>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Context/Summary */}
-        {det?.context && (
-          <div style={{
-            background: "linear-gradient(135deg, #1B3A5C 0%, #132238 100%)",
-            borderRadius: 12,
-            padding: 20,
-            marginBottom: 20,
-            border: "1px solid #2A4A6C",
-          }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 12,
-            }}>
-              <span style={{ fontSize: 20 }}>💼</span>
-              <DarkSectionTitle style={{ marginBottom: 0, color: "#94A3B8" }}>
-                Resumen de la relación
-              </DarkSectionTitle>
-            </div>
-            <p style={{
-              fontSize: 14,
-              color: "#FFFFFF",
-              lineHeight: 1.7,
-              margin: 0,
-              fontWeight: 400,
-            }}>
-              {det.context}
-            </p>
-          </div>
-        )}
-
         {/* Product Matches */}
         <ProductMatchSection companyIdx={c.idx} productMatches={productMatches} />
 
@@ -1949,510 +2069,6 @@ FORMATO (JSON valido, sin markdown):
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Contacts - EDITABLE */}
-        {(editedContacts.length > 0 || isEditingContacts) && (
-          <div style={{
-            marginBottom: 20,
-            background: "#132238",
-            borderRadius: 12,
-            padding: 18,
-            border: isEditingContacts ? "2px solid #3B82F6" : "1px solid #1B3A5C",
-          }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 16,
-            }}>
-              <span style={{ fontSize: 20 }}>👤</span>
-              <DarkSectionTitle style={{ marginBottom: 0, color: isEditingContacts ? "#60A5FA" : "#6B7F94" }}>
-                Contactos clave
-              </DarkSectionTitle>
-              <span style={{
-                marginLeft: "auto",
-                fontSize: 11,
-                color: "#6B7F94",
-                fontWeight: 600,
-              }}>
-                {editedContacts.length} contactos
-              </span>
-              {!isEditingContacts ? (
-                <button
-                  onClick={() => setIsEditingContacts(true)}
-                  style={{
-                    background: "linear-gradient(135deg, #3B82F6, #10B981)",
-                    border: "none",
-                    color: "#FFFFFF",
-                    padding: "5px 10px",
-                    borderRadius: 6,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  ✏️ Editar
-                </button>
-              ) : (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button
-                    onClick={handleCancelContactsEdit}
-                    style={{
-                      background: "#1B3A5C",
-                      border: "1px solid #2A4A6C",
-                      color: "#94A3B8",
-                      padding: "5px 10px",
-                      borderRadius: 6,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleSaveContacts}
-                    style={{
-                      background: "linear-gradient(135deg, #3B82F6, #10B981)",
-                      border: "none",
-                      color: "#FFFFFF",
-                      padding: "5px 10px",
-                      borderRadius: 6,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    💾 Guardar
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Contact list */}
-            {!isEditingContacts ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {[...editedContacts]
-                  .sort((a, b) => contactPriorityRank(a.role) - contactPriorityRank(b.role))
-                  .map((ct, i) => {
-                    const { rank, label, color } = contactPriorityInfo(ct.role);
-                    return (
-                      <div key={i} style={{
-                        padding: "12px 14px",
-                        background: rank <= 3 ? color + "10" : "#0A1628",
-                        borderRadius: 8,
-                        border: `1px solid ${rank <= 3 ? color + "40" : "#1B3A5C"}`,
-                        transition: "all 0.15s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = rank <= 3 ? color + "20" : "#132238";
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = rank <= 3 ? color + "10" : "#0A1628";
-                        e.currentTarget.style.transform = "translateY(0)";
-                      }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                          <span style={{
-                            fontSize: 14,
-                            fontWeight: 700,
-                            color: "#FFFFFF",
-                            flex: 1,
-                            lineHeight: 1.3,
-                          }}>{ct.nombre ? <>{ct.nombre} <span style={{ fontWeight: 400 }}>{ct.apellido}</span></> : ct.name}</span>
-                          <span style={{
-                            fontSize: 9,
-                            fontWeight: 700,
-                            letterSpacing: "0.5px",
-                            padding: "3px 7px",
-                            borderRadius: 4,
-                            background: color + "30",
-                            color,
-                            textTransform: "uppercase",
-                            whiteSpace: "nowrap",
-                            marginLeft: 8,
-                          }}>{label}</span>
-                        </div>
-                        <div style={{
-                          fontSize: 10,
-                          color: "#6B7F94",
-                          marginBottom: ct.email ? 4 : 0,
-                          fontWeight: 600,
-                        }}>
-                          {ct.role || "Cargo desconocido"}
-                        </div>
-                        {ct.email && (
-                          <div style={{
-                            fontSize: 11,
-                            color: "#60A5FA",
-                            fontWeight: 500,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}>
-                            📧 {ct.email}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {editedContacts.map((ct, i) => (
-                  <div key={i} style={{
-                    background: "#0A1628",
-                    borderRadius: 8,
-                    padding: "12px 14px",
-                    border: "1px solid #2A4A6C",
-                  }}>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                      <input
-                        type="text"
-                        value={ct.nombre || ct.name?.split(' ')[0] || ''}
-                        onChange={(e) => {
-                          handleUpdateContact(i, 'nombre', e.target.value);
-                          handleUpdateContact(i, 'name', `${e.target.value} ${ct.apellido || ''}`.trim());
-                        }}
-                        placeholder="Nombre"
-                        style={{
-                          flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
-                          borderRadius: 4,
-                          padding: "6px 8px",
-                          color: "#FFFFFF",
-                          fontSize: 13,
-                          fontFamily: "inherit",
-                          fontWeight: 600,
-                          outline: "none",
-                        }}
-                      />
-                      <input
-                        type="text"
-                        value={ct.apellido || ct.name?.split(' ').slice(1).join(' ') || ''}
-                        onChange={(e) => {
-                          handleUpdateContact(i, 'apellido', e.target.value);
-                          handleUpdateContact(i, 'name', `${ct.nombre || ''} ${e.target.value}`.trim());
-                        }}
-                        placeholder="Apellido"
-                        style={{
-                          flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
-                          borderRadius: 4,
-                          padding: "6px 8px",
-                          color: "#FFFFFF",
-                          fontSize: 13,
-                          fontFamily: "inherit",
-                          fontWeight: 400,
-                          outline: "none",
-                        }}
-                      />
-                      <button
-                        onClick={() => handleDeleteContact(i)}
-                        style={{
-                          background: "#7F1D1D",
-                          border: "1px solid #991B1B",
-                          color: "#FCA5A5",
-                          padding: "6px 10px",
-                          borderRadius: 4,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                        }}
-                        title="Eliminar contacto"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        type="text"
-                        value={ct.role || ''}
-                        onChange={(e) => handleUpdateContact(i, 'role', e.target.value)}
-                        placeholder="Cargo"
-                        style={{
-                          flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
-                          borderRadius: 4,
-                          padding: "6px 8px",
-                          color: "#94A3B8",
-                          fontSize: 12,
-                          fontFamily: "inherit",
-                          outline: "none",
-                        }}
-                      />
-                      <input
-                        type="email"
-                        value={ct.email || ''}
-                        onChange={(e) => handleUpdateContact(i, 'email', e.target.value)}
-                        placeholder="Email"
-                        style={{
-                          flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
-                          borderRadius: 4,
-                          padding: "6px 8px",
-                          color: "#60A5FA",
-                          fontSize: 11,
-                          fontFamily: "inherit",
-                          outline: "none",
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                {/* Add new contact */}
-                {!showAddContact ? (
-                  <button
-                    onClick={() => setShowAddContact(true)}
-                    style={{
-                      background: "#132238",
-                      border: "1px dashed #2A4A6C",
-                      color: "#60A5FA",
-                      padding: "10px",
-                      borderRadius: 8,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6,
-                    }}
-                  >
-                    ➕ Añadir contacto
-                  </button>
-                ) : (
-                  <div style={{
-                    background: "#0A1628",
-                    borderRadius: 8,
-                    padding: "12px 14px",
-                    border: "2px solid #10B981",
-                  }}>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                      <input
-                        type="text"
-                        value={newContact.name}
-                        onChange={(e) => setNewContact(prev => ({ ...prev, name: e.target.value }))}
-                        placeholder="Nombre *"
-                        style={{
-                          flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
-                          borderRadius: 4,
-                          padding: "6px 8px",
-                          color: "#FFFFFF",
-                          fontSize: 13,
-                          fontFamily: "inherit",
-                          fontWeight: 600,
-                          outline: "none",
-                        }}
-                      />
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                      <input
-                        type="text"
-                        value={newContact.role}
-                        onChange={(e) => setNewContact(prev => ({ ...prev, role: e.target.value }))}
-                        placeholder="Cargo"
-                        style={{
-                          flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
-                          borderRadius: 4,
-                          padding: "6px 8px",
-                          color: "#94A3B8",
-                          fontSize: 12,
-                          fontFamily: "inherit",
-                          outline: "none",
-                        }}
-                      />
-                      <input
-                        type="email"
-                        value={newContact.email}
-                        onChange={(e) => setNewContact(prev => ({ ...prev, email: e.target.value }))}
-                        placeholder="Email"
-                        style={{
-                          flex: 1,
-                          background: "#132238",
-                          border: "1px solid #2A4A6C",
-                          borderRadius: 4,
-                          padding: "6px 8px",
-                          color: "#60A5FA",
-                          fontSize: 11,
-                          fontFamily: "inherit",
-                          outline: "none",
-                        }}
-                      />
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        onClick={() => {
-                          setShowAddContact(false);
-                          setNewContact({ name: '', role: '', email: '' });
-                        }}
-                        style={{
-                          flex: 1,
-                          background: "#1B3A5C",
-                          border: "1px solid #2A4A6C",
-                          color: "#94A3B8",
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                        }}
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={handleAddContact}
-                        disabled={!newContact.name.trim()}
-                        style={{
-                          flex: 1,
-                          background: newContact.name.trim() ? "linear-gradient(135deg, #10B981, #059669)" : "#1B3A5C",
-                          border: "none",
-                          color: newContact.name.trim() ? "#FFFFFF" : "#6B7F94",
-                          padding: "6px 10px",
-                          borderRadius: 6,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          cursor: newContact.name.trim() ? "pointer" : "not-allowed",
-                          fontFamily: "inherit",
-                        }}
-                      >
-                        ✅ Añadir
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Timeline */}
-        {det?.timeline?.length > 0 && (
-          <div style={{
-            marginBottom: 20,
-            background: "#132238",
-            borderRadius: 12,
-            padding: 18,
-            border: "1px solid #1B3A5C",
-          }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 16,
-            }}>
-              <span style={{ fontSize: 20 }}>📈</span>
-              <DarkSectionTitle style={{ marginBottom: 0 }}>
-                Histórico de interacciones
-              </DarkSectionTitle>
-              <span style={{
-                marginLeft: "auto",
-                fontSize: 11,
-                color: "#6B7F94",
-                fontWeight: 600,
-              }}>
-                {det.timeline.length} trimestres
-              </span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {det.timeline.map((t, i) => {
-                const maxE = Math.max(...det.timeline.map(x => x.emails));
-                const pct = (t.emails / maxE) * 100;
-                const isRecent = i < 3;
-
-                return (
-                  <div key={i} style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "6px 0",
-                  }}>
-                    <span style={{
-                      width: 70,
-                      fontSize: 12,
-                      color: isRecent ? "#FFFFFF" : "#6B7F94",
-                      fontFamily: "'DM Sans', monospace",
-                      fontWeight: isRecent ? 700 : 600,
-                    }}>{t.quarter}</span>
-                    <div style={{
-                      flex: 1,
-                      height: 20,
-                      background: "#0A1628",
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      position: "relative",
-                    }}>
-                      <div style={{
-                        height: "100%",
-                        width: `${pct}%`,
-                        background: isRecent
-                          ? "linear-gradient(90deg, #10B981, #059669)"
-                          : "linear-gradient(90deg, #3B82F6, #2563EB)",
-                        borderRadius: 6,
-                        transition: "width 0.3s ease",
-                      }} />
-                      {t.emails > 0 && (
-                        <span style={{
-                          position: "absolute",
-                          right: 8,
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: pct > 30 ? "#FFFFFF" : "#94A3B8",
-                        }}>
-                          {t.emails} emails
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{
-              marginTop: 12,
-              padding: 12,
-              background: "#0A1628",
-              borderRadius: 8,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}>
-              <div>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
-                  Total histórico
-                </div>
-                <div style={{ fontSize: 18, color: "#FFFFFF", fontWeight: 800, marginTop: 2 }}>
-                  {det.timeline.reduce((sum, t) => sum + t.emails, 0).toLocaleString()} emails
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700 }}>
-                  Promedio trimestral
-                </div>
-                <div style={{ fontSize: 18, color: "#10B981", fontWeight: 800, marginTop: 2 }}>
-                  {Math.round(det.timeline.reduce((sum, t) => sum + t.emails, 0) / det.timeline.length)} emails
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
