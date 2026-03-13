@@ -74,7 +74,7 @@ def run(criteria: dict) -> dict:
     )
 
     model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
+        model_name="gemini-2.5-flash",
         tools=["google_search_retrieval"],
     )
 
