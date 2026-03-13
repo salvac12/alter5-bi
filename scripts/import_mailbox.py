@@ -245,9 +245,10 @@ def merge_company(existing, new_data, employee_id):
     all_last = max(valid_lasts) if valid_lasts else ""
 
     # Merge unique contacts by email (preserve nombre/apellido if available)
+    # Iterate sources by lastDate descending so most recently active contacts appear first
     seen_emails = {}  # email -> index in all_contacts
     all_contacts = []
-    for s in existing["sources"].values():
+    for s in sorted(existing["sources"].values(), key=lambda x: x.get("lastDate", ""), reverse=True):
         for c in s.get("contacts", []):
             email = c.get("email", "")
             key = email or c["name"]  # fallback to name if no email
@@ -290,7 +291,7 @@ def merge_company(existing, new_data, employee_id):
     existing["contacts"] = all_contacts[:5]
     existing["timeline"] = [
         {"quarter": q, "emails": e, **({"summary": existing_summaries[q]} if q in existing_summaries else {})}
-        for q, e in sorted(quarter_totals.items())
+        for q, e in sorted(quarter_totals.items(), reverse=True)
     ][:8]
 
     # Keep sectors and relType from whichever has more info

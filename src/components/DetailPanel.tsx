@@ -1037,7 +1037,7 @@ FORMATO (JSON valido, sin markdown):
                       </tr>
                     </thead>
                     <tbody>
-                      {[...det.timeline].reverse().map((t, i) => (
+                      {det.timeline.map((t, i) => (
                         <tr key={i} style={{
                           borderBottom: "1px solid #0A1628",
                         }}>
