@@ -71,6 +71,39 @@ export const PROJECT_SCALES = [
   { id: "Mixto", label: "Mixto", color: "#8B5CF6" },
 ];
 
+/* ── Inversión: Investor Types (from enrich_inversion.py) ── */
+export const INVESTOR_TYPES_WEB = [
+  { id: "Fondo de deuda", label: "Fondo de deuda", icon: "\uD83D\uDCB0" },
+  { id: "Fondo de infraestructura", label: "Fondo infra", icon: "\uD83C\uDFD7\uFE0F" },
+  { id: "Private equity", label: "Private equity", icon: "\uD83D\uDCC8" },
+  { id: "Fondo renovable", label: "Fondo renovable", icon: "\uD83C\uDF3F" },
+  { id: "Banco comercial", label: "Banco comercial", icon: "\uD83C\uDFE6" },
+  { id: "Banco de inversi\u00F3n", label: "Banco inversi\u00F3n", icon: "\uD83C\uDFE6" },
+  { id: "Gestora de activos", label: "Gestora", icon: "\uD83D\uDCBC" },
+  { id: "Family office", label: "Family office", icon: "\uD83C\uDFE0" },
+  { id: "Aseguradora / Pensiones", label: "Aseguradora", icon: "\uD83D\uDEE1\uFE0F" },
+  { id: "Utility / Energ\u00E9tica", label: "Utility", icon: "\u26A1" },
+  { id: "DFI / Multilateral", label: "DFI", icon: "\uD83C\uDF0D" },
+  { id: "Bonista / Institucional", label: "Institucional", icon: "\uD83C\uDFDB\uFE0F" },
+  { id: "Plataforma de crowdfunding", label: "Crowdfunding", icon: "\uD83D\uDC65" },
+  { id: "Corporate venture", label: "Corp. venture", icon: "\uD83C\uDFAF" },
+];
+
+/* ── Inversión: Investor Focus ── */
+export const INVESTOR_FOCUS_OPTIONS = [
+  { id: "Deuda senior", label: "Deuda senior", color: "#3B82F6" },
+  { id: "Deuda mezzanine", label: "Mezzanine", color: "#6366F1" },
+  { id: "Project Finance", label: "Project Finance", color: "#0EA5E9" },
+  { id: "Corporate lending", label: "Corporate lending", color: "#14B8A6" },
+  { id: "Equity mayor\u00EDa", label: "Equity mayor\u00EDa", color: "#10B981" },
+  { id: "Equity minor\u00EDa", label: "Equity minor\u00EDa", color: "#34D399" },
+  { id: "Co-inversi\u00F3n", label: "Co-inversi\u00F3n", color: "#8B5CF6" },
+  { id: "M&A / Adquisiciones", label: "M&A", color: "#EC4899" },
+  { id: "Greenfield development", label: "Greenfield", color: "#F59E0B" },
+  { id: "Brownfield / Operativo", label: "Brownfield", color: "#78716C" },
+  { id: "Trading / PPA", label: "Trading / PPA", color: "#F97316" },
+];
+
 /* ── Technologies (multi-select) ── */
 export const TECHNOLOGIES = [
   { id: "Solar", label: "Solar", icon: "☀️" },

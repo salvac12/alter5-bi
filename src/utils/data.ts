@@ -195,6 +195,13 @@ export function parseCompanies() {
       knownPipelineMw: enrichment.known_pipeline_mw || null,
       websiteUrl: enrichment.website_url || null,
       websiteDescription: enrichment.website_description || null,
+      // Inversión web enrichment (enrich_inversion.py)
+      investorTypeWeb: enrichment.investor_type_web || null,
+      investorFocus: enrichment.investor_focus || [],
+      aumRange: enrichment.aum_range || null,
+      renewableExperience: enrichment.renewable_experience || null,
+      investorGeoFocus: enrichment.investor_geo_focus || [],
+      notableRenewableDeals: enrichment.notable_renewable_deals || [],
       // Investor preferences
       sentiment: enrichment.sentiment || null,
       investorPhase: enrichment.inv_phase || null,

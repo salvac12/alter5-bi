@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch } from './utils/data';
-import { PER_PAGE, COMPANY_ROLES, TECHNOLOGIES, PRODUCTS, ALL_COMPANY_TYPES, STATUS_LABELS, STATUS_COLORS, ORIGINACION_BUSINESS_LINES, PROJECT_SCALES } from './utils/constants';
+import { PER_PAGE, COMPANY_ROLES, TECHNOLOGIES, PRODUCTS, ALL_COMPANY_TYPES, STATUS_LABELS, STATUS_COLORS, ORIGINACION_BUSINESS_LINES, PROJECT_SCALES, INVESTOR_TYPES_WEB, INVESTOR_FOCUS_OPTIONS } from './utils/constants';
 import CompanyTable from './components/CompanyTable';
 import DetailPanel from './components/DetailPanel';
 import KanbanView from './components/KanbanView';
@@ -194,6 +194,8 @@ export default function App() {
   const [selTicket, setSelTicket] = useState<string[]>([]);
   const [selBusinessLines, setSelBusinessLines] = useState<string[]>([]);
   const [selScale, setSelScale] = useState<string[]>([]);
+  const [selInvestorType, setSelInvestorType] = useState<string[]>([]);
+  const [selInvestorFocus, setSelInvestorFocus] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
@@ -217,24 +219,15 @@ export default function App() {
     }
 
     if (search) {
-      const q = search.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      list = list.filter(c => {
-        const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        return (
-          norm(c.name).includes(q) ||
-          norm(c.domain).includes(q) ||
-          norm(c.role).includes(q) ||
-          norm(c.segment).includes(q) ||
-          norm(c.companyType).includes(q) ||
-          (c.marketRoles || []).some(mr => norm(mr).includes(q)) ||
-          (c.activities || []).some(a => norm(a).includes(q)) ||
-          (c.businessLines || []).some(bl => norm(bl).includes(q)) ||
-          (c.technologies || []).some(t => norm(t).includes(q)) ||
-          (c.senales || []).some(s => norm(s).includes(q)) ||
-          norm(c.detail?.context).includes(q) ||
-          (c.detail?.subjects || []).some(s => norm(s).includes(q))
-        );
-      });
+      const q = search.toLowerCase();
+      list = list.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        c.domain.toLowerCase().includes(q) ||
+        (c.role || "").toLowerCase().includes(q) ||
+        (c.segment || "").toLowerCase().includes(q) ||
+        (c.companyType || "").toLowerCase().includes(q) ||
+        (c.marketRoles || []).some(mr => mr.toLowerCase().includes(q))
+      );
     }
     if (selEmployees.length) list = list.filter(c => selEmployees.some(e => c.employees.includes(e)));
     if (selGroups.length) list = list.filter(c => selGroups.includes(c.role));
@@ -276,6 +269,8 @@ export default function App() {
 
     if (selBusinessLines.length) list = list.filter(c => selBusinessLines.some(bl => c.businessLines?.includes(bl)));
     if (selScale.length) list = list.filter(c => selScale.includes(c.projectScale));
+    if (selInvestorType.length) list = list.filter(c => selInvestorType.includes(c.investorTypeWeb));
+    if (selInvestorFocus.length) list = list.filter(c => selInvestorFocus.some(f => c.investorFocus?.includes(f)));
 
     // Cleanup mode filters
     if (cleanupMode && cleanupFilter === 'suspicious') {
@@ -295,7 +290,7 @@ export default function App() {
       }
       return m * ((a[sortBy] || 0) - (b[sortBy] || 0));
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, selSentiment, selTicket, selBusinessLines, selScale, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, selSentiment, selTicket, selBusinessLines, selScale, selInvestorType, selInvestorFocus, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -592,7 +587,7 @@ export default function App() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
               Filtros
               {(() => {
-                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0) + selSentiment.length + selTicket.length + selBusinessLines.length + selScale.length;
+                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0) + selSentiment.length + selTicket.length + selBusinessLines.length + selScale.length + selInvestorType.length + selInvestorFocus.length;
                 return count > 0 ? (
                   <span style={{
                     background: showFilters ? "#3B82F6" : "#3B82F6",
@@ -630,7 +625,7 @@ export default function App() {
               boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
             }}>
               {/* Active filters summary + clear */}
-              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct || selSentiment.length > 0 || selTicket.length > 0 || selBusinessLines.length > 0 || selScale.length > 0) && (
+              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct || selSentiment.length > 0 || selTicket.length > 0 || selBusinessLines.length > 0 || selScale.length > 0 || selInvestorType.length > 0 || selInvestorFocus.length > 0) && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid #F1F5F9" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
                     <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>Activos:</span>
@@ -688,9 +683,21 @@ export default function App() {
                         {s} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
                       </span>
                     ))}
+                    {selInvestorType.map(t => (
+                      <span key={t} onClick={() => { setSelInvestorType(prev => prev.filter(x => x !== t)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#DBEAFE", color: "#1D4ED8", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {INVESTOR_TYPES_WEB.find(it => it.id === t)?.label || t} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
+                    {selInvestorFocus.map(f => (
+                      <span key={f} onClick={() => { setSelInvestorFocus(prev => prev.filter(x => x !== f)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: (INVESTOR_FOCUS_OPTIONS.find(fo => fo.id === f)?.color || "#3B82F6") + "20", color: INVESTOR_FOCUS_OPTIONS.find(fo => fo.id === f)?.color || "#3B82F6", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {INVESTOR_FOCUS_OPTIONS.find(fo => fo.id === f)?.label || f} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
                   </div>
                   <button
-                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setSelSentiment([]); setSelTicket([]); setSelBusinessLines([]); setSelScale([]); setPage(0); }}
+                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setSelSentiment([]); setSelTicket([]); setSelBusinessLines([]); setSelScale([]); setSelInvestorType([]); setSelInvestorFocus([]); setPage(0); }}
                     style={{ fontSize: 11, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap", fontFamily: "'DM Sans', sans-serif" }}
                   >Limpiar todo</button>
                 </div>
@@ -877,6 +884,48 @@ export default function App() {
                           <FilterPill key={s.id} active={active} color={s.color}
                             onClick={() => { setSelScale(prev => prev.includes(s.id) ? prev.filter(x => x !== s.id) : [...prev, s.id]); setPage(0); }}>
                             {s.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                          </FilterPill>
+                        );
+                      })}
+                    </FilterRow>
+                  );
+                })()}
+
+                {/* Tipo de inversor (web) */}
+                {(() => {
+                  const totalWithType = companies.filter(c => c.investorTypeWeb).length;
+                  if (totalWithType === 0) return null;
+                  return (
+                    <FilterRow label="Tipo inversor">
+                      {INVESTOR_TYPES_WEB.map(t => {
+                        const active = selInvestorType.includes(t.id);
+                        const count = companies.filter(c => c.investorTypeWeb === t.id).length;
+                        if (count === 0) return null;
+                        return (
+                          <FilterPill key={t.id} active={active} color="#1D4ED8"
+                            onClick={() => { setSelInvestorType(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]); setPage(0); }}>
+                            {t.icon} {t.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                          </FilterPill>
+                        );
+                      })}
+                    </FilterRow>
+                  );
+                })()}
+
+                {/* Foco de inversión */}
+                {(() => {
+                  const totalWithFocus = companies.filter(c => c.investorFocus?.length > 0).length;
+                  if (totalWithFocus === 0) return null;
+                  return (
+                    <FilterRow label="Foco inversión">
+                      {INVESTOR_FOCUS_OPTIONS.map(f => {
+                        const active = selInvestorFocus.includes(f.id);
+                        const count = companies.filter(c => c.investorFocus?.includes(f.id)).length;
+                        if (count === 0) return null;
+                        return (
+                          <FilterPill key={f.id} active={active} color={f.color}
+                            onClick={() => { setSelInvestorFocus(prev => prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]); setPage(0); }}>
+                            {f.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
                           </FilterPill>
                         );
                       })}

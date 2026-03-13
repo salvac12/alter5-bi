@@ -1188,6 +1188,95 @@ FORMATO (JSON valido, sin markdown):
 
         </div>
 
+        {/* ═══ Investor Web Profile Section ═══ */}
+        {(c.investorTypeWeb || c.investorFocus?.length > 0 || c.aumRange || c.notableRenewableDeals?.length > 0) && (
+          <div style={{
+            background: "#132238", borderRadius: 12, padding: 18,
+            marginBottom: 20,
+            border: "1px solid #1B3A5C",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{ fontSize: 16 }}>{"\uD83C\uDFE6"}</span>
+              <DarkSectionTitle style={{ marginBottom: 0 }}>
+                Perfil del inversor
+              </DarkSectionTitle>
+            </div>
+
+            {/* Investor type + AUM + Experience */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {c.investorTypeWeb && (
+                <span style={{
+                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: "#3B82F618", color: "#3B82F6", border: "1px solid #3B82F630",
+                }}>{c.investorTypeWeb}</span>
+              )}
+              {c.aumRange && (
+                <span style={{
+                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: "#10B98118", color: "#10B981", border: "1px solid #10B98130",
+                }}>AUM: {c.aumRange}</span>
+              )}
+              {c.renewableExperience && (
+                <span style={{
+                  padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: c.renewableExperience === "Especialista renovables" ? "#F59E0B18" : "#6B7F9418",
+                  color: c.renewableExperience === "Especialista renovables" ? "#F59E0B" : "#6B7F94",
+                  border: `1px solid ${c.renewableExperience === "Especialista renovables" ? "#F59E0B30" : "#6B7F9430"}`,
+                }}>{c.renewableExperience}</span>
+              )}
+            </div>
+
+            {/* Investor focus */}
+            {c.investorFocus?.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>Foco de inversión</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {c.investorFocus.map((f, i) => (
+                    <span key={i} style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                    }}>{f}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Geographic focus */}
+            {c.investorGeoFocus?.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>Geografía</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                  {c.investorGeoFocus.map((g, i) => (
+                    <span key={i} style={{
+                      padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                    }}>{g}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notable deals */}
+            {c.notableRenewableDeals?.length > 0 && (
+              <div style={{ marginBottom: c.websiteDescription ? 10 : 0 }}>
+                <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>Deals renovables conocidos</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {c.notableRenewableDeals.map((d, i) => (
+                    <div key={i} style={{ fontSize: 11, color: "#94A3B8", paddingLeft: 8, borderLeft: "2px solid #1B3A5C" }}>{d}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Website description (if not shown in business profile) */}
+            {c.websiteDescription && !c.businessLines?.length && (
+              <div style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.5 }}>
+                {c.websiteDescription}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ═══ Investor Preferences Section ═══ */}
         {(c.role === "Inversión" || c.sentiment || c.investorPhase || c.ticketSize || (c.assetTypes && c.assetTypes.length > 0)) && (
           <div style={{
