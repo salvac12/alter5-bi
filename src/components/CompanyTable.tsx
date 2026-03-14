@@ -33,6 +33,7 @@ const COLUMNS = [
   { key: "interactions", label: "Emails",      sortable: true },
   { key: "nContacts",    label: "Cont.",       sortable: true },
   { key: "employeeCount", label: "Empl.",      sortable: true },
+  { key: "scraperMw",    label: "MW",          sortable: true },
   { key: "monthsAgo",   label: "Ultimo",       sortable: true },
   { key: "score",        label: "Score",       sortable: true },
 ];
@@ -507,6 +508,22 @@ export default function CompanyTable({
                       const emp = Math.max(a, b) || null;
                       return emp ? emp.toLocaleString() : "—";
                     })()}
+                  </td>
+
+                  {/* MW (scraper) */}
+                  <td style={{
+                    padding: "10px 12px", fontSize: 12,
+                    fontVariantNumeric: "tabular-nums", color: "#64748B",
+                  }}>
+                    {c.scraperMw > 0 ? (
+                      <span style={{
+                        fontWeight: 700, color: "#F59E0B", fontSize: 12,
+                      }}>
+                        {c.scraperMw >= 1000 ? `${(c.scraperMw / 1000).toFixed(1)}k` : c.scraperMw.toLocaleString()}
+                      </span>
+                    ) : (
+                      <span style={{ color: "#CBD5E1" }}>&mdash;</span>
+                    )}
                   </td>
 
                   {/* Last date */}

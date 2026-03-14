@@ -577,6 +577,19 @@ FORMATO (JSON valido, sin markdown):
                     })}
                   </>
                 )}
+                {/* Scraper MW badge */}
+                {c.scraperProjects > 0 && (
+                  <>
+                    <span style={{ width: 1, height: 14, background: "#1B3A5C" }} />
+                    <span style={{
+                      padding: "2px 8px", borderRadius: 4, fontSize: 9, fontWeight: 700,
+                      background: "#F59E0B18", color: "#F59E0B",
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                    }}>
+                      {c.scraperProjects} proy | {c.scraperMw.toLocaleString()} MW
+                    </span>
+                  </>
+                )}
               </div>
             );
           })()}
@@ -591,6 +604,7 @@ FORMATO (JSON valido, sin markdown):
             { id: 'resumen', label: 'Resumen' },
             { id: 'timeline', label: 'Timeline' },
             { id: 'contactos', label: 'Contactos' },
+            ...(c.scraperProjects > 0 ? [{ id: 'proyectos', label: `Proyectos (${c.scraperProjects})` }] : []),
             { id: 'detalles', label: 'Datos' },
           ].map(tab => (
             <button
@@ -1367,6 +1381,185 @@ FORMATO (JSON valido, sin markdown):
                   fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                 }}>+ Anadir contacto</button>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ TAB: Proyectos (Scraper España) ═══ */}
+        {activeTab === 'proyectos' && c.scraperProjects > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* KPI Row */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8,
+            }}>
+              {[
+                { label: "Proyectos", value: c.scraperProjects, color: "#3B82F6" },
+                { label: "MW", value: c.scraperMw.toLocaleString(), color: "#F59E0B" },
+                { label: "MWp", value: c.scraperMwp.toLocaleString(), color: "#10B981" },
+                { label: "SPVs", value: c.scraperSpvCount, color: "#8B5CF6" },
+                { label: "Capex", value: c.scraperCapex > 0 ? `${(c.scraperCapex / 1e6).toFixed(0)}M` : "-", color: "#EC4899" },
+              ].map(kpi => (
+                <div key={kpi.label} style={{
+                  background: "#132238", borderRadius: 10, padding: "12px 10px",
+                  textAlign: "center", border: "1px solid #1B3A5C",
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: kpi.color }}>{kpi.value}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#6B7F94", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 }}>{kpi.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Technology breakdown */}
+            {c.scraperTechs.length > 0 && (
+              <div style={{ background: "#132238", borderRadius: 10, padding: 14, border: "1px solid #1B3A5C" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#6B7F94", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Tecnologias</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(() => {
+                    const techCount: Record<string, { mw: number; count: number }> = {};
+                    for (const p of c.scraperProjectList) {
+                      const t = p.tech || "desconocida";
+                      if (!techCount[t]) techCount[t] = { mw: 0, count: 0 };
+                      techCount[t].mw += p.mw || 0;
+                      techCount[t].count++;
+                    }
+                    const maxMw = Math.max(...Object.values(techCount).map(t => t.mw), 1);
+                    const TECH_COLORS: Record<string, string> = {
+                      fotovoltaica: "#F59E0B",
+                      "eólica": "#3B82F6",
+                      "eolica": "#3B82F6",
+                      "eólica-fotovoltaica": "#8B5CF6",
+                      "fotovoltaica-eólica": "#8B5CF6",
+                    };
+                    return Object.entries(techCount)
+                      .sort((a, b) => b[1].mw - a[1].mw)
+                      .map(([tech, data]) => {
+                        const color = TECH_COLORS[tech] || "#6B7F94";
+                        const pct = (data.mw / maxMw) * 100;
+                        return (
+                          <div key={tech}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                              <span style={{ fontSize: 12, color: "#CBD5E1", fontWeight: 600 }}>{tech}</span>
+                              <span style={{ fontSize: 11, color: "#94A3B8" }}>{data.count} proy · {data.mw.toLocaleString()} MW</span>
+                            </div>
+                            <div style={{ height: 6, background: "#0A1628", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 3, transition: "width 0.3s ease" }} />
+                            </div>
+                          </div>
+                        );
+                      });
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Permit status chips */}
+            {c.scraperStatuses.length > 0 && (
+              <div style={{ background: "#132238", borderRadius: 10, padding: 14, border: "1px solid #1B3A5C" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#6B7F94", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>Estado de permisos</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {(() => {
+                    const statusCount: Record<string, number> = {};
+                    for (const p of c.scraperProjectList) {
+                      const s = p.status || "sin estado";
+                      statusCount[s] = (statusCount[s] || 0) + 1;
+                    }
+                    const STATUS_COLORS: Record<string, string> = {
+                      AAP: "#F59E0B", DUP: "#3B82F6", AAC: "#10B981", DIA: "#EAB308",
+                      "AAP y DIA": "#8B5CF6", "AAC y DIA": "#14B8A6",
+                    };
+                    return Object.entries(statusCount)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([status, count]) => {
+                        const color = STATUS_COLORS[status] || "#6B7F94";
+                        return (
+                          <span key={status} style={{
+                            padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+                            background: color + "18", color: color, border: `1px solid ${color}30`,
+                          }}>
+                            {status} ({count})
+                          </span>
+                        );
+                      });
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Matched parent info */}
+            {c.scraperMatchedParent && (
+              <div style={{
+                padding: "8px 12px", borderRadius: 8, background: "#0A1628", border: "1px solid #1B3A5C",
+                fontSize: 11, color: "#6B7F94",
+              }}>
+                Empresa matriz scraper: <span style={{ color: "#CBD5E1", fontWeight: 600 }}>{c.scraperMatchedParent}</span>
+              </div>
+            )}
+
+            {/* Projects table */}
+            <div style={{ background: "#132238", borderRadius: 10, padding: 14, border: "1px solid #1B3A5C" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#6B7F94", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
+                Proyectos ({c.scraperProjectList.length})
+              </div>
+              <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      {["Proyecto", "MW", "Tecnologia", "Estado", "SPV"].map(h => (
+                        <th key={h} style={{
+                          textAlign: "left", padding: "6px 8px", borderBottom: "1px solid #1B3A5C",
+                          fontSize: 9, fontWeight: 700, color: "#6B7F94", letterSpacing: "0.08em", textTransform: "uppercase",
+                          position: "sticky", top: 0, background: "#132238",
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {c.scraperProjectList.slice(0, 100).map((p: any, i: number) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #0A162840" }}>
+                        <td style={{ padding: "5px 8px", color: "#CBD5E1", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</td>
+                        <td style={{ padding: "5px 8px", color: "#F59E0B", fontWeight: 700, textAlign: "right" }}>{p.mw}</td>
+                        <td style={{ padding: "5px 8px", color: "#94A3B8" }}>{p.tech}</td>
+                        <td style={{ padding: "5px 8px" }}>
+                          <span style={{
+                            padding: "1px 6px", borderRadius: 4, fontSize: 10,
+                            background: p.status === "AAC" ? "#10B98118" : p.status === "DUP" ? "#3B82F618" : p.status === "AAP" ? "#F59E0B18" : "#6B7F9418",
+                            color: p.status === "AAC" ? "#10B981" : p.status === "DUP" ? "#3B82F6" : p.status === "AAP" ? "#F59E0B" : "#6B7F94",
+                          }}>{p.status || "-"}</span>
+                        </td>
+                        <td style={{ padding: "5px 8px", color: "#6B7F94", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10 }}>{p.spv}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {c.scraperProjectList.length > 100 && (
+                  <div style={{ padding: "8px", textAlign: "center", color: "#6B7F94", fontSize: 11 }}>
+                    ... y {c.scraperProjectList.length - 100} proyectos mas
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* SPV names (collapsible) */}
+            {c.scraperSpvNames?.length > 0 && (
+              <details style={{ background: "#132238", borderRadius: 10, padding: 14, border: "1px solid #1B3A5C" }}>
+                <summary style={{
+                  fontSize: 10, fontWeight: 700, color: "#6B7F94", letterSpacing: "0.08em", textTransform: "uppercase",
+                  cursor: "pointer", listStyle: "none",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span style={{ fontSize: 14, transition: "transform 0.2s" }}>▸</span>
+                  SPVs asociadas ({c.scraperSpvNames.length})
+                </summary>
+                <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {c.scraperSpvNames.map((spv: string, i: number) => (
+                    <span key={i} style={{
+                      padding: "2px 8px", borderRadius: 4, fontSize: 10,
+                      background: "#0A1628", color: "#94A3B8", border: "1px solid #1B3A5C",
+                    }}>{spv}</span>
+                  ))}
+                </div>
+              </details>
             )}
           </div>
         )}

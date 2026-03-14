@@ -199,6 +199,8 @@ export default function App() {
   const [selScale, setSelScale] = useState<string[]>([]);
   const [selInvestorType, setSelInvestorType] = useState<string[]>([]);
   const [selInvestorFocus, setSelInvestorFocus] = useState<string[]>([]);
+  const [selScraperMw, setSelScraperMw] = useState<string[]>([]);
+  const [selScraperTech, setSelScraperTech] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState("score");
   const [sortDir, setSortDir] = useState("desc");
   const [selected, setSelected] = useState(null);
@@ -275,6 +277,30 @@ export default function App() {
     if (selInvestorType.length) list = list.filter(c => selInvestorType.includes(c.investorTypeWeb));
     if (selInvestorFocus.length) list = list.filter(c => selInvestorFocus.some(f => c.investorFocus?.includes(f)));
 
+    // Scraper MW range filter
+    if (selScraperMw.length) list = list.filter(c => {
+      const mw = c.scraperMw || 0;
+      return selScraperMw.some(range => {
+        if (range === ">1000") return mw > 1000;
+        if (range === "500-1000") return mw >= 500 && mw <= 1000;
+        if (range === "100-500") return mw >= 100 && mw < 500;
+        if (range === "10-100") return mw >= 10 && mw < 100;
+        if (range === "<10") return mw > 0 && mw < 10;
+        if (range === "sin_datos") return mw === 0;
+        return false;
+      });
+    });
+
+    // Scraper technology filter
+    if (selScraperTech.length) list = list.filter(c => {
+      const techs = c.scraperTechs || [];
+      if (selScraperTech.includes("mixta")) {
+        if (techs.length > 1) return true;
+        if (techs.some(t => t.includes("-"))) return true;
+      }
+      return selScraperTech.some(t => techs.some(ct => ct.includes(t)));
+    });
+
     // Cleanup mode filters
     if (cleanupMode && cleanupFilter === 'suspicious') {
       list = list.filter(c => isSuspiciousCompany(c));
@@ -293,7 +319,7 @@ export default function App() {
       }
       return m * ((a[sortBy] || 0) - (b[sortBy] || 0));
     });
-  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, selSentiment, selTicket, selBusinessLines, selScale, selInvestorType, selInvestorFocus, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
+  }, [companies, activeEmployeeTab, search, selEmployees, selGroups, selSegments, selTypes, selActivities, selTech, selStatus, selMarketRoles, selPipeline, selProduct, selSentiment, selTicket, selBusinessLines, selScale, selInvestorType, selInvestorFocus, selScraperMw, selScraperTech, productMatches, sortBy, sortDir, cleanupMode, cleanupFilter, cleanupSelection]);
 
   const paginated = filtered.slice(page * PER_PAGE, (page + 1) * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -590,7 +616,7 @@ export default function App() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
               Filtros
               {(() => {
-                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0) + selSentiment.length + selTicket.length + selBusinessLines.length + selScale.length + selInvestorType.length + selInvestorFocus.length;
+                const count = selGroups.length + selTypes.length + selTech.length + selStatus.length + (selProduct ? 1 : 0) + selSentiment.length + selTicket.length + selBusinessLines.length + selScale.length + selInvestorType.length + selInvestorFocus.length + selScraperMw.length + selScraperTech.length;
                 return count > 0 ? (
                   <span style={{
                     background: showFilters ? "#3B82F6" : "#3B82F6",
@@ -628,7 +654,7 @@ export default function App() {
               boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
             }}>
               {/* Active filters summary + clear */}
-              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct || selSentiment.length > 0 || selTicket.length > 0 || selBusinessLines.length > 0 || selScale.length > 0 || selInvestorType.length > 0 || selInvestorFocus.length > 0) && (
+              {(selGroups.length > 0 || selTypes.length > 0 || selTech.length > 0 || selStatus.length > 0 || selProduct || selSentiment.length > 0 || selTicket.length > 0 || selBusinessLines.length > 0 || selScale.length > 0 || selInvestorType.length > 0 || selInvestorFocus.length > 0 || selScraperMw.length > 0 || selScraperTech.length > 0) && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid #F1F5F9" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
                     <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>Activos:</span>
@@ -698,9 +724,21 @@ export default function App() {
                         {INVESTOR_FOCUS_OPTIONS.find(fo => fo.id === f)?.label || f} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
                       </span>
                     ))}
+                    {selScraperMw.map(m => (
+                      <span key={m} onClick={() => { setSelScraperMw(prev => prev.filter(x => x !== m)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#F59E0B20", color: "#F59E0B", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        MW: {m} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
+                    {selScraperTech.map(t => (
+                      <span key={t} onClick={() => { setSelScraperTech(prev => prev.filter(x => x !== t)); setPage(0); }}
+                        style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, background: "#8B5CF620", color: "#8B5CF6", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {t} <span style={{ fontSize: 9, opacity: 0.6 }}>x</span>
+                      </span>
+                    ))}
                   </div>
                   <button
-                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setSelSentiment([]); setSelTicket([]); setSelBusinessLines([]); setSelScale([]); setSelInvestorType([]); setSelInvestorFocus([]); setPage(0); }}
+                    onClick={() => { setSelGroups([]); setSelTypes([]); setSelTech([]); setSelStatus([]); setSelProduct(""); setSelSentiment([]); setSelTicket([]); setSelBusinessLines([]); setSelScale([]); setSelInvestorType([]); setSelInvestorFocus([]); setSelScraperMw([]); setSelScraperTech([]); setPage(0); }}
                     style={{ fontSize: 11, color: "#94A3B8", background: "none", border: "none", cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap", fontFamily: "'DM Sans', sans-serif" }}
                   >Limpiar todo</button>
                 </div>
@@ -929,6 +967,72 @@ export default function App() {
                           <FilterPill key={f.id} active={active} color={f.color}
                             onClick={() => { setSelInvestorFocus(prev => prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]); setPage(0); }}>
                             {f.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                          </FilterPill>
+                        );
+                      })}
+                    </FilterRow>
+                  );
+                })()}
+
+                {/* Escala MW (scraper) */}
+                {(() => {
+                  const totalWithMw = companies.filter(c => c.scraperMw > 0).length;
+                  if (totalWithMw === 0) return null;
+                  const MW_RANGES = [
+                    { id: ">1000", label: ">1 GW", color: "#EF4444" },
+                    { id: "500-1000", label: "500-1000", color: "#F59E0B" },
+                    { id: "100-500", label: "100-500", color: "#3B82F6" },
+                    { id: "10-100", label: "10-100", color: "#10B981" },
+                    { id: "<10", label: "<10", color: "#6B7F94" },
+                    { id: "sin_datos", label: "Sin datos", color: "#475569" },
+                  ];
+                  return (
+                    <FilterRow label="Escala MW">
+                      {MW_RANGES.map(r => {
+                        const active = selScraperMw.includes(r.id);
+                        const count = companies.filter(c => {
+                          const mw = c.scraperMw || 0;
+                          if (r.id === ">1000") return mw > 1000;
+                          if (r.id === "500-1000") return mw >= 500 && mw <= 1000;
+                          if (r.id === "100-500") return mw >= 100 && mw < 500;
+                          if (r.id === "10-100") return mw >= 10 && mw < 100;
+                          if (r.id === "<10") return mw > 0 && mw < 10;
+                          if (r.id === "sin_datos") return mw === 0;
+                          return false;
+                        }).length;
+                        return (
+                          <FilterPill key={r.id} active={active} color={r.color}
+                            onClick={() => { setSelScraperMw(prev => prev.includes(r.id) ? prev.filter(x => x !== r.id) : [...prev, r.id]); setPage(0); }}>
+                            {r.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
+                          </FilterPill>
+                        );
+                      })}
+                    </FilterRow>
+                  );
+                })()}
+
+                {/* Tecnología scraper */}
+                {(() => {
+                  const totalWithTech = companies.filter(c => c.scraperTechs?.length > 0).length;
+                  if (totalWithTech === 0) return null;
+                  const TECH_OPTIONS = [
+                    { id: "fotovoltaica", label: "Solar", color: "#F59E0B" },
+                    { id: "eólica", label: "Eolica", color: "#3B82F6" },
+                    { id: "mixta", label: "Mixta", color: "#8B5CF6" },
+                  ];
+                  return (
+                    <FilterRow label="Tech scraper">
+                      {TECH_OPTIONS.map(t => {
+                        const active = selScraperTech.includes(t.id);
+                        const count = companies.filter(c => {
+                          const techs = c.scraperTechs || [];
+                          if (t.id === "mixta") return techs.length > 1 || techs.some(ct => ct.includes("-"));
+                          return techs.some(ct => ct.includes(t.id));
+                        }).length;
+                        return (
+                          <FilterPill key={t.id} active={active} color={t.color}
+                            onClick={() => { setSelScraperTech(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]); setPage(0); }}>
+                            {t.label} <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>{count}</span>
                           </FilterPill>
                         );
                       })}

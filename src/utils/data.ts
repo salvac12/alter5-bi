@@ -153,6 +153,10 @@ export function parseCompanies() {
     if (subjectCount >= 5) qualityScore += 10;
     else if (subjectCount >= 2) qualityScore += 5;
 
+    // Has scraper data → 10 pts
+    const scraperData = enrichment.scraper || null;
+    if (scraperData && scraperData.n_projects > 0) qualityScore += 10;
+
     // Has market roles assigned → 10 pts
     if (marketRoles.length > 0) qualityScore += 10;
 
@@ -211,6 +215,17 @@ export function parseCompanies() {
       nextAction: enrichment.next_action || null,
       dealsMentioned: enrichment.deals_mentioned || [],
       investorSubtype: enrichment.inv_subtipo || null,
+      // Scraper enrichment (enrich_from_scraper.py)
+      scraperProjects: scraperData?.n_projects || 0,
+      scraperMw: scraperData?.mw_total || 0,
+      scraperMwp: scraperData?.mwp_total || 0,
+      scraperCapex: scraperData?.capex_eur || 0,
+      scraperTechs: scraperData?.technologies || [],
+      scraperStatuses: scraperData?.statuses || [],
+      scraperSpvCount: scraperData?.n_spvs || 0,
+      scraperProjectList: scraperData?.projects || [],
+      scraperMatchedParent: scraperData?.matched_parent || null,
+      scraperSpvNames: scraperData?.spv_names || [],
       // Airtable pipeline
       opportunity,
     };
