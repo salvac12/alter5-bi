@@ -24,6 +24,27 @@ const STATUS_COLORS = {
   pending:  { color: '#6B7F94', bg: '#F1F5F9', border: '#E2E8F0' },
 };
 
+const MW_RANGES = [
+  { id: ">1000", label: ">1 GW", color: "#EF4444" },
+  { id: "500-1000", label: "500-1000", color: "#F59E0B" },
+  { id: "100-500", label: "100-500", color: "#3B82F6" },
+  { id: "10-100", label: "10-100", color: "#10B981" },
+  { id: "<10", label: "<10", color: "#6B7F94" },
+];
+
+const PERMIT_STATUSES = [
+  { id: "AAC", label: "AAC", color: "#10B981" },
+  { id: "DIA", label: "DIA", color: "#3B82F6" },
+  { id: "AAP", label: "AAP", color: "#F59E0B" },
+  { id: "DUP", label: "DUP", color: "#8B5CF6" },
+  { id: "IIA", label: "IIA", color: "#6B7F94" },
+];
+
+const LARGE_UTILITIES = new Set([
+  'iberdrola', 'endesa', 'naturgy', 'enel', 'cepsa', 'repsol',
+  'acciona', 'edp', 'statkraft', 'totalenergies', 'engie', 'bp',
+]);
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function splitName(fullName) {
@@ -135,6 +156,51 @@ function cleanContacts(contacts) {
   return result;
 }
 
+function matchMwRange(mw, rangeId) {
+  if (!mw || mw <= 0) return false;
+  switch (rangeId) {
+    case '>1000': return mw > 1000;
+    case '500-1000': return mw > 500 && mw <= 1000;
+    case '100-500': return mw > 100 && mw <= 500;
+    case '10-100': return mw > 10 && mw <= 100;
+    case '<10': return mw > 0 && mw <= 10;
+    default: return false;
+  }
+}
+
+function isLargeUtility(company) {
+  const name = (company.name || '').toLowerCase();
+  const domain = (company.domain || '').toLowerCase();
+  for (const u of LARGE_UTILITIES) {
+    if (name.includes(u) || domain.includes(u)) return true;
+  }
+  return false;
+}
+
+function getScraperMw(company) {
+  return company.scraperMw || 0;
+}
+
+function getScraperProjects(company) {
+  return company.scraperProjects || 0;
+}
+
+function getScraperTechs(company) {
+  return company.scraperTechs || [];
+}
+
+function getScraperPermits(company) {
+  const statuses = company.scraperStatuses || [];
+  const permits = new Set();
+  for (const s of statuses) {
+    for (const part of (s || '').split('-')) {
+      const upper = part.trim().toUpperCase();
+      if (['AAC', 'DIA', 'AAP', 'DUP', 'IIA'].includes(upper)) permits.add(upper);
+    }
+  }
+  return [...permits];
+}
+
 // ── Component ───────────────────────────────────────────────────────
 
 export default function CandidateSearchView({
@@ -160,6 +226,9 @@ export default function CandidateSearchView({
   const [typeFilter, setTypeFilter] = useState('todos');
   const [techFilter, setTechFilter] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [utilityScaleMode, setUtilityScaleMode] = useState(false);
+  const [mwFilter, setMwFilter] = useState([]);
+  const [permitFilter, setPermitFilter] = useState([]);
 
   // Selection & UI
   const [selectedContacts, setSelectedContacts] = useState({});
@@ -237,18 +306,24 @@ export default function CandidateSearchView({
     return matched;
   }, [allCompanies]);
 
-  // ── Derive unique filter options from Originacion companies ──
+  // ── Derive unique filter options from pool companies ──
   const originacionCompanies = useMemo(() => {
+    if (utilityScaleMode) {
+      return allCompanies.filter(c => getScraperProjects(c) > 0);
+    }
     return allCompanies.filter(c =>
       c.role === 'Originación' &&
       c.detail?.contacts?.some(ct => ct.email)
     );
-  }, [allCompanies]);
+  }, [allCompanies, utilityScaleMode]);
 
   const filterOptions = useMemo(() => {
     const segments = new Map();
     const types = new Map();
     const techs = new Map();
+    const mwRangeCounts = {};
+    const permitCounts = {};
+    let withScraperCount = 0;
 
     for (const c of originacionCompanies) {
       const d = c.domain?.toLowerCase();
@@ -258,18 +333,41 @@ export default function CandidateSearchView({
       for (const t of (c.technologies || [])) {
         techs.set(t, (techs.get(t) || 0) + 1);
       }
+      // Scraper counts
+      if (getScraperProjects(c) > 0) {
+        withScraperCount++;
+        const mw = getScraperMw(c);
+        for (const r of MW_RANGES) {
+          if (matchMwRange(mw, r.id)) mwRangeCounts[r.id] = (mwRangeCounts[r.id] || 0) + 1;
+        }
+        for (const p of getScraperPermits(c)) {
+          permitCounts[p] = (permitCounts[p] || 0) + 1;
+        }
+      }
+    }
+
+    // Count scraper companies from ALL companies (for toggle label when not in utility mode)
+    let globalScraperCount = 0;
+    if (!utilityScaleMode) {
+      for (const c of allCompanies) {
+        if (getScraperProjects(c) > 0) globalScraperCount++;
+      }
     }
 
     return {
       segments: [...segments.entries()].sort((a, b) => b[1] - a[1]),
       types: [...types.entries()].sort((a, b) => b[1] - a[1]),
       techs: [...techs.entries()].sort((a, b) => b[1] - a[1]),
+      withScraperCount,
+      globalScraperCount,
+      mwRangeCounts,
+      permitCounts,
     };
-  }, [originacionCompanies, trackingDomains, allSentDomains, leticiaDomains]);
+  }, [originacionCompanies, allCompanies, utilityScaleMode, trackingDomains, allSentDomains, leticiaDomains]);
 
   // ── Filter candidates ──
   const candidates = useMemo(() => {
-    return originacionCompanies.filter(c => {
+    const filtered = originacionCompanies.filter(c => {
       const domain = c.domain?.toLowerCase();
       // Exclude already-sent domains (GAS tracking)
       if (domain && trackingDomains.has(domain)) return false;
@@ -291,9 +389,31 @@ export default function CandidateSearchView({
       // Status filter
       const status = savedTargets[c.domain?.toLowerCase()]?.status || 'pending';
       if (statusFilter !== 'all' && status !== statusFilter) return false;
+      // MW range filter
+      if (mwFilter.length > 0) {
+        const mw = getScraperMw(c);
+        if (!mwFilter.some(r => matchMwRange(mw, r))) return false;
+      }
+      // Permit filter
+      if (permitFilter.length > 0) {
+        const permits = getScraperPermits(c);
+        if (!permitFilter.some(p => permits.includes(p))) return false;
+      }
       return true;
     });
-  }, [originacionCompanies, trackingDomains, allSentDomains, leticiaDomains, segFilter, typeFilter, techFilter, searchQuery, statusFilter, savedTargets]);
+
+    // Sort: large utilities last, then by MW descending
+    if (utilityScaleMode) {
+      filtered.sort((a, b) => {
+        const aLarge = isLargeUtility(a) ? 1 : 0;
+        const bLarge = isLargeUtility(b) ? 1 : 0;
+        if (aLarge !== bLarge) return aLarge - bLarge;
+        return getScraperMw(b) - getScraperMw(a);
+      });
+    }
+
+    return filtered;
+  }, [originacionCompanies, trackingDomains, allSentDomains, leticiaDomains, segFilter, typeFilter, techFilter, searchQuery, statusFilter, savedTargets, mwFilter, permitFilter, utilityScaleMode]);
 
   const paginated = candidates.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(candidates.length / PAGE_SIZE);
@@ -823,7 +943,86 @@ export default function CandidateSearchView({
               width: 200, outline: 'none',
             }}
           />
+
+          {/* Utility Scale toggle */}
+          <button
+            onClick={() => {
+              setUtilityScaleMode(prev => {
+                if (prev) { setMwFilter([]); setPermitFilter([]); }
+                return !prev;
+              });
+              setPage(0);
+            }}
+            style={{
+              padding: '5px 12px', borderRadius: 8, border: '1px solid',
+              borderColor: utilityScaleMode ? '#059669' : '#E2E8F0',
+              background: utilityScaleMode ? '#ECFDF5' : '#FFFFFF',
+              color: utilityScaleMode ? '#059669' : '#6B7F94',
+              fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+            }}
+          >
+            <span style={{ fontSize: 13 }}>&#9889;</span>
+            Proyectos Scraper ({utilityScaleMode ? filterOptions.withScraperCount : filterOptions.globalScraperCount})
+          </button>
         </div>
+
+        {/* Scraper sub-filters (MW + Permisos) */}
+        {utilityScaleMode && (
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#6B7F94', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MW</span>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {MW_RANGES.map(r => {
+                const active = mwFilter.includes(r.id);
+                const count = filterOptions.mwRangeCounts[r.id] || 0;
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => {
+                      setMwFilter(prev => active ? prev.filter(x => x !== r.id) : [...prev, r.id]);
+                      setPage(0);
+                    }}
+                    style={{
+                      padding: '3px 10px', borderRadius: 12, border: '1px solid',
+                      borderColor: active ? r.color : '#E2E8F0',
+                      background: active ? `${r.color}15` : '#FFFFFF',
+                      color: active ? r.color : '#6B7F94',
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {r.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#6B7F94', textTransform: 'uppercase', letterSpacing: '0.5px', marginLeft: 8 }}>Permisos</span>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {PERMIT_STATUSES.map(p => {
+                const active = permitFilter.includes(p.id);
+                const count = filterOptions.permitCounts[p.id] || 0;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setPermitFilter(prev => active ? prev.filter(x => x !== p.id) : [...prev, p.id]);
+                      setPage(0);
+                    }}
+                    style={{
+                      padding: '3px 10px', borderRadius: 12, border: '1px solid',
+                      borderColor: active ? p.color : '#E2E8F0',
+                      background: active ? `${p.color}15` : '#FFFFFF',
+                      color: active ? p.color : '#6B7F94',
+                      fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {p.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Count ── */}
@@ -851,12 +1050,13 @@ export default function CandidateSearchView({
                 expanded={expandedCompany === company.domain}
                 onToggleExpand={() => toggleExpand(company.domain)}
                 onAction={(status) => handleAction(company, status)}
-                isContactSelected={(email) => isContactSelectedForCompany(company, email)}  // ← cambiar
+                isContactSelected={(email) => isContactSelectedForCompany(company, email)}
                 onToggleContact={(email) => toggleContact(company.domain, email)}
                 isSaving={saving === domainKey}
                 actionsBlocked={actionsBlocked}
                 isSelectedForSend={selectedForSend.has(domainKey)}
                 onToggleSendSelection={() => toggleSendSelection(domainKey)}
+                utilityScaleMode={utilityScaleMode}
               />
             );
           })
@@ -1046,10 +1246,66 @@ export default function CandidateSearchView({
 
 // ── CompanyCard sub-component ───────────────────────────────────────
 
+function ScraperSummary({ company }) {
+  const mw = getScraperMw(company);
+  const projCount = getScraperProjects(company);
+  const techs = getScraperTechs(company);
+  const permits = getScraperPermits(company);
+  const large = isLargeUtility(company);
+
+  if (projCount === 0) return null;
+
+  const techColor = (t) => {
+    const lower = t.toLowerCase();
+    if (lower.includes('fotovoltaica') || lower.includes('photovoltaic')) return '#F59E0B';
+    if (lower.includes('eólica') || lower.includes('eolica')) return '#3B82F6';
+    return '#6B7F94';
+  };
+  const techLabel = (t) => {
+    const lower = t.toLowerCase();
+    if (lower.includes('fotovoltaica') || lower.includes('photovoltaic')) return 'Solar';
+    if (lower.includes('eólica') || lower.includes('eolica')) return 'Eolica';
+    return t;
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#334155' }}>
+        {mw > 0 ? `${Math.round(mw)} MW` : '—'} · {projCount} proy
+      </span>
+      {techs.slice(0, 3).map(t => (
+        <span key={t} style={{
+          fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+          background: `${techColor(t)}18`,
+          color: techColor(t),
+        }}>
+          {techLabel(t)}
+        </span>
+      ))}
+      {permits.slice(0, 3).map(p => (
+        <span key={p} style={{
+          fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 3,
+          background: '#F1F5F9', color: '#475569',
+        }}>
+          {p}
+        </span>
+      ))}
+      {large && (
+        <span style={{
+          fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
+          background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA',
+        }}>
+          Grande
+        </span>
+      )}
+    </div>
+  );
+}
+
 function CompanyCard({
   company, savedTarget, expanded, onToggleExpand,
   onAction, isContactSelected, onToggleContact, isSaving, actionsBlocked,
-  isSelectedForSend, onToggleSendSelection,
+  isSelectedForSend, onToggleSendSelection, utilityScaleMode,
 }) {
   const [hover, setHover] = useState(false);
   const status = savedTarget?.status || 'pending';
@@ -1202,6 +1458,7 @@ function CompanyCard({
               {contacts.length} contacto{contacts.length !== 1 ? 's' : ''}
             </span>
           </div>
+          {utilityScaleMode && <ScraperSummary company={company} />}
         </div>
 
         {/* Action buttons */}
