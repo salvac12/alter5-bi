@@ -28,15 +28,20 @@ React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 - `python scripts/verify_classifications.py --force` — re-verificar incluso ya verificadas
 - `python scripts/verify_classifications.py --dry-run` — preview sin escribir a Airtable
 - `python scripts/create_verified_table.py` — crear tabla Verified-Companies en Airtable (una vez, YA EJECUTADO)
+- `python scripts/enrich_from_scraper.py` — cruzar scraper España con CRM, enriquecer empresas existentes
+- `python scripts/enrich_from_scraper.py --dry-run` — preview sin escribir
+- `python scripts/import_scraper_companies.py` — importar empresas del scraper que no están en CRM
+- `python scripts/import_scraper_companies.py --dry-run` — preview sin escribir
 
 ## Architecture
-- **3 vistas**: Empresas (tabla CRM con ~3,943 empresas), Prospects (Kanban pre-pipeline) y Pipeline (Kanban Airtable con ~114 deals)
+- **3 vistas**: Empresas (tabla CRM con ~5,550 empresas), Prospects (Kanban pre-pipeline) y Pipeline (Kanban Airtable con ~114 deals)
 - **Datos empresas**: `src/data/companies.json` (compact), `companies_full.json` (dict by domain, trackeado en git)
 - **Datos pipeline**: live API Airtable (`src/utils/airtable.js`) + static `src/data/opportunities.json`
 - **Datos prospects**: live API Airtable (`src/utils/airtableProspects.js`), tabla "BETA-Prospects"
 - **Enrichment**: AI-generated taxonomy con localStorage overrides editables inline
 - **Verificacion**: Agente Gemini + Google Search que verifica clasificaciones vs web real, persiste en Airtable "Verified-Companies"
-- **Quality Score**: `qualityScore` (0-100) en `data.js` mide completitud de datos (enrichment, roles contacto, timeline, contexto, market roles). Labels: alta/media/baja. Dot visual en CompanyTable
+- **Scraper España**: 5,652 proyectos renovables (SPVs, MW, tecnologías, permisos) cruzados con CRM. 738 empresas con datos scraper (129 existentes + 609 importadas)
+- **Quality Score**: `qualityScore` (0-100) en `data.ts` mide completitud de datos (enrichment, roles contacto, timeline, contexto, market roles, scraper). Labels: alta/media/baja. Dot visual en CompanyTable
 
 ### Flujo de ventas
 ```
@@ -89,6 +94,34 @@ Dashboard (DetailPanel: seccion Verificacion, CompanyTable: dot de estado)
     | Verde=Verified, Morado=Edited, Amarillo=Pending Review
 ```
 
+### Scraper España → CRM enrichment
+```
+alter5-scraper-spain (proyectos renovables MITECO/CCAA)
+    |
+scraper_projects.json (5,652 proyectos: SPV, MW, MWp, capex, tecnología, permisos)
+    |
+spv_parent_mapping.json (2,531 SPV→empresa matriz, resolución por empresaMatriz + heurísticas)
+    |
+enrich_from_scraper.py (cruza con CRM por fuzzy name matching)
+    | Agrega: proyectos, MW total, MWp, capex, tecnologías, estados permisos, SPVs
+    | Inyecta enrichment.scraper en empresas matched (129 empresas)
+    |
+import_scraper_companies.py (importa empresas NO en CRM)
+    | 609 nuevas empresas con dominio .scraper.es
+    | Clasificación inferida: Originación/Developer, contexto generado
+    | Enrichment completo: role, segment, tech, geo, mr, scraper block
+    |
+companies_full.json + companies.json (5,550 empresas totales)
+    |
+Dashboard:
+    | CompanyTable: columna MW sortable
+    | DetailPanel: tab "Proyectos" (KPIs, barras tech, chips permisos, tabla proyectos, SPVs)
+    | App.tsx: filtros "Escala MW" y "Tech scraper"
+```
+
+Nota: empresas importadas del scraper tienen dominio `.scraper.es` (pseudo-dominio) y 0 contactos/interacciones.
+Se pueden enriquecer con contactos cuando se establezca relación comercial.
+
 ## Key Files
 - `src/App.jsx` — main router, state management, 3 tabs (Empresas/Prospects/Pipeline)
 - `src/utils/airtable.js` — Airtable REST client Opportunities, normalizeRecord, stages
@@ -117,6 +150,10 @@ Dashboard (DetailPanel: seccion Verificacion, CompanyTable: dot de estado)
 - `scripts/verify_classifications.py` — Agente de verificacion: Gemini + Google Search grounding vs clasificacion actual
 - `scripts/create_verified_table.py` — crear tabla Verified-Companies via Meta API (una vez, YA EJECUTADO)
 - `src/utils/airtableVerified.js` — Airtable REST client para Verified-Companies (cache 5 min, upsert)
+- `scripts/enrich_from_scraper.py` — Cruza scraper_projects.json + spv_parent_mapping.json con CRM (fuzzy match)
+- `scripts/import_scraper_companies.py` — Importa empresas del scraper no en CRM (dominio .scraper.es)
+- `src/data/scraper_projects.json` — 5,652 proyectos renovables España (SPV, MW, tech, permisos)
+- `src/data/spv_parent_mapping.json` — 2,531 mapeos SPV→empresa matriz
 - `.github/workflows/process-emails.yml` — CI/CD diario + dispatch manual con opcion reprocess
 
 ## Airtable Tables
@@ -142,10 +179,12 @@ Dashboard (DetailPanel: seccion Verificacion, CompanyTable: dot de estado)
 - Token: `VITE_AIRTABLE_PAT` (env var, scopes: data.records:read/write, schema.bases:read/write)
 
 ## Data Files
-- `src/data/companies.json` — formato compacto para React (~8MB, trackeado en git)
+- `src/data/companies.json` — formato compacto para React (~8MB, trackeado en git, 5,550 empresas)
 - `src/data/companies_full.json` — formato completo dict by domain (~15MB, trackeado en git desde 27-feb-2026)
 - `src/data/employees.json` — registro de 3 empleados con contadores
 - `src/data/opportunities.json` — snapshot de oportunidades Airtable
+- `src/data/scraper_projects.json` — 5,652 proyectos renovables España (1.6MB, fuente: alter5-scraper-spain)
+- `src/data/spv_parent_mapping.json` — 2,531 mapeos SPV→empresa matriz (367KB, generado por resolve_spv_parents.py)
 
 **IMPORTANTE**: `companies_full.json` DEBE estar en git (no en .gitignore) para que el GitHub Action tenga la base completa al hacer merge incremental. Sin este fichero, el pipeline parte de cero y pierde las empresas existentes.
 
