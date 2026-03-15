@@ -85,7 +85,7 @@ export default function KanbanView({ onSelectOpportunity, onCreateOpportunity }:
 
   async function loadOpportunities() {
     if (!isAirtableConfigured()) {
-      setError('Airtable is not configured. Please set VITE_AIRTABLE_PAT.');
+      setError('Airtable proxy not configured. Please set VITE_CAMPAIGN_PROXY_SECRET.');
       setLoading(false);
       return;
     }

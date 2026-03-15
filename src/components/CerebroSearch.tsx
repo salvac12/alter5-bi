@@ -41,7 +41,7 @@ export default function CerebroSearch({ companies, onClose, onSelectCompany }: {
     const text = (q || question).trim();
     if (!text) return;
     if (!isGeminiConfigured()) {
-      setError("API key de Gemini no configurada (VITE_GEMINI_API_KEY).");
+      setError("Proxy no configurado (VITE_CAMPAIGN_PROXY_SECRET).");
       return;
     }
 

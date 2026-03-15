@@ -1,28 +1,18 @@
 /**
- * Verified-Companies — Airtable REST API backend.
+ * Verified-Companies -- Airtable REST API backend.
  *
  * Stores company classification verifications (agent + manual edits).
  * The pipeline (process_sheet_emails.py) reads from this table to
  * avoid overwriting verified classifications.
  *
  * Same base as Opportunities/Prospects (appVu3TvSZ1E4tj0J).
- * Table: "Verified-Companies" (create with scripts/create_verified_table.py)
+ * Table: "Verified-Companies"
+ * All requests go through /api/airtable-proxy (Vercel serverless).
  */
 
-const BASE_ID = "appVu3TvSZ1E4tj0J";
+import { airtableProxy, isProxyConfigured } from './proxyClient';
+
 const TABLE_NAME = "Verified-Companies";
-const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
-
-function getToken() {
-  return import.meta.env.VITE_AIRTABLE_PAT || "";
-}
-
-function headers() {
-  return {
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  };
-}
 
 // -- In-memory cache --
 let verifiedCache = null;
@@ -39,23 +29,19 @@ export async function fetchAllVerified() {
     return verifiedCache;
   }
 
-  const token = getToken();
-  if (!token) return new Map();
+  if (!isProxyConfigured()) return new Map();
 
   const allRecords = [];
   let offset = "";
 
   try {
     do {
-      let url = `${API_ROOT}?pageSize=100`;
-      if (offset) url += `&offset=${offset}`;
-
-      const res = await fetch(url, { headers: headers() });
-      if (!res.ok) {
-        console.warn("Verified fetch error:", res.status);
-        return verifiedCache || new Map();
-      }
-      const data = await res.json();
+      const data = await airtableProxy({
+        table: TABLE_NAME,
+        method: 'GET',
+        pageSize: 100,
+        ...(offset ? { offset } : {}),
+      });
       allRecords.push(...(data.records || []));
       offset = data.offset || "";
     } while (offset);
@@ -116,11 +102,10 @@ export async function getVerification(domain) {
  * Otherwise, it creates a new record via POST.
  */
 export async function saveVerification(domain, data) {
-  const token = getToken();
-  if (!token || !domain) return null;
+  if (!isProxyConfigured() || !domain) return null;
 
   // Build Airtable fields
-  const fields = {
+  const fields: Record<string, any> = {
     Domain: domain,
   };
   if (data.companyName) fields["Company Name"] = data.companyName;
@@ -145,30 +130,23 @@ export async function saveVerification(domain, data) {
   const existing = await getVerification(domain);
 
   try {
-    let res;
+    let record;
     if (existing) {
       // PATCH existing
-      res = await fetch(`${API_ROOT}/${existing.id}`, {
-        method: "PATCH",
-        headers: headers(),
-        body: JSON.stringify({ fields }),
+      record = await airtableProxy({
+        table: TABLE_NAME,
+        method: 'PATCH',
+        recordId: existing.id,
+        fields,
       });
     } else {
       // POST new
-      res = await fetch(API_ROOT, {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({ fields }),
+      record = await airtableProxy({
+        table: TABLE_NAME,
+        method: 'POST',
+        fields,
       });
     }
-
-    if (!res.ok) {
-      const body = await res.text();
-      console.error("Verified save error:", res.status, body);
-      return null;
-    }
-
-    const record = await res.json();
 
     // Invalidate cache
     verifiedCache = null;
@@ -229,7 +207,7 @@ function mapAccentArray(arr, map) {
 export function verifiedToEnrichmentOverride(verified) {
   if (!verified || !verified.role) return null;
 
-  const override = {};
+  const override: Record<string, any> = {};
   if (verified.role) override.role = mapAccent(verified.role, ROLE_ACCENT_MAP);
   if (verified.segment) override.seg = verified.segment; // segments don't have accents
   if (verified.type) override.tp2 = mapAccent(verified.type, TYPE_ACCENT_MAP);

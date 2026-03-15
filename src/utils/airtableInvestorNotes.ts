@@ -1,24 +1,14 @@
 /**
- * Distribution - Investor Selection — Airtable REST API client.
+ * Distribution - Investor Selection -- Airtable REST API client.
  *
  * Fetches "Investor - Strategic Notes" from the investor selection table.
  * Same base as Opportunities/Prospects (appVu3TvSZ1E4tj0J).
+ * All requests go through /api/airtable-proxy (Vercel serverless).
  */
 
-const BASE_ID = "appVu3TvSZ1E4tj0J";
+import { airtableProxy, isProxyConfigured } from './proxyClient';
+
 const TABLE_NAME = "Distribution - Investor Selection";
-const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
-
-function getToken() {
-  return import.meta.env.VITE_AIRTABLE_PAT || "";
-}
-
-function headers() {
-  return {
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  };
-}
 
 // -- In-memory cache --
 let notesCache: Map<string, string[]> | null = null;
@@ -35,26 +25,20 @@ export async function fetchAllInvestorNotes(): Promise<Map<string, string[]>> {
     return notesCache;
   }
 
-  const token = getToken();
-  if (!token) return new Map();
+  if (!isProxyConfigured()) return new Map();
 
   const allRecords: any[] = [];
   let offset = "";
 
   try {
     do {
-      let url = `${API_ROOT}?pageSize=100`;
-      // Only fetch fields we need
-      url += `&fields[]=${encodeURIComponent("Investor - Strategic Notes")}`;
-      url += `&fields[]=${encodeURIComponent("Name")}`;
-      if (offset) url += `&offset=${offset}`;
-
-      const res = await fetch(url, { headers: headers() });
-      if (!res.ok) {
-        console.warn("InvestorNotes fetch error:", res.status);
-        return notesCache || new Map();
-      }
-      const data = await res.json();
+      const data = await airtableProxy({
+        table: TABLE_NAME,
+        method: 'GET',
+        pageSize: 100,
+        fieldsList: ["Investor - Strategic Notes", "Name"],
+        ...(offset ? { offset } : {}),
+      });
       allRecords.push(...(data.records || []));
       offset = data.offset || "";
     } while (offset);

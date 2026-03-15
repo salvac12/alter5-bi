@@ -4,6 +4,7 @@ import { getCompanyDataByDomain, saveCompanyData, qualifyCountry, qualifyCompany
 import { COUNTRIES, COMPANY_SIZES, COMPANY_ROLES, COMPANY_TYPES, ORIGINACION_SEGMENTS, COMPANY_TYPES_V2, CORPORATE_ACTIVITIES, TECHNOLOGIES, ASSET_PHASES, GEOGRAPHIES, COMMERCIAL_PHASES, MARKET_ROLES, PRODUCTS } from '../utils/constants';
 import { saveVerification, invalidateVerifiedCache } from '../utils/airtableVerified';
 import { isGeminiConfigured } from '../utils/gemini';
+import { geminiProxy } from '../utils/proxyClient';
 
 /** Priority rank for sorting: lower = higher priority */
 function contactPriorityRank(role) {
@@ -203,9 +204,9 @@ export default function DetailPanel({ company, onClose, onDelete, onEnrichmentSa
     setVerificationError(null);
     setVerificationResult(null);
 
-    const apiKey = (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
-    if (!apiKey) {
-      setVerificationError("VITE_GEMINI_API_KEY no configurada");
+    const proxySecret = (import.meta.env.VITE_CAMPAIGN_PROXY_SECRET || "").trim();
+    if (!proxySecret) {
+      setVerificationError("Proxy no configurado (VITE_CAMPAIGN_PROXY_SECRET)");
       setIsVerifying(false);
       return;
     }
@@ -248,25 +249,7 @@ FORMATO (JSON valido, sin markdown):
 {"company_description": "...", "web_sources": "...", "verified_role": "...", "verified_segment": "...", "verified_type": "...", "verified_market_roles": [...], "mismatch": true/false, "mismatch_explanation": "...", "confidence": "alta|media|baja"}`;
 
     try {
-      const GEMINI_MODEL = "gemini-2.5-flash";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search: {} }],
-          generationConfig: { temperature: 0.2 },
-        }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini API error ${res.status}: ${errText.slice(0, 200)}`);
-      }
-
-      const data = await res.json();
+      const data = await geminiProxy(prompt, 0.2, "gemini-2.5-flash", [{ google_search: {} }]);
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
       // Parse JSON from response

@@ -1,30 +1,19 @@
 /**
- * ProspectingResults — Airtable REST API backend.
+ * ProspectingResults -- Airtable REST API backend.
  *
  * Manages prospecting jobs and their company results.
  * Same base as Opportunities/Prospects (appVu3TvSZ1E4tj0J).
- * Table: "ProspectingResults" (create with scripts/create_prospecting_table.py)
+ * Table: "ProspectingResults"
+ * All requests go through /api/airtable-proxy (Vercel serverless).
  */
 
-const BASE_ID = "appVu3TvSZ1E4tj0J";
+import { airtableProxy, isProxyConfigured } from './proxyClient';
+
 const TABLE_NAME = "ProspectingResults";
 const CAMPAIGN_TARGETS_TABLE = "CampaignTargets";
-const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
-const CAMPAIGN_API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(CAMPAIGN_TARGETS_TABLE)}`;
-
-function getToken() {
-  return import.meta.env.VITE_AIRTABLE_PAT || "";
-}
 
 function getProxySecret() {
   return import.meta.env.VITE_CAMPAIGN_PROXY_SECRET || "";
-}
-
-function headers() {
-  return {
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  };
 }
 
 // -- In-memory cache for jobs list --
@@ -48,23 +37,20 @@ export async function fetchProspectingJobs() {
     return jobsCache;
   }
 
-  const token = getToken();
-  if (!token) return [];
+  if (!isProxyConfigured()) return [];
 
   const allRecords = [];
   let offset = "";
 
   try {
     do {
-      let url = `${API_ROOT}?pageSize=100&fields[]=JobId&fields[]=JobName&fields[]=JobStatus&fields[]=SearchCriteria&fields[]=CreatedAt&fields[]=CreatedBy&fields[]=ReviewStatus&fields[]=Confidence&fields[]=CompanyName`;
-      if (offset) url += `&offset=${encodeURIComponent(offset)}`;
-
-      const res = await fetch(url, { headers: headers() });
-      if (!res.ok) {
-        console.warn("ProspectingResults fetch error:", res.status);
-        return jobsCache || [];
-      }
-      const data = await res.json();
+      const data = await airtableProxy({
+        table: TABLE_NAME,
+        method: 'GET',
+        pageSize: 100,
+        fieldsList: ["JobId", "JobName", "JobStatus", "SearchCriteria", "CreatedAt", "CreatedBy", "ReviewStatus", "Confidence", "CompanyName"],
+        ...(offset ? { offset } : {}),
+      });
       allRecords.push(...(data.records || []));
       offset = data.offset || "";
     } while (offset);
@@ -127,24 +113,21 @@ export async function fetchProspectingJobs() {
  * Returns array of company records with pagination support.
  */
 export async function fetchJobResults(jobId) {
-  const token = getToken();
-  if (!token || !jobId) return [];
+  if (!isProxyConfigured() || !jobId) return [];
 
   const allRecords = [];
   let offset = "";
-  const filterFormula = encodeURIComponent(`AND({JobId}="${jobId}",{CompanyName}!="__JOB_PLACEHOLDER__",{CompanyName}!="__NO_RESULTS__")`);
+  const filterFormula = `AND({JobId}="${jobId}",{CompanyName}!="__JOB_PLACEHOLDER__",{CompanyName}!="__NO_RESULTS__")`;
 
   try {
     do {
-      let url = `${API_ROOT}?pageSize=100&filterByFormula=${filterFormula}`;
-      if (offset) url += `&offset=${encodeURIComponent(offset)}`;
-
-      const res = await fetch(url, { headers: headers() });
-      if (!res.ok) {
-        console.warn("fetchJobResults error:", res.status);
-        return [];
-      }
-      const data = await res.json();
+      const data = await airtableProxy({
+        table: TABLE_NAME,
+        method: 'GET',
+        pageSize: 100,
+        formula: filterFormula,
+        ...(offset ? { offset } : {}),
+      });
       allRecords.push(...(data.records || []));
       offset = data.offset || "";
     } while (offset);
@@ -212,8 +195,7 @@ export async function fetchJobResults(jobId) {
  * Update the review status of a company record.
  */
 export async function updateReviewStatus(recordId, status, reviewedBy = "") {
-  const token = getToken();
-  if (!token || !recordId) return null;
+  if (!isProxyConfigured() || !recordId) return null;
 
   const fields = {
     ReviewStatus: status,
@@ -222,18 +204,14 @@ export async function updateReviewStatus(recordId, status, reviewedBy = "") {
   };
 
   try {
-    const res = await fetch(`${API_ROOT}/${recordId}`, {
-      method: "PATCH",
-      headers: headers(),
-      body: JSON.stringify({ fields }),
+    const data = await airtableProxy({
+      table: TABLE_NAME,
+      method: 'PATCH',
+      recordId,
+      fields,
     });
-    if (!res.ok) {
-      const err = await res.text();
-      console.warn("updateReviewStatus error:", res.status, err);
-      return null;
-    }
     invalidateJobsCache();
-    return await res.json();
+    return data;
   } catch (err) {
     console.warn("updateReviewStatus failed:", err.message);
     return null;
@@ -244,10 +222,9 @@ export async function updateReviewStatus(recordId, status, reviewedBy = "") {
  * Update contact data for a company record.
  */
 export async function updateContactData(recordId, contactData) {
-  const token = getToken();
-  if (!token || !recordId) return null;
+  if (!isProxyConfigured() || !recordId) return null;
 
-  const fields = {};
+  const fields: Record<string, any> = {};
   if (contactData.contactName !== undefined) fields.ContactName = contactData.contactName;
   if (contactData.contactRole !== undefined) fields.ContactRole = contactData.contactRole;
   if (contactData.contactEmail !== undefined) fields.ContactEmail = contactData.contactEmail;
@@ -256,17 +233,12 @@ export async function updateContactData(recordId, contactData) {
   if (contactData.apolloData !== undefined) fields.ApolloData = JSON.stringify(contactData.apolloData);
 
   try {
-    const res = await fetch(`${API_ROOT}/${recordId}`, {
-      method: "PATCH",
-      headers: headers(),
-      body: JSON.stringify({ fields }),
+    return await airtableProxy({
+      table: TABLE_NAME,
+      method: 'PATCH',
+      recordId,
+      fields,
     });
-    if (!res.ok) {
-      const err = await res.text();
-      console.warn("updateContactData error:", res.status, err);
-      return null;
-    }
-    return await res.json();
   } catch (err) {
     console.warn("updateContactData failed:", err.message);
     return null;
@@ -278,8 +250,7 @@ export async function updateContactData(recordId, contactData) {
  * Returns the created record.
  */
 export async function createProspectingJob(criteria, jobName, createdBy = "") {
-  const token = getToken();
-  if (!token) throw new Error("Airtable token not configured");
+  if (!isProxyConfigured()) throw new Error("Proxy not configured");
 
   const jobId = `job_${new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 15)}_${(typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10))}`;
 
@@ -294,18 +265,12 @@ export async function createProspectingJob(criteria, jobName, createdBy = "") {
     ReviewStatus: "pending",
   };
 
-  const res = await fetch(API_ROOT, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ records: [{ fields }] }),
+  const data = await airtableProxy({
+    table: TABLE_NAME,
+    method: 'POST',
+    records: [{ fields }],
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Airtable error ${res.status}: ${err}`);
-  }
-
-  const data = await res.json();
   invalidateJobsCache();
 
   return { jobId, record: data.records?.[0] };
@@ -347,30 +312,31 @@ export async function triggerGitHubAction(criteria, jobId) {
  * Update job status for all records matching a JobId.
  */
 export async function updateJobStatusByJobId(jobId, status, notes) {
-  const token = getToken();
-  if (!token || !jobId) return;
+  if (!isProxyConfigured() || !jobId) return;
 
   // Find all record IDs for this job
-  const filterFormula = encodeURIComponent(`{JobId}="${jobId}"`);
-  let url = `${API_ROOT}?pageSize=100&filterByFormula=${filterFormula}&fields[]=JobId`;
   try {
-    const res = await fetch(url, { headers: headers() });
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await airtableProxy({
+      table: TABLE_NAME,
+      method: 'GET',
+      pageSize: 100,
+      formula: `{JobId}="${jobId}"`,
+      fieldsList: ["JobId"],
+    });
     const recordIds = (data.records || []).map(r => r.id);
     if (recordIds.length === 0) return;
 
-    const fields = { JobStatus: status };
+    const fields: Record<string, any> = { JobStatus: status };
     if (notes) fields.Notes = notes;
 
     // Update in batches of 10
     for (let i = 0; i < recordIds.length; i += 10) {
       const batch = recordIds.slice(i, i + 10);
-      const payload = { records: batch.map(id => ({ id, fields })) };
-      await fetch(API_ROOT, {
-        method: "PATCH",
-        headers: headers(),
-        body: JSON.stringify(payload),
+      const payload = batch.map(id => ({ id, fields }));
+      await airtableProxy({
+        table: TABLE_NAME,
+        method: 'PATCH',
+        records: payload,
       });
     }
     invalidateJobsCache();
@@ -390,7 +356,7 @@ export async function retryProspectingJob(jobId, criteria) {
 /**
  * Find contact by LinkedIn URL using Findymail API (called from frontend).
  * Note: This requires a server-side proxy to avoid exposing the API key.
- * For now, this returns a placeholder — implement server-side if needed.
+ * For now, this returns a placeholder -- implement server-side if needed.
  */
 export async function findContactByLinkedIn(linkedinUrl, recordId) {
   // This would need a server-side endpoint to avoid exposing Findymail API key
@@ -404,8 +370,7 @@ export async function findContactByLinkedIn(linkedinUrl, recordId) {
  * Returns count of exported companies.
  */
 export async function exportToCampaignTargets(companies, jobName) {
-  const token = getToken();
-  if (!token) throw new Error("Airtable token not configured");
+  if (!isProxyConfigured()) throw new Error("Proxy not configured");
 
   const toExport = companies.filter(
     c => c.reviewStatus === "approved" && c.contactEmail
@@ -436,17 +401,15 @@ export async function exportToCampaignTargets(companies, jobName) {
       };
     });
 
-    const res = await fetch(CAMPAIGN_API_ROOT, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ records }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.warn("exportToCampaignTargets batch error:", res.status, err);
-    } else {
+    try {
+      await airtableProxy({
+        table: CAMPAIGN_TARGETS_TABLE,
+        method: 'POST',
+        records,
+      });
       exported += batch.length;
+    } catch (err) {
+      console.warn("exportToCampaignTargets batch error:", err.message);
     }
   }
 

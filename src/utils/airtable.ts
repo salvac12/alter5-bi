@@ -1,31 +1,20 @@
 /**
  * Airtable REST API client for browser-side CRUD operations.
  *
- * Uses VITE_AIRTABLE_PAT (env var injected at build time by Vite).
+ * All requests go through /api/airtable-proxy (Vercel serverless).
  * Base: appVu3TvSZ1E4tj0J  |  Table: Opportunities
  */
 
-const BASE_ID = "appVu3TvSZ1E4tj0J";
+import { airtableProxy, isProxyConfigured } from './proxyClient';
+
 const TABLE_NAME = "Opportunities";
-const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
-
-function getToken() {
-  return import.meta.env.VITE_AIRTABLE_PAT || "";
-}
-
-function headers() {
-  return {
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  };
-}
 
 /** Check if Airtable integration is configured */
 export function isAirtableConfigured() {
-  return !!getToken();
+  return isProxyConfigured();
 }
 
-// ── READ ────────────────────────────────────────────────────────────
+// -- READ --------------------------------------------------------------------
 
 /**
  * Fetch all records from the Opportunities table (handles pagination).
@@ -34,23 +23,16 @@ export function isAirtableConfigured() {
 export async function fetchAllOpportunities() {
   const all = [];
   let offset = null;
-  // Only fetch active Transactions (exclude Internal Initiatives + Inactive/Archived + Stand-by).
-  // Note: Airtable view-level "hidden" rows are NOT excluded by {Record Status} alone —
-  // records hidden in a view still have Record Status = "Active". To properly hide a deal,
-  // set its Record Status to "Inactive" or "Archived" in Airtable, or move it to "Stand-by".
-  const formula = encodeURIComponent(
-    'AND({Type of opportunity} = "Transaction", {Record Status} = "Active", {Global Status} != "Stand-by")'
-  );
+  const formula =
+    'AND({Type of opportunity} = "Transaction", {Record Status} = "Active", {Global Status} != "Stand-by")';
 
   do {
-    let url = `${API_ROOT}?filterByFormula=${formula}`;
-    if (offset) url += `&offset=${offset}`;
-    const res = await fetch(url, { headers: headers() });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Airtable GET ${res.status}: ${body}`);
-    }
-    const data = await res.json();
+    const data = await airtableProxy({
+      table: TABLE_NAME,
+      method: 'GET',
+      formula,
+      ...(offset ? { offset } : {}),
+    });
     all.push(...(data.records || []));
     offset = data.offset || null;
   } while (offset);
@@ -62,15 +44,14 @@ export async function fetchAllOpportunities() {
  * Fetch a single record by ID.
  */
 export async function fetchOpportunity(recordId) {
-  const res = await fetch(`${API_ROOT}/${recordId}`, { headers: headers() });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable GET ${res.status}: ${body}`);
-  }
-  return res.json();
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'GET',
+    recordId,
+  });
 }
 
-// ── CREATE ──────────────────────────────────────────────────────────
+// -- CREATE ------------------------------------------------------------------
 
 /**
  * Create a new opportunity record.
@@ -78,37 +59,28 @@ export async function fetchOpportunity(recordId) {
  * @returns {object} Created record { id, fields, createdTime }
  */
 export async function createOpportunity(fields) {
-  const res = await fetch(API_ROOT, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ fields }),
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'POST',
+    fields,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable POST ${res.status}: ${body}`);
-  }
-  return res.json();
 }
 
-// ── UPDATE ──────────────────────────────────────────────────────────
+// -- UPDATE ------------------------------------------------------------------
 
 /**
- * Update an existing record (PATCH — partial update).
+ * Update an existing record (PATCH -- partial update).
  * @param {string} recordId - Airtable record ID (rec...)
  * @param {object} fields - Fields to update
  * @returns {object} Updated record
  */
 export async function updateOpportunity(recordId, fields) {
-  const res = await fetch(`${API_ROOT}/${recordId}`, {
-    method: "PATCH",
-    headers: headers(),
-    body: JSON.stringify({ fields }),
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'PATCH',
+    recordId,
+    fields,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable PATCH ${res.status}: ${body}`);
-  }
-  return res.json();
 }
 
 /**
@@ -120,39 +92,30 @@ export async function batchUpdateOpportunities(updates) {
   // Airtable allows max 10 records per batch request
   for (let i = 0; i < updates.length; i += 10) {
     const batch = updates.slice(i, i + 10);
-    const res = await fetch(API_ROOT, {
-      method: "PATCH",
-      headers: headers(),
-      body: JSON.stringify({ records: batch }),
+    const data = await airtableProxy({
+      table: TABLE_NAME,
+      method: 'PATCH',
+      records: batch,
     });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Airtable batch PATCH ${res.status}: ${body}`);
-    }
-    const data = await res.json();
     results.push(...(data.records || []));
   }
   return results;
 }
 
-// ── DELETE ───────────────────────────────────────────────────────────
+// -- DELETE ------------------------------------------------------------------
 
 /**
  * Delete a record by ID.
  */
 export async function deleteOpportunity(recordId) {
-  const res = await fetch(`${API_ROOT}/${recordId}`, {
-    method: "DELETE",
-    headers: headers(),
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'DELETE',
+    recordId,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable DELETE ${res.status}: ${body}`);
-  }
-  return res.json();
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
+// -- Helpers -----------------------------------------------------------------
 
 /** Junk / test name patterns to exclude */
 const JUNK_NAMES = /^(test|prueba|unnamed|sin nombre|xxx|aaa|bbb|dummy|ejemplo|sample|sabri)\b/i;
@@ -169,11 +132,9 @@ export function isValidOpportunity(opp) {
   if (JUNK_EXACT.has(name.toLowerCase())) return false;
   // Archived, deleted, or inactive records
   if (opp.recordStatus && /^(archived|deleted|inactive)$/i.test(opp.recordStatus)) return false;
-  // Stand-by records are paused/on-hold — exclude from active pipeline views.
-  // In Airtable, deals hidden via "hide in view" still have Record Status = "Active";
-  // to properly exclude them, set Global Status = "Stand-by" or change Record Status.
+  // Stand-by records are paused/on-hold -- exclude from active pipeline views.
   if (opp.stage && opp.stage.toLowerCase() === "stand-by") return false;
-  // No stage assigned — orphan record
+  // No stage assigned -- orphan record
   if (!opp.stage) return false;
   return true;
 }
@@ -196,7 +157,7 @@ export function normalizeRecord(record) {
   let businessType = f["Type (from Business Program)"] || "";
   if (Array.isArray(businessType)) businessType = businessType[0] || "";
 
-  // Deal Manager / Responsible — try multiple field names as Airtable schemas vary
+  // Deal Manager / Responsible
   const dealManager = f["Deal Manager"] || f["Responsible"] || f["Assigned To"] || "";
 
   return {
