@@ -634,8 +634,7 @@ export default function SlideOverPanel({
   isOpen,
   onClose,
   contacto,
-  apiUrl,
-  apiToken,
+  proxyFetch,
   onSendSuccess
 }) {
   const [loading, setLoading] = useState(true);
@@ -663,18 +662,13 @@ export default function SlideOverPanel({
 
   // Fetch conversation data
   const fetchConversation = useCallback(async () => {
-    if (!contacto?.email || !apiUrl) return;
+    if (!contacto?.email || !proxyFetch) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const url = `${apiUrl}?action=getConversation&email=${encodeURIComponent(contacto.email)}`;
-      const response = await fetch(url);
-
-      if (!response.ok) throw new Error("Error al cargar");
-
-      const data = await response.json();
+      const data = await proxyFetch("getConversation", { email: contacto.email });
       setConversacion(data);
 
       if (data.borrador?.cuerpo) {
@@ -693,7 +687,7 @@ export default function SlideOverPanel({
     } finally {
       setLoading(false);
     }
-  }, [contacto?.email, apiUrl]);
+  }, [contacto?.email, proxyFetch]);
 
   // Load data when panel opens
   useEffect(() => {
@@ -739,18 +733,10 @@ export default function SlideOverPanel({
     setSaving(true);
 
     try {
-      // Content-Type: text/plain evita el preflight CORS de Google Apps Script
-      const response = await fetch(`${apiUrl}?action=saveDraft`, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({
-          email: contacto.email,
-          borradorCuerpo: draftText,
-          token: apiToken,
-        }),
+      await proxyFetch("saveDraft", {
+        email: contacto.email,
+        borradorCuerpo: draftText,
       });
-
-      if (!response.ok) throw new Error("Error al guardar");
 
       setOriginalDraft(draftText);
       setSaved(true);
@@ -770,19 +756,11 @@ export default function SlideOverPanel({
     setSending(true);
 
     try {
-      // Content-Type: text/plain evita el preflight CORS de Google Apps Script
-      const response = await fetch(`${apiUrl}?action=sendDraft`, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({
-          email: contacto.email,
-          draftId: conversacion?.borrador?.draftId,
-          cuerpoEditado: draftText !== originalDraft ? draftText : undefined,
-          token: apiToken,
-        }),
+      await proxyFetch("sendDraft", {
+        email: contacto.email,
+        draftId: conversacion?.borrador?.draftId,
+        cuerpoEditado: draftText !== originalDraft ? draftText : undefined,
       });
-
-      if (!response.ok) throw new Error("Error al enviar");
 
       setSent(true);
       setShowConfirm(false);

@@ -5,10 +5,9 @@ import BridgeExplorerView from "./BridgeExplorerView";
 import { fetchAllBridgeTargets } from "../utils/airtableCandidates";
 
 // ============================================================
-// CONFIG
+// CONFIG — all GAS calls go through /api/campaign-proxy
 // ============================================================
-const API_URL = import.meta.env.VITE_BRIDGE_WEB_APP_URL || "";
-const API_TOKEN = import.meta.env.VITE_BRIDGE_API_TOKEN || "";
+import { proxyFetch } from "../utils/campaignApi";
 
 // ============================================================
 // ALTER5 BRAND TOKENS (Figma Make Design System)
@@ -1514,7 +1513,7 @@ function PipelineListItem({ card, contact, isExpanded, onToggle, onViewDetail, o
   );
 }
 
-function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl, conversationCache, onGenerateFollowUp, followUpLoading, onImproveMessage, improveLoading, onComposeAndSave, composeLoading }) {
+function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, conversationCache, onGenerateFollowUp, followUpLoading, onImproveMessage, improveLoading, onComposeAndSave, composeLoading }) {
   const [newNote, setNewNote] = useState('');
   const [messages, setMessages] = useState(null);
   const [conversationData, setConversationData] = useState(null);
@@ -1556,25 +1555,8 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
       }
     }
 
-    if (!apiUrl) {
-      const mockData = {
-        mensajes: [
-          { fecha: "14/02/2026 10:00", remitente: "leticia@alter-5.com", esLeticia: true, cuerpo: "Estimado/a, le escribo en relacion con el Bridge Debt Energy Program de Alter5. Ofrecemos financiacion puente para proyectos de energia renovable utility-scale. Las condiciones principales son prestamo bullet a 18-24 meses, sin garantia corporativa, ticket desde 2M EUR." },
-          { fecha: "15/02/2026 09:15", remitente: card.email, esLeticia: false, cuerpo: "Hola Leticia, gracias por el contacto. Tenemos un proyecto solar en fase RTB y nos interesaria conocer las condiciones en mas detalle. Podriamos agendar una llamada?" },
-          { fecha: "16/02/2026 11:30", remitente: "leticia@alter-5.com", esLeticia: true, cuerpo: "Encantada de ayudarle. Le adjunto la ficha del programa con todas las condiciones. Quedamos a su disposicion para una llamada cuando le venga bien." },
-          { fecha: "18/02/2026 14:00", remitente: card.email, esLeticia: false, cuerpo: "Perfecto, he revisado la documentacion. Me interesa explorar la opcion para un parque eolico de 50MW que tenemos en fase RTB. Podemos hablar el jueves?" },
-        ],
-        resumen: "El contacto mostro interes en financiacion puente para un parque eolico de 50MW en fase RTB. Se compartio la ficha del programa y se propuso agendar una llamada para el jueves."
-      };
-      setConversationData(mockData);
-      setMessages(mockData.mensajes);
-      setMsgsLoading(false);
-      return;
-    }
-
     // Optimized: 1 call to getConversacionCompleta (1 Gmail search)
-    fetch(apiUrl + "?action=getConversacionCompleta&email=" + encodeURIComponent(card.email))
-      .then(r => r.json())
+    proxyFetch("getConversacionCompleta", { email: card.email })
       .then(data => {
         if (data.success && data.mensajes && data.mensajes.length > 0) {
           data._ts = Date.now();
@@ -1584,8 +1566,7 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
           return;
         }
         // Fallback: try legacy getConversation endpoint
-        return fetch(apiUrl + "?action=getConversation&email=" + encodeURIComponent(card.email))
-          .then(r => r.json())
+        return proxyFetch("getConversation", { email: card.email })
           .then(d => {
             if (d.success && d.respuesta) {
               const fallbackData = { mensajes: [{ fecha: d.respuesta.fecha, remitente: card.email, esLeticia: false, cuerpo: d.respuesta.cuerpo }], _ts: Date.now(), resumen: null };
@@ -1599,7 +1580,7 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
       })
       .catch(() => setMessages([]))
       .finally(() => setMsgsLoading(false));
-  }, [card?.email, apiUrl, conversationCache]);
+  }, [card?.email, conversationCache]);
 
   // Initial fetch on mount
   useEffect(() => {
@@ -1896,17 +1877,11 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
                                 fileName = meetingFile.name;
                                 fileType = meetingFile.type;
                               }
-                              const resp = await fetch(API_URL + '?action=uploadMeetingNotes', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-                                body: JSON.stringify({
+                              const result = await proxyFetch('uploadMeetingNotes', {
                                   email: card.email,
                                   noteText: meetingNoteText.trim(),
                                   fileName, fileBase64, fileType,
-                                  token: API_TOKEN,
-                                }),
                               });
-                              const result = await resp.json();
                               if (result.success) {
                                 let noteDisplay = meetingNoteText.trim();
                                 if (result.driveUrl) noteDisplay += '\nArchivo: ' + result.driveUrl;
@@ -2058,12 +2033,7 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
                                 try {
                                   const htmlBody = editDraftText.trim()
                                     .split('\n\n').map(p => '<p>' + p.replace(/\n/g, '<br>') + '</p>').join('');
-                                  const res = await fetch(apiUrl + "?action=sendDraft", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "text/plain;charset=UTF-8" },
-                                    body: JSON.stringify({ email: card.email, cuerpoEditado: htmlBody, token: API_TOKEN }),
-                                  });
-                                  const data = await res.json();
+                                  const data = await proxyFetch("sendDraft", { email: card.email, cuerpoEditado: htmlBody });
                                   if (data.success) {
                                     setEditingDraft(false);
                                     setEditDraftText('');
@@ -2176,8 +2146,7 @@ function PipelineDetail({ card, contact, onClose, onMoveCard, onAddNote, apiUrl,
                       // Trigger re-fetch by resetting messages
                       setMessages(null);
                       setMsgsLoading(true);
-                      fetch(apiUrl + "?action=getConversacionCompleta&email=" + encodeURIComponent(card.email))
-                        .then(r => r.json())
+                      proxyFetch("getConversacionCompleta", { email: card.email })
                         .then(data => {
                           if (data.success && data.mensajes) {
                             if (conversationCache) conversationCache[card.email] = data;
@@ -2504,15 +2473,10 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
   };
 
   const handleGenerateFollowUp = async (card) => {
-    if (!API_URL || followUpLoading) return;
+    if (followUpLoading) return;
     setFollowUpLoading(card.email);
     try {
-      const res = await fetch(API_URL + "?action=generateFollowUp", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ email: card.email, token: API_TOKEN }),
-      });
-      const data = await res.json();
+      const data = await proxyFetch("generateFollowUp", { email: card.email });
       if (data.success) {
         // Invalidate session cache
         delete conversationCacheRef.current[card.email];
@@ -2539,15 +2503,10 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
   };
 
   const handleImproveMessage = async (email, texto) => {
-    if (!API_URL || improveLoading) return null;
+    if (improveLoading) return null;
     setImproveLoading(true);
     try {
-      const res = await fetch(API_URL + "?action=improveMessage", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ email, texto, token: API_TOKEN }),
-      });
-      const data = await res.json();
+      const data = await proxyFetch("improveMessage", { email, texto });
       if (data.success) {
         return data.textoMejorado;
       } else {
@@ -2563,15 +2522,10 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
   };
 
   const handleComposeAndSave = async (email, mensaje, asunto) => {
-    if (!API_URL || composeLoading) return false;
+    if (composeLoading) return false;
     setComposeLoading(true);
     try {
-      const res = await fetch(API_URL + "?action=composeAndSaveDraft", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ email, mensaje, asunto, token: API_TOKEN }),
-      });
-      const data = await res.json();
+      const data = await proxyFetch("composeAndSaveDraft", { email, mensaje, asunto });
       if (data.success) {
         // Invalidate cache so PipelineDetail re-fetches with fresh draft
         delete conversationCacheRef.current[email];
@@ -2589,15 +2543,10 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
   };
 
   const handleComposeFromInstructions = async (email, instrucciones) => {
-    if (!API_URL || composeInstrLoading) return null;
+    if (composeInstrLoading) return null;
     setComposeInstrLoading(email);
     try {
-      const res = await fetch(API_URL + "?action=composeFromInstructions", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ email, instrucciones, token: API_TOKEN }),
-      });
-      const data = await res.json();
+      const data = await proxyFetch("composeFromInstructions", { email, instrucciones });
       if (data.success) {
         delete conversationCacheRef.current[email];
         return data;
@@ -2615,11 +2564,9 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
 
   // --- Seguimiento handlers ---
   const loadSeguimientoCandidatos = async () => {
-    if (!API_URL) return;
     setSeguimientoLoading(true);
     try {
-      const res = await fetch(API_URL + "?action=getFollowUpCandidates");
-      const data = await res.json();
+      const data = await proxyFetch("getFollowUpCandidates");
       if (data.success) {
         setSeguimientoCandidatos(data.candidatos || []);
         // Pre-select all orgs
@@ -2698,17 +2645,11 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
     if (!emails.length || !seguimientoInstrucciones.trim()) return;
     setSeguimientoGenerando(true);
     try {
-      const res = await fetch(API_URL + "?action=generateFollowUpBatch", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({
+      const data = await proxyFetch("generateFollowUpBatch", {
           emails,
           instrucciones: seguimientoInstrucciones,
           incluirKB: seguimientoIncluirKB,
-          token: API_TOKEN
-        }),
       });
-      const data = await res.json();
       if (data.success) {
         setSeguimientoBorradores(data.borradores || []);
         setSeguimientoStep(3);
@@ -2731,15 +2672,9 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
     if (!emailsToSend.length) return;
     setSeguimientoEnviando(true);
     try {
-      const res = await fetch(API_URL + "?action=sendFollowUpBatch", {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({
+      const data = await proxyFetch("sendFollowUpBatch", {
           emails: emailsToSend.map(b => ({ email: b.email, asunto: b.asunto, cuerpoHtml: b.cuerpoHtml })),
-          token: API_TOKEN
-        }),
       });
-      const data = await res.json();
       if (data.success) {
         setSeguimientoResultado({ enviados: data.totalEnviados || 0, errores: data.totalErrores || 0 });
       } else {
@@ -2763,11 +2698,10 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      if (!API_URL) throw new Error("No URL");
       // Fetch paralelo: dashboard + pipeline + Airtable targets al mismo tiempo
       const [dashboardRes, pipelineRes, atResult] = await Promise.all([
-        fetch(API_URL + "?action=dashboard").then(r => r.json()).catch(() => null),
-        fetch(API_URL + "?action=pipeline").then(r => r.json()).catch(() => null),
+        proxyFetch("dashboard").catch(() => null),
+        proxyFetch("pipeline").catch(() => null),
         fetchAllBridgeTargets("Bridge_Q1").catch(() => ({ allTargets: {}, maxWave: 1 })),
       ]);
       if (!dashboardRes) throw new Error("Dashboard fetch failed");
@@ -2871,15 +2805,9 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
       };
     });
 
-    if (API_URL) {
-      try {
-        await fetch(API_URL + "?action=moveStage", {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=UTF-8" },
-          body: JSON.stringify({ email, newStage, token: API_TOKEN }),
-        });
-      } catch (err) { console.error("Error moving card:", err); }
-    }
+    try {
+      await proxyFetch("moveStage", { email, newStage });
+    } catch (err) { console.error("Error moving card:", err); }
   }, []);
 
   const addNote = useCallback(async (email, noteText) => {
@@ -2893,15 +2821,9 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
       return { ...prev, notas: [...(prev.notas || []), note] };
     });
 
-    if (API_URL) {
-      try {
-        await fetch(API_URL + "?action=addNote", {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=UTF-8" },
-          body: JSON.stringify({ email, note: noteText, token: API_TOKEN }),
-        });
-      } catch (err) { console.error("Error adding note:", err); }
-    }
+    try {
+      await proxyFetch("addNote", { email, note: noteText });
+    } catch (err) { console.error("Error adding note:", err); }
   }, []);
 
   const contacts = data?.contactos || [];
@@ -4529,7 +4451,6 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
         <PipelineDetail
           card={selectedPipelineCard}
           contact={contacts.find(c => c.email === selectedPipelineCard.email)}
-          apiUrl={API_URL}
           conversationCache={conversationCacheRef.current}
           onClose={() => setSelectedPipelineCard(null)}
           onMoveCard={moveCard}
@@ -4555,12 +4476,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
             const htmlBody = d.editing && d.editText.trim()
               ? d.editText.trim().split('\n\n').map(p => '<p>' + p.replace(/\n/g, '<br>') + '</p>').join('')
               : d.borrador;
-            const res = await fetch(API_URL + "?action=sendDraft", {
-              method: "POST",
-              headers: { "Content-Type": "text/plain;charset=UTF-8" },
-              body: JSON.stringify({ email: d.email, cuerpoEditado: htmlBody, token: API_TOKEN }),
-            });
-            const data = await res.json();
+            const data = await proxyFetch("sendDraft", { email: d.email, cuerpoEditado: htmlBody });
             if (data.success) {
               delete conversationCacheRef.current[d.email];
               setFollowUpDraft(null);
@@ -4583,12 +4499,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
               ? d.editText.trim().split('\n\n').map(p => '<p>' + p.replace(/\n/g, '<br>') + '</p>').join('')
               : d.borrador;
             const scheduledAt = new Date(d.scheduleDate).toISOString();
-            const res = await fetch(API_URL + "?action=scheduleFollowUp", {
-              method: "POST",
-              headers: { "Content-Type": "text/plain;charset=UTF-8" },
-              body: JSON.stringify({ email: d.email, htmlBody, scheduledAt, token: API_TOKEN }),
-            });
-            const data = await res.json();
+            const data = await proxyFetch("scheduleFollowUp", { email: d.email, htmlBody, scheduledAt });
             if (data.success) {
               setFollowUpDraft(null);
               alert(data.message || 'Follow-up programado');
@@ -4742,8 +4653,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
         isOpen={panelOpen}
         onClose={handlePanelClose}
         contacto={selectedContact}
-        apiUrl={API_URL}
-        apiToken={API_TOKEN}
+        proxyFetch={proxyFetch}
         onSendSuccess={handleSendSuccess}
       />
     </div>

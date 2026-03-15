@@ -10,8 +10,7 @@
  */
 
 import { PROSPECT_STAGES } from './airtableProspects';
-
-const API_URL = import.meta.env.VITE_BRIDGE_WEB_APP_URL || '';
+import { proxyFetch } from './campaignApi';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -64,11 +63,8 @@ const MEETING_RE = new RegExp(MEETING_KEYWORDS.join('|'), 'i');
 // ── Fetch Bridge pipeline cards ──────────────────────────────────────
 
 export async function fetchBridgePipelineCards(): Promise<BridgeCard[]> {
-  if (!API_URL) return [];
   try {
-    const res = await fetch(API_URL + '?action=pipeline');
-    if (!res.ok) return [];
-    const data = await res.json();
+    const data = await proxyFetch('pipeline');
     if (data && Array.isArray(data.pipeline)) return data.pipeline;
     if (Array.isArray(data)) return data;
     return [];

@@ -12,7 +12,7 @@ function getSecret() {
   return import.meta.env.VITE_CAMPAIGN_PROXY_SECRET || '';
 }
 
-async function proxyFetch(action, params = {}) {
+export async function proxyFetch(action, params = {}) {
   const res = await fetch(PROXY_URL, {
     method: 'POST',
     headers: {
