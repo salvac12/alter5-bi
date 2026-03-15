@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import DOMPurify from 'dompurify';
 import BridgeSlideOverPanel from "./BridgeSlideOverPanel";
 import BridgeExplorerView from "./BridgeExplorerView";
 import { fetchAllBridgeTargets } from "../utils/airtableCandidates";
@@ -1114,7 +1115,7 @@ function ResponseItem({ contact, pipelineCard, isExpanded, onToggle, onMoveStage
                       borderLeft: `3px solid ${T.primary}`,
                       maxHeight: 300, overflowY: 'auto',
                     }}
-                    dangerouslySetInnerHTML={{ __html: generatedDraft }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(generatedDraft) }}
                   />
                   <button
                     onClick={(e) => {
@@ -1493,7 +1494,7 @@ function PipelineListItem({ card, contact, isExpanded, onToggle, onViewDetail, o
                       borderLeft: `3px solid ${T.primary}`,
                       maxHeight: 300, overflowY: 'auto',
                     }}
-                    dangerouslySetInnerHTML={{ __html: composeDraft }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(composeDraft) }}
                   />
                   <button
                     onClick={(e) => { e.stopPropagation(); onViewDetail(card); }}
@@ -4479,7 +4480,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
                                 paddingTop: 12,
                               }}>
                                 <div
-                                  dangerouslySetInnerHTML={{ __html: b.cuerpoHtml }}
+                                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(b.cuerpoHtml) }}
                                   style={{
                                     fontSize: 13, lineHeight: 1.7, color: T.text,
                                     background: T.sidebar, padding: 16, borderRadius: 8,
@@ -4652,7 +4653,7 @@ export default function BridgeCampaignView({ onBack, allCompanies }) {
                     padding: '16px 20px', borderRadius: 10, border: `1px solid ${T.border}`,
                     background: '#FAFBFC', fontSize: 14, lineHeight: 1.7, color: T.text,
                     fontFamily: T.sans, maxHeight: 400, overflowY: 'auto',
-                  }} dangerouslySetInnerHTML={{ __html: d.borrador }} />
+                  }} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(d.borrador) }} />
                 )}
 
                 {/* Edit / Preview toggle */}

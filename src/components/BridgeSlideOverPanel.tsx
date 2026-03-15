@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import DOMPurify from 'dompurify';
 
 // ============================================================
 // DESIGN TOKENS (debe coincidir con App.jsx)
@@ -500,7 +501,7 @@ function MensajeHilo({ mensaje, isLast, contacto }) {
         ) : isHtmlContent(mensaje.cuerpo) ? (
           /* HTML: renderizado completo */
           <div
-            dangerouslySetInnerHTML={{ __html: mensaje.cuerpo }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mensaje.cuerpo) }}
             style={{
               fontSize: 13,
               lineHeight: 1.65,
@@ -1270,7 +1271,7 @@ export default function SlideOverPanel({
                     viewMode === "preview" ? (
                       /* Vista previa: renderiza el HTML de Gemini */
                       <div
-                        dangerouslySetInnerHTML={{ __html: draftText }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(draftText) }}
                         style={{
                           padding: "20px 24px",
                           background: T.white,

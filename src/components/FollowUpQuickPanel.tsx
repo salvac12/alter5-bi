@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { TEAM_MEMBERS } from '../utils/airtableProspects';
 import { scheduleFollowUp, cancelFollowUp } from '../utils/campaignApi';
 
@@ -182,7 +183,7 @@ export default function FollowUpQuickPanel({ prospect, existingFollowUp, onClose
                 border: '1px solid #E2E8F0', fontSize: 13, color: '#334155',
                 maxHeight: 200, overflow: 'auto',
               }}
-                dangerouslySetInnerHTML={{ __html: existingFollowUp.draftHtml }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(existingFollowUp.draftHtml) }}
               />
             </div>
           )}
