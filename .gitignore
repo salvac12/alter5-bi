@@ -3,6 +3,8 @@ dist
 .DS_Store
 *.local
 .env
+.env.*
+.env.vercel
 data_sources/*.xlsx
 src/data/*.bak
 .vercel

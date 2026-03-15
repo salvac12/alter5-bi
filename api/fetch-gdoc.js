@@ -6,12 +6,25 @@
  */
 export default async function handler(req, res) {
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  // Validate proxy secret to prevent open SSRF
+  const secret = req.headers['x-proxy-secret'] || req.query.secret;
+  const expected = process.env.CAMPAIGN_PROXY_SECRET;
+  if (!expected || secret !== expected) {
+    return res.status(403).json({ error: 'Invalid proxy secret' });
+  }
+
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'Falta parametro ?url=' });
+
+  // Validate that the URL is specifically a Google Docs URL
+  if (!url.startsWith('https://docs.google.com/')) {
+    return res.status(400).json({ error: 'Solo se permiten URLs de Google Docs' });
+  }
 
   // Extract doc ID
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);

@@ -22,8 +22,19 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'RESEND_API_KEY not configured' });
   }
 
-  const dueLine = dueDate ? `<p><strong>Fecha limite:</strong> ${dueDate}</p>` : '';
-  const descLine = taskDescription ? `<p><strong>Descripcion:</strong> ${taskDescription}</p>` : '';
+  // HTML-escape user-controlled strings to prevent HTML injection
+  const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const safeToName = esc(toName) || esc(to.split('@')[0]);
+  const safeProspectName = esc(prospectName);
+  const safeTaskText = esc(taskText);
+  const safeAssignedBy = esc(assignedBy);
+  const safeDueDate = esc(dueDate);
+  const safeTaskDescription = esc(taskDescription);
+  const safeDashboardUrl = esc(dashboardUrl);
+
+  const dueLine = dueDate ? `<p><strong>Fecha limite:</strong> ${safeDueDate}</p>` : '';
+  const descLine = taskDescription ? `<p><strong>Descripcion:</strong> ${safeTaskDescription}</p>` : '';
 
   // Truncate context to first 500 chars for email
   let contextBlock = '';
@@ -38,7 +49,7 @@ export default async function handler(req, res) {
   }
 
   const linkBlock = dashboardUrl
-    ? `<p style="margin: 16px 0 0;"><a href="${dashboardUrl}" style="display: inline-block; padding: 10px 20px; background: linear-gradient(135deg, #8B5CF6, #3B82F6); color: #FFFFFF; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600;">Ver prospect en dashboard</a></p>`
+    ? `<p style="margin: 16px 0 0;"><a href="${safeDashboardUrl}" style="display: inline-block; padding: 10px 20px; background: linear-gradient(135deg, #8B5CF6, #3B82F6); color: #FFFFFF; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600;">Ver prospect en dashboard</a></p>`
     : '';
 
   const htmlBody = `
@@ -48,21 +59,21 @@ export default async function handler(req, res) {
       </div>
       <div style="background: #FFFFFF; padding: 24px; border: 1px solid #E2E8F0; border-top: none; border-radius: 0 0 10px 10px;">
         <p style="color: #6B7F94; font-size: 14px; margin-top: 0;">
-          Hola ${toName || to.split('@')[0]},
+          Hola ${safeToName},
         </p>
         <p style="color: #1A2B3D; font-size: 14px;">
-          Se te ha asignado una tarea en el prospect <strong>${prospectName}</strong>:
+          Se te ha asignado una tarea en el prospect <strong>${safeProspectName}</strong>:
         </p>
         <div style="background: #F5F3FF; border: 1px solid #DDD6FE; border-radius: 8px; padding: 16px; margin: 16px 0;">
           <p style="margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #1A2B3D;">
-            ${taskText}
+            ${safeTaskText}
           </p>
           ${descLine}
           ${dueLine}
         </div>
         ${contextBlock}
         <p style="color: #6B7F94; font-size: 13px;">
-          Asignada por: <strong>${assignedBy}</strong>
+          Asignada por: <strong>${safeAssignedBy}</strong>
         </p>
         ${linkBlock}
         <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;">
@@ -83,7 +94,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'Alter5 BI <noreply@alter-5.com>',
         to: [to],
-        subject: `[Alter5] Tarea asignada: ${taskText} — ${prospectName}`,
+        subject: `[Alter5] Tarea asignada: ${safeTaskText} — ${safeProspectName}`,
         html: htmlBody,
       }),
     });
