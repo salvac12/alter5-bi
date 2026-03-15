@@ -40,8 +40,9 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          INPUT_REPROCESS: ${{ github.event.inputs.reprocess }}
         run: |
-          if [ "${{ github.event.inputs.reprocess }}" = "true" ]; then
+          if [ "$INPUT_REPROCESS" = "true" ]; then
             echo "Running in REPROCESS mode..."
             python scripts/process_sheet_emails.py --reprocess
           else

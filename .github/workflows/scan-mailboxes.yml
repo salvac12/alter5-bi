@@ -51,13 +51,15 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          INPUT_DAYS: ${{ github.event.inputs.days }}
+          INPUT_REENRICH: ${{ github.event.inputs.reenrich }}
         run: |
           DAYS_ARG=""
-          if [ -n "${{ github.event.inputs.days }}" ]; then
-            DAYS_ARG="--days ${{ github.event.inputs.days }}"
+          if [ -n "$INPUT_DAYS" ]; then
+            DAYS_ARG="--days $INPUT_DAYS"
           fi
           REENRICH_ARG=""
-          if [ "${{ github.event.inputs.reenrich }}" = "true" ]; then
+          if [ "$INPUT_REENRICH" = "true" ]; then
             REENRICH_ARG="--reenrich"
           fi
           python scripts/scan_mailboxes.py $DAYS_ARG $REENRICH_ARG
@@ -66,7 +68,8 @@ jobs:
         if: ${{ github.event.inputs.fix_subjects != '' }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python scripts/fix_stuck_subjects.py --${{ github.event.inputs.fix_subjects }}
+          INPUT_FIX_SUBJECTS: ${{ github.event.inputs.fix_subjects }}
+        run: python scripts/fix_stuck_subjects.py "--$INPUT_FIX_SUBJECTS"
 
       - name: Scan calendars for meetings
         env:
