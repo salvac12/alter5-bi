@@ -16,6 +16,8 @@ interface AppShellProps {
   onToggleCleanup: () => void;
   currentUser: any;
   onOpenSettings: () => void;
+  onLogout?: () => void;
+  authPicture?: string;
   subtitle: string;
   children: ReactNode;
 }
@@ -32,6 +34,8 @@ export default function AppShell({
   onToggleCleanup,
   currentUser,
   onOpenSettings,
+  onLogout,
+  authPicture,
   subtitle,
   children,
 }: AppShellProps) {
@@ -51,6 +55,8 @@ export default function AppShell({
         onToggleCleanup={onToggleCleanup}
         currentUser={currentUser}
         onOpenSettings={onOpenSettings}
+        onLogout={onLogout}
+        authPicture={authPicture}
         subtitle={subtitle}
       />
 
