@@ -1,8 +1,18 @@
-import rawData from '../data/companies.json';
 import oppData from '../data/opportunities.json';
 import { GROUP_WEIGHTS, ROLE_WEIGHTS, REF_DATE, PRODUCTS } from './constants';
 
 const normalize = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+// ── Async loader for companies.json (moved out of bundle) ──
+let cachedRawData: any = null;
+
+export async function loadCompaniesData(): Promise<any> {
+  if (cachedRawData) return cachedRawData;
+  const res = await fetch('/companies.json');
+  if (!res.ok) throw new Error(`Failed to load companies data: ${res.status}`);
+  cachedRawData = await res.json();
+  return cachedRawData;
+}
 
 // ── Airtable opportunities lookup ──
 const oppByName = new Map();
@@ -57,7 +67,7 @@ function inferSegment(grp, tp) {
  *          tipoRelacion, primeraInteraccion, ultimaInteraccion, employeeSources]
  * Detail: [[contacts], [timeline], contexto, [[empId, interactions], ...], subjects, enrichment]
  */
-export function parseCompanies() {
+export function parseCompanies(rawData: any) {
   const maxInteractions = Math.max(...rawData.r.map(r => r[4]));
 
   return rawData.r.map((r, i) => {
