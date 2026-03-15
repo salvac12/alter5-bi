@@ -1,22 +1,8 @@
-import { useState, useMemo, useEffect } from 'react';
-import { parseCompanies, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch } from './utils/data';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import { parseCompanies, loadCompaniesData, getEmployees, downloadCSV, calculateProductMatches, getBestProductMatch } from './utils/data';
 import { PER_PAGE, COMPANY_ROLES, TECHNOLOGIES, PRODUCTS, ALL_COMPANY_TYPES, STATUS_LABELS, STATUS_COLORS, ORIGINACION_BUSINESS_LINES, PROJECT_SCALES, INVESTOR_TYPES_WEB, INVESTOR_FOCUS_OPTIONS } from './utils/constants';
 import CompanyTable from './components/CompanyTable';
-import DetailPanel from './components/DetailPanel';
-import KanbanView from './components/KanbanView';
-import OpportunityPanel from './components/OpportunityPanel';
-import ProspectsView from './components/ProspectsView';
-import ProspectPanel from './components/ProspectPanel';
-import CerebroSearch from './components/CerebroSearch';
 import UserSelector from './components/UserSelector';
-import CampaignsView from './components/CampaignsView';
-import CampaignCreationPanel from './components/CampaignCreationPanel';
-import CampaignDetailView from './components/CampaignDetailView';
-import BridgeCampaignView from './components/BridgeCampaignView';
-import FollowUpQuickPanel from './components/FollowUpQuickPanel';
-import ProspectingView from './components/ProspectingView';
-import CandidateSearchView from './components/CandidateSearchView';
-import { AnalysisView } from './components/views/AnalysisView';
 import { HelpOverlay } from './components/shared/HelpOverlay';
 import { getCampaigns } from './utils/campaignApi';
 import { getHiddenCompanies, hideCompany, getAllEnrichmentOverrides, saveEnrichmentOverride, isSuspiciousCompany } from './utils/companyData';
@@ -30,13 +16,37 @@ import type { ViewId } from './types';
 import type { AuthUser } from './utils/auth';
 import employees from './data/employees.json';
 
+// Lazy load non-default views
+const DetailPanel = lazy(() => import('./components/DetailPanel'));
+const KanbanView = lazy(() => import('./components/KanbanView'));
+const OpportunityPanel = lazy(() => import('./components/OpportunityPanel'));
+const ProspectsView = lazy(() => import('./components/ProspectsView'));
+const ProspectPanel = lazy(() => import('./components/ProspectPanel'));
+const CerebroSearch = lazy(() => import('./components/CerebroSearch'));
+const CampaignsView = lazy(() => import('./components/CampaignsView'));
+const CampaignCreationPanel = lazy(() => import('./components/CampaignCreationPanel'));
+const CampaignDetailView = lazy(() => import('./components/CampaignDetailView'));
+const BridgeCampaignView = lazy(() => import('./components/BridgeCampaignView'));
+const FollowUpQuickPanel = lazy(() => import('./components/FollowUpQuickPanel'));
+const ProspectingView = lazy(() => import('./components/ProspectingView'));
+const CandidateSearchView = lazy(() => import('./components/CandidateSearchView'));
+const AnalysisView = lazy(() => import('./components/views/AnalysisView').then(m => ({ default: m.AnalysisView })));
+
 interface AppProps {
   authUser: AuthUser;
   onLogout: () => void;
 }
 
 export default function App({ authUser, onLogout }: AppProps) {
-  const allCompanies = useMemo(() => parseCompanies(), []);
+  const [allCompanies, setAllCompanies] = useState<any[]>([]);
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(true);
+
+  useEffect(() => {
+    loadCompaniesData().then(rawData => {
+      setAllCompanies(parseCompanies(rawData));
+      setIsLoadingCompanies(false);
+    });
+  }, []);
   const [hiddenCompanies, setHiddenCompanies] = useState(() => getHiddenCompanies());
   const [enrichmentOverrides, setEnrichmentOverrides] = useState(() => getAllEnrichmentOverrides());
   const [verifiedCompanies, setVerifiedCompanies] = useState(new Map());
@@ -582,6 +592,24 @@ export default function App({ authUser, onLogout }: AppProps) {
     setSelectedCampaignName(null);
   };
 
+  if (isLoadingCompanies) {
+    return (
+      <div style={{
+        display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center',
+        flexDirection: 'column', gap: 16, fontFamily: "'DM Sans', sans-serif",
+        background: '#F8FAFC',
+      }}>
+        <div style={{
+          width: 48, height: 48, border: '3px solid #E2E8F0',
+          borderTopColor: '#3B82F6', borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <div style={{ color: '#64748B', fontSize: 14 }}>Cargando datos...</div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    );
+  }
+
   return (
     <AppShell
       activeView={activeView}
@@ -600,6 +628,7 @@ export default function App({ authUser, onLogout }: AppProps) {
       subtitle={subtitle}
     >
       {/* ── Content area ── */}
+      <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748B', fontFamily: "'DM Sans', sans-serif", fontSize: 14 }}>Cargando...</div>}>
       {activeView === "empresas" ? (
         <div style={{ height: `calc(100vh - 60px)`, overflow: "auto", background: "#F0F4F8" }}>
           {/* ── Toolbar: Search + Filtros + Export + Cerebro ── */}
@@ -1155,9 +1184,11 @@ export default function App({ authUser, onLogout }: AppProps) {
           onCreateOpportunity={handleCreateOpp}
         />
       )}
+      </Suspense>
 
       {/* ── Company Detail overlay ── */}
       {activeView === "empresas" && selected && (
+        <Suspense fallback={null}>
         <>
           <div onClick={() => setSelected(null)}
             style={{ position: "fixed", inset: 0, background: "rgba(10,22,40,0.5)", zIndex: 99, backdropFilter: "blur(4px)" }}
@@ -1174,10 +1205,12 @@ export default function App({ authUser, onLogout }: AppProps) {
             investorNotes={investorNotes}
           />
         </>
+        </Suspense>
       )}
 
       {/* ── Opportunity Panel ── */}
       {(selectedOpp || isCreatingOpp) && (
+        <Suspense fallback={null}>
         <>
           <div onClick={() => { setSelectedOpp(null); setIsCreatingOpp(false); }}
             style={{ position: "fixed", inset: 0, background: "rgba(10,22,40,0.5)", zIndex: 99, backdropFilter: "blur(4px)" }}
@@ -1191,10 +1224,12 @@ export default function App({ authUser, onLogout }: AppProps) {
             onDeleted={handleOppDeleted}
           />
         </>
+        </Suspense>
       )}
 
       {/* ── Prospect Panel ── */}
       {(selectedProspect || isCreatingProspect) && (
+        <Suspense fallback={null}>
         <ProspectPanel
           prospect={selectedProspect}
           isNew={isCreatingProspect}
@@ -1205,28 +1240,34 @@ export default function App({ authUser, onLogout }: AppProps) {
           onConverted={handleProspectConverted}
           companies={companies}
         />
+        </Suspense>
       )}
 
       {/* ── Campaign Creation Panel ── */}
       {showCampaignCreation && (
+        <Suspense fallback={null}>
         <CampaignCreationPanel
           onClose={() => setShowCampaignCreation(false)}
           onCreated={() => { setShowCampaignCreation(false); loadCampaigns(); }}
           allCompanies={companies}
         />
+        </Suspense>
       )}
 
       {/* ── Follow-up Quick Panel ── */}
       {showFollowUpQuick && (
+        <Suspense fallback={null}>
         <FollowUpQuickPanel
           prospect={showFollowUpQuick}
           onClose={() => setShowFollowUpQuick(null)}
           onScheduled={() => { setShowFollowUpQuick(null); loadCampaigns(); }}
         />
+        </Suspense>
       )}
 
       {/* ── Cerebro AI overlay ── */}
       {showCerebro && (
+        <Suspense fallback={null}>
         <CerebroSearch
           companies={companies}
           onClose={() => setShowCerebro(false)}
@@ -1235,6 +1276,7 @@ export default function App({ authUser, onLogout }: AppProps) {
             setSelected(company);
           }}
         />
+        </Suspense>
       )}
 
       {/* ── User selector ── */}
