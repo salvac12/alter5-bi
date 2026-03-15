@@ -24,10 +24,11 @@ import json
 import os
 import ssl
 import sys
+import tempfile
 import time
 import urllib.request
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -41,6 +42,21 @@ PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 # Import shared functions from import_mailbox
 sys.path.insert(0, SCRIPT_DIR)
 from import_mailbox import merge_company, export_to_compact, get_data_paths
+
+# ---------------------------------------------------------------------------
+# Atomic file writes
+# ---------------------------------------------------------------------------
+def _atomic_json_write(path, data, **kwargs):
+    """Write JSON to a file atomically using temp file + os.replace."""
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, **kwargs)
+        os.replace(tmp_path, path)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
+
 
 # ---------------------------------------------------------------------------
 # Config
@@ -342,7 +358,7 @@ def log_classifications_batch(sheet, classifications, source):
         rows = []
         for domain, cls in classifications.items():
             rows.append([
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
                 domain,
                 cls.get("group", "Other"),
                 cls.get("type", "Other"),
@@ -1189,7 +1205,7 @@ def process_pipeline(reprocess=False):
                 enr = cls.get("enrichment")
                 if enr:
                     # Add classification metadata for tracking re-classification triggers
-                    enr["_classified_at"] = datetime.utcnow().isoformat()
+                    enr["_classified_at"] = datetime.now(timezone.utc).isoformat()
                     enr["_email_count"] = all_companies[domain].get("interactions", 0)
                     # Preserve fields from other scripts that Gemini doesn't produce
                     existing_enrichment = all_companies[domain].get("enrichment") or {}
@@ -1248,15 +1264,12 @@ def process_pipeline(reprocess=False):
     print("  [7/7] Escribiendo archivos JSON...")
 
     full_data = {"companies": all_companies, "employees": employees}
-    with open(paths["full"], "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False, indent=2)
+    _atomic_json_write(paths["full"], full_data, indent=2)
 
     compact = export_to_compact(all_companies)
-    with open(paths["compact"], "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
+    _atomic_json_write(paths["compact"], compact, separators=(",", ":"))
 
-    with open(paths["employees"], "w", encoding="utf-8") as f:
-        json.dump(employees, f, ensure_ascii=False, indent=2)
+    _atomic_json_write(paths["employees"], employees, indent=2)
 
     # Mark rows as done in the sheet (skip for reprocess — already done)
     if not reprocess:
@@ -1277,5 +1290,9 @@ def process_pipeline(reprocess=False):
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     reprocess = "--reprocess" in sys.argv
-    had_changes = process_pipeline(reprocess=reprocess)
-    sys.exit(0 if had_changes else 0)
+    try:
+        had_changes = process_pipeline(reprocess=reprocess)
+        sys.exit(0)
+    except Exception as exc:
+        print(f"\n  [FATAL] Pipeline failed: {exc}", file=sys.stderr)
+        sys.exit(1)
