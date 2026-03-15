@@ -1,41 +1,18 @@
 /**
- * Gemini AI client — browser-side calls to Gemini API.
+ * Gemini AI client -- all calls go through /api/gemini-proxy.
  * Used for summarizing meeting notes and extracting tasks from prospects.
  */
 
-const GEMINI_MODEL = "gemini-2.5-flash";
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+import { geminiProxy, isProxyConfigured } from './proxyClient';
 
 export function isGeminiConfigured() {
-  const key = import.meta.env.VITE_GEMINI_API_KEY;
-  return !!(key && key.trim().length > 0);
-}
-
-function getApiKey() {
-  return (import.meta.env.VITE_GEMINI_API_KEY || "").trim();
+  return isProxyConfigured();
 }
 
 export async function callGemini(prompt, temperature = 0.3) {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("VITE_GEMINI_API_KEY no configurada");
+  if (!isProxyConfigured()) throw new Error("Proxy secret no configurado");
 
-  const url = `${GEMINI_API_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature },
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini API error ${res.status}: ${err}`);
-  }
-
-  const data = await res.json();
+  const data = await geminiProxy(prompt, temperature);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini no devolvio respuesta");
   return text;
@@ -107,7 +84,7 @@ ${notes}`;
   }
 }
 
-// ── Cerebro AI ──────────────────────────────────────────────────────────────
+// -- Cerebro AI ---------------------------------------------------------------
 
 import { fetchRelevantKnowledge, saveKnowledge } from "./airtableCerebro";
 
@@ -143,11 +120,11 @@ const STOP_WORDS = new Set([
  * Phase 2: send context to Gemini for a structured answer.
  *
  * @param {string} question
- * @param {Array} companies — full parsed companies array
+ * @param {Array} companies -- full parsed companies array
  * @returns {{ answer: string, matchedCompanies: Array }}
  */
 export async function queryCerebro(question, companies) {
-  // Phase 1 — keyword extraction (normalize accents, filter stop words)
+  // Phase 1 -- keyword extraction (normalize accents, filter stop words)
   const keywords = question
     .toLowerCase()
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -162,7 +139,6 @@ export async function queryCerebro(question, companies) {
   }
 
   // Build keyword variants for simple stemming (plural handling)
-  // "sheets" -> ["sheets", "sheet"], "inversiones" -> ["inversiones", "inversion"]
   const keywordVariants = keywords.map(kw => {
     const variants = [kw];
     if (kw.endsWith("s")) variants.push(kw.slice(0, -1));
@@ -207,7 +183,7 @@ export async function queryCerebro(question, companies) {
   const allMatches = scored.map(m => m.company);
   const topForGemini = scored.slice(0, 50);
 
-  // Phase 2 — fetch relevant past Q&A from knowledge base (non-blocking on error)
+  // Phase 2 -- fetch relevant past Q&A from knowledge base (non-blocking on error)
   let knowledgeContext = "";
   try {
     const pastKnowledge = await fetchRelevantKnowledge(keywords, 5);
@@ -221,7 +197,7 @@ export async function queryCerebro(question, companies) {
     console.warn("Knowledge base fetch failed (continuing without):", err.message);
   }
 
-  // Phase 3 — build context for Gemini (compact to fit more companies)
+  // Phase 3 -- build context for Gemini (compact to fit more companies)
   const contextEmpresas = topForGemini.map(({ company: c }) => ({
     empresa: c.name,
     dominio: c.domain,
@@ -261,7 +237,7 @@ INSTRUCCIONES:
   const rawAnswer = await callGemini(prompt, 0.2);
   const answer = rawAnswer.trim();
 
-  // Phase 4 — save Q&A to knowledge base (fire-and-forget, don't block the response)
+  // Phase 4 -- save Q&A to knowledge base (fire-and-forget, don't block the response)
   const matchedDomains = allMatches.map(c => c.domain);
   const savePromise = saveKnowledge({
     question,

@@ -3,28 +3,16 @@
  *
  * Syncs prospect tasks to Airtable, linking Owner (Config - Users)
  * and Opportunity (if prospect was converted).
+ * All requests go through /api/airtable-proxy (Vercel serverless).
  */
 
 import { TEAM_MEMBERS } from './airtableProspects';
+import { airtableProxy, isProxyConfigured } from './proxyClient';
 
-const BASE_ID = "appVu3TvSZ1E4tj0J";
 const TABLE_NAME = "Internal - Tasks";
 const USERS_TABLE_ID = "tblb3kyXSnXS0GPjy";
-const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
-const USERS_API = `https://api.airtable.com/v0/${BASE_ID}/${USERS_TABLE_ID}`;
 
-function getToken() {
-  return import.meta.env.VITE_AIRTABLE_PAT || "";
-}
-
-function headers() {
-  return {
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  };
-}
-
-// ── Status mapping ──────────────────────────────────────────────────
+// -- Status mapping ----------------------------------------------------------
 
 export const STATUS_MAP = {
   pendiente: "To do",
@@ -38,7 +26,7 @@ const STATUS_MAP_REVERSE = {
   "Done": "hecho",
 };
 
-// ── User cache (email → recordId) ──────────────────────────────────
+// -- User cache (email -> recordId) ------------------------------------------
 
 const userCache = new Map();
 
@@ -46,21 +34,25 @@ export async function fetchUserByEmail(email) {
   if (!email) return null;
   if (userCache.has(email)) return userCache.get(email);
 
-  const formula = encodeURIComponent(`{Email}="${email}"`);
-  const res = await fetch(`${USERS_API}?filterByFormula=${formula}&maxRecords=1`, {
-    headers: headers(),
-  });
-  if (!res.ok) {
-    console.warn(`Config - Users lookup failed for ${email}:`, res.status);
+  try {
+    const formula = `{Email}="${email}"`;
+    // Use the users table ID directly as the table name
+    const data = await airtableProxy({
+      table: USERS_TABLE_ID,
+      method: 'GET',
+      formula,
+      pageSize: 1,
+    });
+    const recordId = data.records?.[0]?.id || null;
+    if (recordId) userCache.set(email, recordId);
+    return recordId;
+  } catch (err) {
+    console.warn(`Config - Users lookup failed for ${email}:`, err.message);
     return null;
   }
-  const data = await res.json();
-  const recordId = data.records?.[0]?.id || null;
-  if (recordId) userCache.set(email, recordId);
-  return recordId;
 }
 
-// ── Resolve owner name → Airtable record ID ────────────────────────
+// -- Resolve owner name -> Airtable record ID --------------------------------
 
 async function resolveOwner(assignedToName) {
   if (!assignedToName) return null;
@@ -69,10 +61,10 @@ async function resolveOwner(assignedToName) {
   return fetchUserByEmail(member.email);
 }
 
-// ── CREATE ──────────────────────────────────────────────────────────
+// -- CREATE ------------------------------------------------------------------
 
 export async function createAirtableTask(task, opportunityId) {
-  const fields = {
+  const fields: Record<string, any> = {
     "Name": task.text || "",
     "Status": STATUS_MAP[task.status] || "To do",
   };
@@ -85,23 +77,18 @@ export async function createAirtableTask(task, opportunityId) {
 
   if (opportunityId) fields["Opportunity"] = [opportunityId];
 
-  const res = await fetch(API_ROOT, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ fields }),
+  const record = await airtableProxy({
+    table: TABLE_NAME,
+    method: 'POST',
+    fields,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable Tasks POST ${res.status}: ${body}`);
-  }
-  const record = await res.json();
   return record.id;
 }
 
-// ── UPDATE ──────────────────────────────────────────────────────────
+// -- UPDATE ------------------------------------------------------------------
 
 export async function updateAirtableTask(airtableId, task) {
-  const fields = {
+  const fields: Record<string, any> = {
     "Name": task.text || "",
     "Status": STATUS_MAP[task.status] || "To do",
   };
@@ -114,28 +101,24 @@ export async function updateAirtableTask(airtableId, task) {
     fields["Owner"] = [ownerRecId];
   }
 
-  const res = await fetch(`${API_ROOT}/${airtableId}`, {
-    method: "PATCH",
-    headers: headers(),
-    body: JSON.stringify({ fields }),
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'PATCH',
+    recordId: airtableId,
+    fields,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable Tasks PATCH ${res.status}: ${body}`);
-  }
-  return res.json();
 }
 
-// ── Sync all tasks for a prospect ───────────────────────────────────
+// -- Sync all tasks for a prospect -------------------------------------------
 
 /**
  * Sync an array of tasks to Airtable.
- * - Tasks without airtableId → create
- * - Tasks with airtableId → update
+ * - Tasks without airtableId -> create
+ * - Tasks with airtableId -> update
  * Returns updated tasks array with airtableIds populated.
  */
 export async function syncTasksToAirtable(tasks, opportunityId) {
-  if (!getToken() || !tasks?.length) return { tasks, synced: 0, errors: 0 };
+  if (!isProxyConfigured() || !tasks?.length) return { tasks, synced: 0, errors: 0 };
 
   let synced = 0;
   let errors = 0;

@@ -125,7 +125,7 @@ export default function ProspectsView({ onSelectProspect, onCreateProspect, comp
 
   async function loadProspects() {
     if (!isAirtableConfigured()) {
-      setError('Airtable no configurado. Configura VITE_AIRTABLE_PAT.');
+      setError('Airtable proxy no configurado. Configura VITE_CAMPAIGN_PROXY_SECRET.');
       setLoading(false);
       return;
     }

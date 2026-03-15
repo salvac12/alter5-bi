@@ -1,29 +1,19 @@
 /**
- * Cerebro Knowledge Base — Airtable REST API backend.
+ * Cerebro Knowledge Base -- Airtable REST API backend.
  *
  * Stores past Q&A from the Cerebro AI so that future queries
  * benefit from accumulated organizational knowledge.
  *
  * Same base as Opportunities/Prospects (appVu3TvSZ1E4tj0J).
- * Table: "Cerebro-Knowledge" (create with scripts/create_cerebro_table.py)
+ * Table: "Cerebro-Knowledge"
+ * All requests go through /api/airtable-proxy (Vercel serverless).
  */
 
-const BASE_ID = "appVu3TvSZ1E4tj0J";
+import { airtableProxy, isProxyConfigured } from './proxyClient';
+
 const TABLE_NAME = "Cerebro-Knowledge";
-const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
 
-function getToken() {
-  return import.meta.env.VITE_AIRTABLE_PAT || "";
-}
-
-function headers() {
-  return {
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  };
-}
-
-// ── In-memory cache ──────────────────────────────────────────────────
+// -- In-memory cache ----------------------------------------------------------
 // Avoids re-fetching from Airtable on every query within the same session.
 let knowledgeCache = null;
 let cacheTimestamp = 0;
@@ -39,26 +29,20 @@ export async function fetchAllKnowledge() {
     return knowledgeCache;
   }
 
-  const token = getToken();
-  if (!token) return [];
+  if (!isProxyConfigured()) return [];
 
   const allRecords = [];
   let offset = "";
 
   try {
     do {
-      const params = new URLSearchParams({
+      const data = await airtableProxy({
+        table: TABLE_NAME,
+        method: 'GET',
         sort: JSON.stringify([{ field: "CreatedAt", direction: "desc" }]),
-        pageSize: "100",
+        pageSize: 100,
+        ...(offset ? { offset } : {}),
       });
-      if (offset) params.set("offset", offset);
-
-      const res = await fetch(`${API_ROOT}?${params}`, { headers: headers() });
-      if (!res.ok) {
-        console.warn("Cerebro KB fetch error:", res.status);
-        return knowledgeCache || [];
-      }
-      const data = await res.json();
       allRecords.push(...(data.records || []));
       offset = data.offset || "";
     } while (offset);
@@ -117,8 +101,7 @@ export async function fetchRelevantKnowledge(keywords, maxResults = 5) {
  * Returns the created record ID, or null on error.
  */
 export async function saveKnowledge({ question, answer, keywords, matchedDomains, matchCount }) {
-  const token = getToken();
-  if (!token) return null;
+  if (!isProxyConfigured()) return null;
 
   const fields = {
     Question: question.slice(0, 500),
@@ -130,16 +113,11 @@ export async function saveKnowledge({ question, answer, keywords, matchedDomains
   };
 
   try {
-    const res = await fetch(API_ROOT, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ fields }),
+    const data = await airtableProxy({
+      table: TABLE_NAME,
+      method: 'POST',
+      fields,
     });
-    if (!res.ok) {
-      console.warn("Cerebro KB save error:", res.status);
-      return null;
-    }
-    const data = await res.json();
     // Invalidate cache so next fetch picks up the new entry
     knowledgeCache = null;
     return data.id;
@@ -153,18 +131,18 @@ export async function saveKnowledge({ question, answer, keywords, matchedDomains
  * Update the Useful/NotUseful feedback on a knowledge entry.
  */
 export async function updateFeedback(recordId, useful) {
-  const token = getToken();
-  if (!token || !recordId) return;
+  if (!isProxyConfigured() || !recordId) return;
 
   const fields = useful
     ? { Useful: true, NotUseful: false }
     : { Useful: false, NotUseful: true };
 
   try {
-    await fetch(`${API_ROOT}/${recordId}`, {
-      method: "PATCH",
-      headers: headers(),
-      body: JSON.stringify({ fields }),
+    await airtableProxy({
+      table: TABLE_NAME,
+      method: 'PATCH',
+      recordId,
+      fields,
     });
     // Update cache entry if present
     if (knowledgeCache) {

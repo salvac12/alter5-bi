@@ -1,28 +1,16 @@
 /**
- * Prospects data layer — Airtable REST API backend.
+ * Prospects data layer -- Airtable REST API backend.
  *
- * Same base as Opportunities (appVu3TvSZ1E4tj0J), table "Prospects".
- * Uses VITE_AIRTABLE_PAT (env var injected at build time by Vite).
+ * Same base as Opportunities (appVu3TvSZ1E4tj0J), table "BETA-Prospects".
+ * All requests go through /api/airtable-proxy (Vercel serverless).
  */
 
 import { createOpportunity } from './airtable';
+import { airtableProxy } from './proxyClient';
 
-const BASE_ID = "appVu3TvSZ1E4tj0J";
 const TABLE_NAME = "BETA-Prospects";
-const API_ROOT = `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`;
 
-function getToken() {
-  return import.meta.env.VITE_AIRTABLE_PAT || "";
-}
-
-function headers() {
-  return {
-    Authorization: `Bearer ${getToken()}`,
-    "Content-Type": "application/json",
-  };
-}
-
-// ── Prospect Stages ─────────────────────────────────────────────────
+// -- Prospect Stages ---------------------------------------------------------
 
 export const PROSPECT_STAGES = [
   "Lead",
@@ -48,7 +36,7 @@ export const PROSPECT_STAGE_SHORT = {
   "Listo para Term-Sheet":      "Term-Sheet",
 };
 
-// ── Origin options ──────────────────────────────────────────────────
+// -- Origin options ----------------------------------------------------------
 
 export const ORIGIN_OPTIONS = [
   "Referral",
@@ -60,7 +48,7 @@ export const ORIGIN_OPTIONS = [
   "Otro",
 ];
 
-// ── Team members ────────────────────────────────────────────────────
+// -- Team members ------------------------------------------------------------
 
 export const TEAM_MEMBERS = [
   { name: "Carlos Almodovar", email: "carlos.almodovar@alter-5.com" },
@@ -72,7 +60,7 @@ export const TEAM_MEMBERS = [
   { name: "Leticia Menendez", email: "leticia.menendez@alter-5.com" },
 ];
 
-// ── Task templates ──────────────────────────────────────────────────
+// -- Task templates ----------------------------------------------------------
 
 export const TASK_TEMPLATES = [
   "Convocar reunion",
@@ -80,7 +68,7 @@ export const TASK_TEMPLATES = [
   "Preparar Term-Sheet",
 ];
 
-// ── READ ────────────────────────────────────────────────────────────
+// -- READ --------------------------------------------------------------------
 
 /**
  * Fetch all active prospects (handles pagination).
@@ -89,17 +77,15 @@ export const TASK_TEMPLATES = [
 export async function fetchAllProspects() {
   const all = [];
   let offset = null;
-  const formula = encodeURIComponent('{Record Status}="Active"');
+  const formula = '{Record Status}="Active"';
 
   do {
-    let url = `${API_ROOT}?filterByFormula=${formula}`;
-    if (offset) url += `&offset=${offset}`;
-    const res = await fetch(url, { headers: headers() });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Airtable Prospects GET ${res.status}: ${body}`);
-    }
-    const data = await res.json();
+    const data = await airtableProxy({
+      table: TABLE_NAME,
+      method: 'GET',
+      formula,
+      ...(offset ? { offset } : {}),
+    });
     all.push(...(data.records || []));
     offset = data.offset || null;
   } while (offset);
@@ -111,15 +97,14 @@ export async function fetchAllProspects() {
  * Fetch a single prospect by ID.
  */
 export async function fetchProspect(recordId) {
-  const res = await fetch(`${API_ROOT}/${recordId}`, { headers: headers() });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable Prospects GET ${res.status}: ${body}`);
-  }
-  return res.json();
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'GET',
+    recordId,
+  });
 }
 
-// ── CREATE ──────────────────────────────────────────────────────────
+// -- CREATE ------------------------------------------------------------------
 
 /**
  * Create a new prospect record.
@@ -135,29 +120,24 @@ export async function createProspect(fields) {
     }
   }
 
-  const res = await fetch(API_ROOT, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify({ fields: clean }),
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'POST',
+    fields: clean,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable Prospects POST ${res.status}: ${body}`);
-  }
-  return res.json();
 }
 
-// ── UPDATE ──────────────────────────────────────────────────────────
+// -- UPDATE ------------------------------------------------------------------
 
 /**
- * Update an existing prospect (PATCH — partial update).
+ * Update an existing prospect (PATCH -- partial update).
  * @param {string} recordId - Airtable record ID (rec...)
  * @param {object} fields - Fields to update
  * @returns {object} Updated record
  */
 export async function updateProspect(recordId, fields) {
   // Sanitize: remove fields that are arrays of record IDs (linked records read
-  // from Airtable) — sending them as-is causes 422.
+  // from Airtable) -- sending them as-is causes 422.
   const clean = { ...fields };
   for (const [k, v] of Object.entries(clean)) {
     if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string" && v[0].startsWith("rec")) {
@@ -165,36 +145,28 @@ export async function updateProspect(recordId, fields) {
     }
   }
 
-  const res = await fetch(`${API_ROOT}/${recordId}`, {
-    method: "PATCH",
-    headers: headers(),
-    body: JSON.stringify({ fields: clean }),
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'PATCH',
+    recordId,
+    fields: clean,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable Prospects PATCH ${res.status}: ${body}`);
-  }
-  return res.json();
 }
 
-// ── DELETE ───────────────────────────────────────────────────────────
+// -- DELETE ------------------------------------------------------------------
 
 /**
  * Delete a prospect record by ID.
  */
 export async function deleteProspect(recordId) {
-  const res = await fetch(`${API_ROOT}/${recordId}`, {
-    method: "DELETE",
-    headers: headers(),
+  return airtableProxy({
+    table: TABLE_NAME,
+    method: 'DELETE',
+    recordId,
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable Prospects DELETE ${res.status}: ${body}`);
-  }
-  return res.json();
 }
 
-// ── CONVERSION: Prospect → Opportunity ──────────────────────────────
+// -- CONVERSION: Prospect -> Opportunity -------------------------------------
 
 export async function convertToOpportunity(prospect) {
   // 1. Create Opportunity in Airtable Opportunities table
@@ -219,7 +191,7 @@ export async function convertToOpportunity(prospect) {
   return { opportunity: newOpp, prospect: { id: updated.id, fields: updated.fields } };
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
+// -- Helpers -----------------------------------------------------------------
 
 export function normalizeProspect(record) {
   const f = record.fields || {};
