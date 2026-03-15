@@ -292,20 +292,6 @@ export default function CandidateSearchView({
     }
   }
 
-  // ── Detect domains already contacted by Leticia (campaign sender) ──
-  const leticiaDomains = useMemo(() => {
-    const matched = new Set();
-    for (const c of allCompanies) {
-      const domain = c.domain?.toLowerCase();
-      if (!domain) continue;
-      const leticiaSource = (c.detail?.sources || []).find(
-        s => s.employee === 'leticia_menéndez'
-      );
-      if (leticiaSource && leticiaSource.interactions > 0) matched.add(domain);
-    }
-    return matched;
-  }, [allCompanies]);
-
   // ── Derive unique filter options from pool companies ──
   const originacionCompanies = useMemo(() => {
     if (utilityScaleMode) {
@@ -327,7 +313,7 @@ export default function CandidateSearchView({
 
     for (const c of originacionCompanies) {
       const d = c.domain?.toLowerCase();
-      if (d && (trackingDomains.has(d) || allSentDomains.has(d) || leticiaDomains.has(d))) continue;
+      if (d && (trackingDomains.has(d) || allSentDomains.has(d))) continue;
       if (c.segment) segments.set(c.segment, (segments.get(c.segment) || 0) + 1);
       if (c.companyType) types.set(c.companyType, (types.get(c.companyType) || 0) + 1);
       for (const t of (c.technologies || [])) {
@@ -363,7 +349,7 @@ export default function CandidateSearchView({
       mwRangeCounts,
       permitCounts,
     };
-  }, [originacionCompanies, allCompanies, utilityScaleMode, trackingDomains, allSentDomains, leticiaDomains]);
+  }, [originacionCompanies, allCompanies, utilityScaleMode, trackingDomains, allSentDomains]);
 
   // ── Filter candidates ──
   const candidates = useMemo(() => {
@@ -373,14 +359,12 @@ export default function CandidateSearchView({
       if (domain && trackingDomains.has(domain)) return false;
       // Exclude domains already in Bridge campaign (Airtable)
       if (domain && allSentDomains.has(domain)) return false;
-      // Exclude domains contacted by Leticia via CRM
-      if (domain && leticiaDomains.has(domain)) return false;
       // Segment filter
       if (segFilter !== 'todas' && c.segment !== segFilter) return false;
       // Type filter
       if (typeFilter !== 'todos' && c.companyType !== typeFilter) return false;
       // Tech filter (AND)
-      if (techFilter.length > 0 && !techFilter.every(t => c.technologies?.includes(t))) return false;
+      if (techFilter.length > 0 && !techFilter.some(t => c.technologies?.includes(t))) return false;
       // Text search
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -402,18 +386,21 @@ export default function CandidateSearchView({
       return true;
     });
 
-    // Sort: large utilities last, then by MW descending
-    if (utilityScaleMode) {
-      filtered.sort((a, b) => {
+    // Sort: always prioritize scraper companies, large utilities last in utility mode
+    filtered.sort((a, b) => {
+      const aHas = getScraperProjects(a) > 0 ? 1 : 0;
+      const bHas = getScraperProjects(b) > 0 ? 1 : 0;
+      if (aHas !== bHas) return bHas - aHas;
+      if (utilityScaleMode) {
         const aLarge = isLargeUtility(a) ? 1 : 0;
         const bLarge = isLargeUtility(b) ? 1 : 0;
         if (aLarge !== bLarge) return aLarge - bLarge;
-        return getScraperMw(b) - getScraperMw(a);
-      });
-    }
+      }
+      return getScraperMw(b) - getScraperMw(a);
+    });
 
     return filtered;
-  }, [originacionCompanies, trackingDomains, allSentDomains, leticiaDomains, segFilter, typeFilter, techFilter, searchQuery, statusFilter, savedTargets, mwFilter, permitFilter, utilityScaleMode]);
+  }, [originacionCompanies, trackingDomains, allSentDomains, segFilter, typeFilter, techFilter, searchQuery, statusFilter, savedTargets, mwFilter, permitFilter, utilityScaleMode]);
 
   const paginated = candidates.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(candidates.length / PAGE_SIZE);
@@ -422,7 +409,7 @@ export default function CandidateSearchView({
   const kpis = useMemo(() => {
     const isExcluded = c => {
       const d = c.domain?.toLowerCase();
-      return d && (trackingDomains.has(d) || allSentDomains.has(d) || leticiaDomains.has(d));
+      return d && (trackingDomains.has(d) || allSentDomains.has(d));
     };
     const available = originacionCompanies.filter(c => !isExcluded(c)).length;
     const contacted = originacionCompanies.filter(c => isExcluded(c)).length;
@@ -435,7 +422,7 @@ export default function CandidateSearchView({
       }
     }
     return { available, contacted, approvedCount, approvedContacts };
-  }, [originacionCompanies, trackingDomains, allSentDomains, leticiaDomains, savedTargets]);
+  }, [originacionCompanies, trackingDomains, allSentDomains, savedTargets]);
 
   // ── Actions ──
 
