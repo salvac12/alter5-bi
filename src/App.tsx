@@ -27,8 +27,15 @@ import CleanupToolbar from './components/CleanupToolbar';
 import AppShell from './components/layout/AppShell';
 import blocklist from './data/blocklist.json';
 import type { ViewId } from './types';
+import type { AuthUser } from './utils/auth';
+import employees from './data/employees.json';
 
-export default function App() {
+interface AppProps {
+  authUser: AuthUser;
+  onLogout: () => void;
+}
+
+export default function App({ authUser, onLogout }: AppProps) {
   const allCompanies = useMemo(() => parseCompanies(), []);
   const [hiddenCompanies, setHiddenCompanies] = useState(() => getHiddenCompanies());
   const [enrichmentOverrides, setEnrichmentOverrides] = useState(() => getAllEnrichmentOverrides());
@@ -66,8 +73,18 @@ export default function App() {
     fetchAllInvestorNotes().then(map => setInvestorNotes(map)).catch(() => {});
   }, []);
 
-  // ── User identity ──
-  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  // ── User identity (derived from Google auth) ──
+  const [currentUser, setCurrentUser] = useState(() => {
+    // Map auth email to employee list, fallback to getCurrentUser() for backward compat
+    const emailName = authUser.email.split('@')[0].toLowerCase(); // e.g. "salvador.carrillo"
+    const matched = employees.find(e => {
+      const empNorm = e.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '.');
+      return empNorm === emailName || e.name.toLowerCase() === authUser.name?.toLowerCase();
+    });
+    if (matched) return { id: matched.id, name: matched.name, isAdmin: false };
+    // Fallback: use auth name or legacy getCurrentUser
+    return getCurrentUser() || { id: emailName, name: authUser.name || emailName, isAdmin: false };
+  });
   const [showUserSelector, setShowUserSelector] = useState(false);
 
   // ── View state ──
@@ -578,6 +595,8 @@ export default function App() {
       onToggleCleanup={() => { setCleanupMode(m => !m); setCleanupSelection(new Set()); setCleanupFilter(null); setPage(0); }}
       currentUser={currentUser}
       onOpenSettings={() => setShowUserSelector(true)}
+      onLogout={onLogout}
+      authPicture={authUser.picture}
       subtitle={subtitle}
     >
       {/* ── Content area ── */}

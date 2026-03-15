@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Search, Download, Trash2 } from 'lucide-react';
+import { Sparkles, Search, Download, Trash2, LogOut } from 'lucide-react';
 import alter5Logo from '../../assets/alter5-logo.svg';
 import { colors, font, layout, spacing, transitions } from '../../theme/tokens';
 import type { ViewId } from '../../types';
@@ -15,6 +15,8 @@ interface HeaderProps {
   onToggleCleanup: () => void;
   currentUser: any;
   onOpenSettings: () => void;
+  onLogout?: () => void;
+  authPicture?: string;
   subtitle: string;
 }
 
@@ -29,6 +31,8 @@ export default function Header({
   onToggleCleanup,
   currentUser,
   onOpenSettings,
+  onLogout,
+  authPicture,
   subtitle,
 }: HeaderProps) {
   const [searchFocused, setSearchFocused] = useState(false);
@@ -189,7 +193,7 @@ export default function Header({
           />
         </div>
 
-        {/* Separator + User Avatar */}
+        {/* Separator + User Avatar + Logout */}
         {currentUser && (
           <div style={{
             display: 'flex',
@@ -204,6 +208,7 @@ export default function Header({
                 width: 30,
                 height: 30,
                 borderRadius: '50%',
+                overflow: 'hidden',
                 background: '#FFFFFF',
                 display: 'flex',
                 alignItems: 'center',
@@ -216,8 +221,50 @@ export default function Header({
                 boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
               }}
             >
-              {initials}
+              {authPicture ? (
+                <img
+                  src={authPicture}
+                  alt={currentUser.name}
+                  style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover' }}
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                initials
+              )}
             </div>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                title="Cerrar sesion"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 28,
+                  height: 28,
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 6,
+                  color: 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  padding: 0,
+                  fontFamily: font.family,
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
+                  e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)';
+                  e.currentTarget.style.color = '#F87171';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                  e.currentTarget.style.color = 'rgba(255,255,255,0.5)';
+                }}
+              >
+                <LogOut size={13} />
+              </button>
+            )}
           </div>
         )}
       </div>

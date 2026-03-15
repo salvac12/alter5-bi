@@ -1,32 +1,117 @@
-/* ═══════════════════════════════════════════════════════════════
-   LoginScreen — Visual login screen (UI only, no real auth)
-   ═══════════════════════════════════════════════════════════════ */
+/* ===================================================================
+   LoginScreen -- Google Sign-In with Alter5 branding
+   =================================================================== */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { LogIn, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { colors, font, layout, spacing, shadows, transitions } from '../../theme/tokens';
+import { getGoogleClientId, verifyToken } from '../../utils/auth';
+import type { AuthUser } from '../../utils/auth';
 
-// ── Types ───────────────────────────────────────────────────────
+// -- Types --------------------------------------------------------
 
 interface LoginScreenProps {
-  onLogin: (email: string) => void;
+  onLogin: (user: AuthUser) => void;
 }
 
-// ── Component ───────────────────────────────────────────────────
+// -- Google GIS type declarations ---------------------------------
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: any) => void;
+          renderButton: (el: HTMLElement, config: any) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }
+}
+
+// -- Component ----------------------------------------------------
 
 export function LoginScreen({ onLogin }: LoginScreenProps) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
-  const [showPwd, setShowPwd] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [gisReady, setGisReady] = useState(false);
+  const buttonRef = useRef<HTMLDivElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onLogin(email);
-  };
+  // Load Google Identity Services script
+  useEffect(() => {
+    const clientId = getGoogleClientId();
+    if (!clientId) {
+      setError('VITE_GOOGLE_CLIENT_ID no configurado. Contacta al administrador.');
+      return;
+    }
 
-  // ── Styles ──────────────────────────────────────────────────
+    // Check if already loaded
+    if (window.google?.accounts?.id) {
+      initializeGIS(clientId);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => initializeGIS(clientId);
+    script.onerror = () => setError('Error cargando Google Sign-In. Recarga la pagina.');
+    document.head.appendChild(script);
+
+    return () => {
+      // Cleanup only if we added it
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+  }, []);
+
+  function initializeGIS(clientId: string) {
+    if (!window.google?.accounts?.id) return;
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleCredentialResponse,
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+
+    // Render the Google button
+    if (buttonRef.current) {
+      window.google.accounts.id.renderButton(buttonRef.current, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        width: 340,
+        text: 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+      });
+    }
+
+    setGisReady(true);
+  }
+
+  async function handleCredentialResponse(response: { credential: string }) {
+    setError('');
+    setLoading(true);
+
+    try {
+      const verified = await verifyToken(response.credential);
+      if (verified) {
+        onLogin(verified);
+      } else {
+        setError('No se pudo verificar tu cuenta. Asegurate de usar tu email @alter-5.com.');
+      }
+    } catch {
+      setError('Error al verificar. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // -- Styles -------------------------------------------------------
 
   const wrapperStyle: React.CSSProperties = {
     display: 'flex',
@@ -122,6 +207,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const formContainerStyle: React.CSSProperties = {
     maxWidth: 380,
     width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
   };
 
   const formTitleStyle: React.CSSProperties = {
@@ -129,118 +217,52 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     fontWeight: font.weight.bold,
     color: colors.text.primary,
     marginBottom: spacing.xs,
+    textAlign: 'center' as const,
   };
 
   const formSubtitleStyle: React.CSSProperties = {
     fontSize: font.size.md,
     color: colors.text.secondary,
     marginBottom: spacing['3xl'],
+    textAlign: 'center' as const,
   };
 
-  const fieldGroupStyle: React.CSSProperties = {
-    marginBottom: spacing.xl,
-  };
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: font.size.sm,
-    fontWeight: font.weight.medium,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
+  const errorStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    background: '#FEF2F2',
+    border: '1px solid #FECACA',
+    borderRadius: layout.borderRadius.md,
     padding: `${spacing.md} ${spacing.lg}`,
-    borderRadius: layout.borderRadius.md,
-    border: `1px solid ${colors.light.border}`,
-    fontSize: font.size.md,
-    fontFamily: font.family,
-    color: colors.text.primary,
-    outline: 'none',
-    transition: transitions.fast,
-    boxSizing: 'border-box' as const,
-  };
-
-  const passwordWrapStyle: React.CSSProperties = {
-    position: 'relative',
-  };
-
-  const eyeBtnStyle: React.CSSProperties = {
-    position: 'absolute',
-    right: 12,
-    top: '50%',
-    transform: 'translateY(-50%)',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: colors.text.secondary,
-    padding: spacing.xs,
-    display: 'flex',
-    alignItems: 'center',
-  };
-
-  const checkRowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing['2xl'],
-    cursor: 'pointer',
-  };
-
-  const checkboxStyle: React.CSSProperties = {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    border: `1.5px solid ${remember ? colors.accent.blue : colors.light.border}`,
-    background: remember ? colors.accent.blue : 'transparent',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    transition: transitions.fast,
-  };
-
-  const checkLabelStyle: React.CSSProperties = {
     fontSize: font.size.sm,
-    color: colors.text.secondary,
+    color: '#DC2626',
+    marginTop: spacing.xl,
+    maxWidth: 340,
+    lineHeight: font.lineHeight.normal,
   };
 
-  const submitBtnStyle: React.CSSProperties = {
-    width: '100%',
-    padding: `${spacing.md} ${spacing.xl}`,
-    borderRadius: layout.borderRadius.md,
-    border: 'none',
-    background: `linear-gradient(135deg, ${colors.accent.blue}, ${colors.accent.green})`,
-    color: '#fff',
+  const loadingStyle: React.CSSProperties = {
     fontSize: font.size.md,
-    fontWeight: font.weight.semibold,
-    fontFamily: font.family,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    transition: transitions.fast,
-    boxShadow: shadows.md,
+    color: colors.text.secondary,
+    marginTop: spacing.xl,
   };
 
-  // Responsive: media query via inline fallback (use flex-direction)
-  const responsiveStyle: React.CSSProperties = {
-    ...wrapperStyle,
+  const domainHintStyle: React.CSSProperties = {
+    fontSize: font.size.xs,
+    color: colors.text.muted,
+    marginTop: spacing.lg,
+    textAlign: 'center' as const,
   };
-
-  // We detect narrow screen via a CSS-like approach with minWidth on each side
-  // The flex: 1 on both sides handles the split naturally
 
   return (
     <motion.div
-      style={responsiveStyle}
+      style={wrapperStyle}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
     >
-      {/* Left — Branding */}
+      {/* Left -- Branding */}
       <div style={leftStyle}>
         <div style={circle1} />
         <div style={circle2} />
@@ -274,7 +296,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
         </motion.div>
       </div>
 
-      {/* Right — Form */}
+      {/* Right -- Google Sign-In */}
       <div style={rightStyle}>
         <motion.div
           style={formContainerStyle}
@@ -283,73 +305,37 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           transition={{ delay: 0.3, duration: 0.5 }}
         >
           <div style={formTitleStyle}>Iniciar sesion</div>
-          <div style={formSubtitleStyle}>Accede a tu panel de inteligencia comercial</div>
+          <div style={formSubtitleStyle}>Accede con tu cuenta de Google Workspace</div>
 
-          <form onSubmit={handleSubmit}>
-            <div style={fieldGroupStyle}>
-              <label style={labelStyle}>Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="nombre@alter-5.com"
-                style={inputStyle}
-                onFocus={e => {
-                  e.currentTarget.style.borderColor = colors.accent.blue;
-                  e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.accent.blue}20`;
-                }}
-                onBlur={e => {
-                  e.currentTarget.style.borderColor = colors.light.border;
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
+          {/* Google Sign-In button container */}
+          <div
+            ref={buttonRef}
+            style={{
+              minHeight: 44,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          />
+
+          {!gisReady && !error && (
+            <div style={loadingStyle}>Cargando...</div>
+          )}
+
+          {loading && (
+            <div style={loadingStyle}>Verificando cuenta...</div>
+          )}
+
+          {error && (
+            <div style={errorStyle}>
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span>{error}</span>
             </div>
+          )}
 
-            <div style={fieldGroupStyle}>
-              <label style={labelStyle}>Contrasena</label>
-              <div style={passwordWrapStyle}>
-                <input
-                  type={showPwd ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Tu contrasena"
-                  style={{ ...inputStyle, paddingRight: 44 }}
-                  onFocus={e => {
-                    e.currentTarget.style.borderColor = colors.accent.blue;
-                    e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.accent.blue}20`;
-                  }}
-                  onBlur={e => {
-                    e.currentTarget.style.borderColor = colors.light.border;
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                />
-                <button
-                  type="button"
-                  style={eyeBtnStyle}
-                  onClick={() => setShowPwd(!showPwd)}
-                  aria-label={showPwd ? 'Ocultar contrasena' : 'Mostrar contrasena'}
-                >
-                  {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </div>
-
-            <div style={checkRowStyle} onClick={() => setRemember(!remember)}>
-              <div style={checkboxStyle}>
-                {remember && (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </div>
-              <span style={checkLabelStyle}>Recordarme</span>
-            </div>
-
-            <button type="submit" style={submitBtnStyle}>
-              <LogIn size={16} />
-              Entrar
-            </button>
-          </form>
+          <div style={domainHintStyle}>
+            Solo cuentas @alter-5.com
+          </div>
         </motion.div>
       </div>
     </motion.div>
