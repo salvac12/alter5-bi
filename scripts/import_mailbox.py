@@ -26,8 +26,9 @@
 
 import argparse
 import json
-import sys
 import os
+import sys
+import tempfile
 import time
 from datetime import datetime
 
@@ -51,6 +52,18 @@ _paths = get_data_paths()
 COMPACT_FILE = _paths["compact"]
 FULL_FILE = _paths["full"]
 EMPLOYEES_FILE = _paths["employees"]
+
+
+def _atomic_json_write(path, data, **kwargs):
+    """Write JSON to a file atomically using temp file + os.replace."""
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, **kwargs)
+        os.replace(tmp_path, path)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
 
 
 def _safe_str(val, pd):
@@ -585,17 +598,14 @@ Ejemplos:
 
     os.makedirs(os.path.dirname(FULL_FILE), exist_ok=True)
 
-    with open(FULL_FILE, "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False, indent=2)
+    _atomic_json_write(FULL_FILE, full_data, indent=2)
 
     # 7. Save compact data (for React app)
     compact = export_to_compact(all_companies)
-    with open(COMPACT_FILE, "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
+    _atomic_json_write(COMPACT_FILE, compact, separators=(",", ":"))
 
     # 8. Save employees list
-    with open(EMPLOYEES_FILE, "w", encoding="utf-8") as f:
-        json.dump(employees, f, ensure_ascii=False, indent=2)
+    _atomic_json_write(EMPLOYEES_FILE, employees, indent=2)
 
     # 9. Register in Google Sheet (if email provided and env vars set)
     if args.email and not args.no_sheet:

@@ -17,9 +17,10 @@ import json
 import os
 import re
 import sys
+import tempfile
 import unicodedata
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "src", "data")
@@ -30,6 +31,18 @@ COMPANIES_FULL = os.path.join(DATA_DIR, "companies_full.json")
 COMPANIES_COMPACT = os.path.join(DATA_DIR, "companies.json")
 
 SKIP_PARENTS = {"unknown", "self", "desconocido", ""}
+
+
+def _atomic_json_write(path, data, **kwargs):
+    """Write JSON to a file atomically using temp file + os.replace."""
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, **kwargs)
+        os.replace(tmp_path, path)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
 
 
 def normalize(s):
@@ -285,7 +298,7 @@ def main():
     print(f"\n  Unmatched (to add): {len(unmatched)}")
 
     # Create new CRM entries
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     new_count = 0
     skipped_domains = 0
 
@@ -447,12 +460,10 @@ def main():
         return
 
     print("\nWriting companies_full.json...")
-    with open(COMPANIES_FULL, "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False)
+    _atomic_json_write(COMPANIES_FULL, full_data, indent=2)
 
     print("Writing companies.json...")
-    with open(COMPANIES_COMPACT, "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False)
+    _atomic_json_write(COMPANIES_COMPACT, compact, separators=(",", ":"))
 
     print(f"\nDone! Added {new_count} new companies to the CRM.")
 

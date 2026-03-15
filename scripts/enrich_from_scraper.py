@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import unicodedata
 from collections import defaultdict
 
@@ -29,6 +30,18 @@ SCRAPER_FILE = os.path.join(DATA_DIR, "scraper_projects.json")
 MAPPING_FILE = os.path.join(DATA_DIR, "spv_parent_mapping.json")
 COMPANIES_FULL = os.path.join(DATA_DIR, "companies_full.json")
 COMPANIES_COMPACT = os.path.join(DATA_DIR, "companies.json")
+
+
+def _atomic_json_write(path, data, **kwargs):
+    """Write JSON to a file atomically using temp file + os.replace."""
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, **kwargs)
+        os.replace(tmp_path, path)
+    except BaseException:
+        os.unlink(tmp_path)
+        raise
 
 
 def normalize(s):
@@ -357,14 +370,12 @@ def main():
 
     print("\nStep 5: Writing companies_full.json...")
     # companies dict is already mutated in-place inside full_data
-    with open(COMPANIES_FULL, "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False)
+    _atomic_json_write(COMPANIES_FULL, full_data, indent=2)
     print(f"  Written {COMPANIES_FULL}")
 
     print("\nStep 6: Regenerating companies.json (compact)...")
     compact = regenerate_compact(companies)
-    with open(COMPANIES_COMPACT, "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False)
+    _atomic_json_write(COMPANIES_COMPACT, compact, separators=(",", ":"))
     print(f"  Written {COMPANIES_COMPACT}")
 
     print(f"\nDone! Enriched {injected} companies with scraper data.")
