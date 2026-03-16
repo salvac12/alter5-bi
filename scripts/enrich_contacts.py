@@ -74,12 +74,13 @@ def campaign_priority_score(domain, company):
     details = company.get("details", [])
 
     # Parse contacts
+    raw_contacts = company.get("contacts", [])
     contacts = []
-    for d in details:
-        if isinstance(d, dict):
-            contacts.append(d)
-        elif isinstance(d, list) and len(d) >= 3:
-            contacts.append({"name": d[0], "role": d[1], "email": d[2] or ""})
+    for ct in raw_contacts:
+        if isinstance(ct, dict):
+            contacts.append(ct)
+        elif isinstance(ct, list) and len(ct) >= 3:
+            contacts.append({"name": ct[0], "role": ct[1], "email": ct[2] or ""})
 
     # -- Mid-market fit (max 30) --
     emp = enrichment.get("emp_count")
@@ -340,25 +341,23 @@ def save_companies(data, paths):
 
 def get_contacts_needing_enrichment(company):
     """Return contacts that need role enrichment (No identificado or empty)."""
-    details = company.get("details", [])
+    raw_contacts = company.get("contacts", [])
     contacts = []
-    for d in details:
-        if isinstance(d, dict):
-            name = d.get("name", "")
-            email = d.get("email", "")
-            role = d.get("role", "")
-        elif isinstance(d, list) and len(d) >= 3:
-            name = d[0] or ""
-            role = d[1] or ""
-            email = d[2] or ""
+    for ct in raw_contacts:
+        if isinstance(ct, dict):
+            name = ct.get("name", "")
+            email = ct.get("email", "")
+            role = ct.get("role", "")
+            role_source = ct.get("_role_source")
+        elif isinstance(ct, list) and len(ct) >= 3:
+            name = ct[0] or ""
+            role = ct[1] or ""
+            email = ct[2] or ""
+            role_source = None
         else:
             continue
         if not email:
             continue
-        # Skip already enriched contacts (have _role_source metadata)
-        role_source = None
-        if isinstance(d, dict):
-            role_source = d.get("_role_source")
         # Only enrich if role is empty or "No identificado"
         needs_enrichment = (
             not role or
@@ -495,16 +494,16 @@ def main():
                 result_by_email[email] = r
 
         # Update contacts in company data
-        details = all_companies[domain].get("details", [])
+        contact_list = all_companies[domain].get("contacts", [])
         updated = 0
         now = datetime.now(timezone.utc).isoformat()
 
-        for j, d in enumerate(details):
+        for j, ct in enumerate(contact_list):
             email = ""
-            if isinstance(d, dict):
-                email = (d.get("email") or "").lower().strip()
-            elif isinstance(d, list) and len(d) >= 3:
-                email = (d[2] or "").lower().strip()
+            if isinstance(ct, dict):
+                email = (ct.get("email") or "").lower().strip()
+            elif isinstance(ct, list) and len(ct) >= 3:
+                email = (ct[2] or "").lower().strip()
 
             if email not in result_by_email:
                 continue
@@ -519,13 +518,13 @@ def main():
                 continue
 
             # Update the contact
-            if isinstance(d, dict):
-                d["role"] = new_role
-                d["_role_source"] = f"linkedin_search:{source}"
-                d["_role_verified_at"] = now
-                d["_role_confidence"] = confidence
-            elif isinstance(d, list) and len(d) >= 3:
-                d[1] = new_role  # role is at index 1
+            if isinstance(ct, dict):
+                ct["role"] = new_role
+                ct["_role_source"] = f"linkedin_search:{source}"
+                ct["_role_verified_at"] = now
+                ct["_role_confidence"] = confidence
+            elif isinstance(ct, list) and len(ct) >= 3:
+                ct[1] = new_role  # role is at index 1
 
             updated += 1
             print(f"    ✓ {enriched.get('email')}: {new_role} ({source}, {confidence})")
