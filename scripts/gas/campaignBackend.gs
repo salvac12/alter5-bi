@@ -1830,3 +1830,66 @@ function handleCampaignDashboard(payload) {
     actualizado: now(),
   };
 }
+
+// ── Time-based trigger entry points ───────────────────────────────────
+
+/**
+ * generateScheduledDrafts — Llamada por trigger cada hora.
+ * Busca follow-ups con status 'scheduled' cuya fecha scheduledAt ya ha llegado,
+ * genera el borrador con Gemini y lo guarda en Gmail; actualiza la fila a draft_ready.
+ */
+function generateScheduledDrafts() {
+  var sheet = getOrCreateSheet(SHEET_FOLLOWUPS, FOLLOWUP_HEADERS);
+  var followUps = readAll(SHEET_FOLLOWUPS, FOLLOWUP_HEADERS);
+  var nowMs = Date.now();
+  var processed = 0;
+  var maxPerRun = 5;
+
+  for (var i = 0; i < followUps.length && processed < maxPerRun; i++) {
+    var f = followUps[i];
+    if (f.status !== 'scheduled' || !f.email) continue;
+
+    var scheduledAtMs = NaN;
+    try {
+      var d = new Date(f.scheduledAt);
+      if (!isNaN(d.getTime())) scheduledAtMs = d.getTime();
+    } catch (e) { /* ignore */ }
+    if (isNaN(scheduledAtMs) || scheduledAtMs > nowMs) continue;
+
+    try {
+      var gen = handleGenerateFollowUp({
+        email: f.email,
+        instructions: f.instructions || '',
+      });
+      if (gen.error) {
+        Logger.log('generateScheduledDrafts: ' + f.email + ' — ' + gen.error);
+        continue;
+      }
+
+      var body = gen.borrador || gen.body || '';
+      if (!body) continue;
+
+      var save = handleSaveDraft({
+        email: f.email,
+        asunto: 'Seguimiento - Alter5 Capital',
+        body: body,
+      });
+      if (save.error) {
+        Logger.log('generateScheduledDrafts save: ' + f.email + ' — ' + save.error);
+        continue;
+      }
+
+      var rowIndex = findRowIndex(sheet, 0, f.id);
+      if (rowIndex !== -1) {
+        updateCell(sheet, rowIndex, FOLLOWUP_HEADERS, 'status', 'draft_ready');
+        updateCell(sheet, rowIndex, FOLLOWUP_HEADERS, 'draftHtml', body);
+      }
+      processed++;
+      Utilities.sleep(500);
+    } catch (e) {
+      Logger.log('generateScheduledDrafts: ' + f.email + ' — ' + e.message);
+    }
+  }
+
+  if (processed > 0) Logger.log('generateScheduledDrafts: ' + processed + ' draft(s) generated');
+}
