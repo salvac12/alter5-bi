@@ -335,7 +335,7 @@ def export_to_compact(all_companies):
             c.get("firstDate", ""),
             c.get("lastDate", ""),
             # Employee sources as comma-separated list
-            ",".join(sorted(c.get("sources", {}).keys())),
+            ",".join(sorted(c.get("sources", {}).keys())) if isinstance(c.get("sources"), dict) else "",
         ])
 
         contacts = c.get("contacts", [])
@@ -346,7 +346,10 @@ def export_to_compact(all_companies):
         if contacts or timeline or context:
             # Include per-employee breakdown
             source_breakdown = []
-            for emp_id, s in sorted(c.get("sources", {}).items()):
+            sources = c.get("sources", {})
+            if not isinstance(sources, dict):
+                sources = {}
+            for emp_id, s in sorted(sources.items()):
                 source_breakdown.append([emp_id, s["interactions"]])
 
             dated_subjects = c.get("dated_subjects", [])
