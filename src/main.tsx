@@ -1,29 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import { LoginScreen } from './components/shared/LoginScreen'
 import { ToastProvider } from './components/shared/ToastSystem'
-import { getStoredAuth, verifyToken, storeAuth, clearAuth } from './utils/auth'
+import { getStoredAuth, storeAuth, clearAuth } from './utils/auth'
 import type { AuthUser } from './utils/auth'
 import './index.css'
 
 function AuthGate() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    const stored = getStoredAuth();
-    if (stored) {
-      // Verify stored token is still valid
-      verifyToken(stored.token).then(verified => {
-        if (verified) setUser(verified);
-        else clearAuth();
-        setChecking(false);
-      });
-    } else {
-      setChecking(false);
-    }
-  }, []);
+  // Check localStorage synchronously — no need to re-verify expired Google tokens
+  const [user, setUser] = useState<AuthUser | null>(() => getStoredAuth());
 
   const handleLogin = (authedUser: AuthUser) => {
     storeAuth(authedUser);
@@ -34,22 +20,6 @@ function AuthGate() {
     clearAuth();
     setUser(null);
   };
-
-  if (checking) {
-    return (
-      <div style={{
-        display: 'flex',
-        height: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: "'DM Sans', system-ui, -apple-system, sans-serif",
-        color: '#64748B',
-        fontSize: 14,
-      }}>
-        Verificando sesion...
-      </div>
-    );
-  }
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
 

@@ -104,8 +104,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       } else {
         setError('No se pudo verificar tu cuenta. Asegurate de usar tu email @alter-5.com.');
       }
-    } catch {
-      setError('Error al verificar. Intenta de nuevo.');
+    } catch (err: any) {
+      setError(`Error: ${err.message || 'Intenta de nuevo.'}`);
     } finally {
       setLoading(false);
     }

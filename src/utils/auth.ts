@@ -19,8 +19,7 @@ export function getStoredAuth(): AuthUser | null {
     const data = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!data) return null;
     const parsed = JSON.parse(data);
-    // Check if token looks valid (basic check)
-    if (!parsed.token || !parsed.email) return null;
+    if (!parsed.email || !parsed.email.endsWith('@alter-5.com')) return null;
     return parsed;
   } catch {
     return null;
@@ -44,7 +43,7 @@ export function getAuthToken(): string {
   return auth?.token || '';
 }
 
-/** Verify token with our backend */
+/** Verify token with our backend (used only during login) */
 export async function verifyToken(token: string): Promise<AuthUser | null> {
   try {
     const res = await fetch('/api/auth/verify', {
@@ -54,10 +53,14 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
         'Authorization': `Bearer ${token}`,
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const detail = body.detail || body.error || `HTTP ${res.status}`;
+      throw new Error(detail);
+    }
     const data = await res.json();
     return { ...data, token };
-  } catch {
-    return null;
+  } catch (err) {
+    throw err;
   }
 }
