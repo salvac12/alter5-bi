@@ -31,6 +31,7 @@ const FollowUpQuickPanel = lazy(() => import('./components/FollowUpQuickPanel'))
 const ProspectingView = lazy(() => import('./components/ProspectingView'));
 const CandidateSearchView = lazy(() => import('./components/CandidateSearchView'));
 const AnalysisView = lazy(() => import('./components/views/AnalysisView').then(m => ({ default: m.AnalysisView })));
+const AddToCampaignModal = lazy(() => import('./components/AddToCampaignModal'));
 
 interface AppProps {
   authUser: AuthUser;
@@ -121,6 +122,7 @@ export default function App({ authUser, onLogout }: AppProps) {
   const [selectedCampaignName, setSelectedCampaignName] = useState(null);
   const [showFollowUpQuick, setShowFollowUpQuick] = useState(null); // prospect obj or null
   const [showHelp, setShowHelp] = useState(false);
+  const [showAddToCampaign, setShowAddToCampaign] = useState(false);
 
   // ── URL params: ?view=pipeline|prospects&add=CompanyName&stage=New ──
   useEffect(() => {
@@ -451,6 +453,12 @@ export default function App({ authUser, onLogout }: AppProps) {
       return next;
     });
   };
+
+  // Companies selected for bulk campaign actions
+  const bulkSelectedCompanies = useMemo(() => {
+    if (!bulkSelection || bulkSelection.size === 0) return [];
+    return companies.filter(c => bulkSelection.has(c.domain));
+  }, [companies, bulkSelection]);
 
   const handleBulkHide = () => {
     if (bulkSelection.size === 0) return;
@@ -1134,6 +1142,8 @@ export default function App({ authUser, onLogout }: AppProps) {
             onSelectAllPage={handleSelectAllPage}
             onBulkHide={() => setShowBulkHideConfirm(true)}
             onClearBulkSelection={() => setBulkSelection(new Set())}
+            onBulkCampaignNew={() => { setShowCampaignCreation(true); }}
+            onBulkCampaignAdd={() => setShowAddToCampaign(true)}
           />
         </div>
       ) : activeView === "prospects" ? (
@@ -1296,6 +1306,18 @@ export default function App({ authUser, onLogout }: AppProps) {
       )}
 
       {/* ── Bulk Hide Confirmation Modal ── */}
+      {/* ── Add to Campaign Modal ── */}
+      {showAddToCampaign && bulkSelectedCompanies.length > 0 && (
+        <AddToCampaignModal
+          companies={bulkSelectedCompanies}
+          onClose={() => setShowAddToCampaign(false)}
+          onDone={() => {
+            setShowAddToCampaign(false);
+            setBulkSelection(new Set());
+          }}
+        />
+      )}
+
       {showBulkHideConfirm && (
         <>
           <div

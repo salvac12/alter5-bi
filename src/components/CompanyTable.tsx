@@ -268,6 +268,7 @@ export default function CompanyTable({
   cleanupMode, cleanupSelection, onToggleCleanup, suspiciousMap,
   verifiedCompanies,
   bulkSelection, onToggleBulkSelect, onSelectAllPage, onBulkHide, onClearBulkSelection,
+  onBulkCampaignNew, onBulkCampaignAdd,
 }: any) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -639,6 +640,50 @@ export default function CompanyTable({
           >
             Ocultar seleccionadas
           </button>
+          {onBulkCampaignNew && (
+            <button
+              onClick={onBulkCampaignNew}
+              style={{
+                background: "linear-gradient(135deg, #8B5CF6, #6366F1)", border: "none",
+                color: "#FFFFFF", padding: "7px 14px", borderRadius: 6,
+                fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s ease",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 12px rgba(139,92,246,0.4)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Nueva campana
+            </button>
+          )}
+          {onBulkCampaignAdd && (
+            <button
+              onClick={onBulkCampaignAdd}
+              style={{
+                background: "transparent", border: "1px solid #3B82F6",
+                color: "#3B82F6", padding: "7px 14px", borderRadius: 6,
+                fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "rgba(59,130,246,0.1)";
+                (e.currentTarget as HTMLButtonElement).style.color = "#60A5FA";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                (e.currentTarget as HTMLButtonElement).style.color = "#3B82F6";
+              }}
+            >
+              Anadir a campana
+            </button>
+          )}
         </div>
       )}
     </div>
