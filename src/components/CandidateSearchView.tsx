@@ -3,6 +3,7 @@ import { KPI } from './UI';
 import { fetchCandidateTargets, fetchAllBridgeTargets, upsertCandidateTarget } from '../utils/airtableCandidates';
 import { fetchSentDomains } from '../utils/campaignApi';
 import { getCurrentUser } from '../utils/userConfig';
+import { campaignPriorityScore } from '../utils/data';
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -386,17 +387,11 @@ export default function CandidateSearchView({
       return true;
     });
 
-    // Sort: always prioritize scraper companies, large utilities last in utility mode
+    // Sort by campaign priority score descending
     filtered.sort((a, b) => {
-      const aHas = getScraperProjects(a) > 0 ? 1 : 0;
-      const bHas = getScraperProjects(b) > 0 ? 1 : 0;
-      if (aHas !== bHas) return bHas - aHas;
-      if (utilityScaleMode) {
-        const aLarge = isLargeUtility(a) ? 1 : 0;
-        const bLarge = isLargeUtility(b) ? 1 : 0;
-        if (aLarge !== bLarge) return aLarge - bLarge;
-      }
-      return getScraperMw(b) - getScraperMw(a);
+      const scoreA = campaignPriorityScore(a).score;
+      const scoreB = campaignPriorityScore(b).score;
+      return scoreB - scoreA;
     });
 
     return filtered;
@@ -1298,6 +1293,9 @@ function CompanyCard({
   const status = savedTarget?.status || 'pending';
   const contacts = cleanContacts((company.detail?.contacts || []).filter(ct => ct.email));
   const sc = STATUS_COLORS[status] || STATUS_COLORS.pending;
+  const priority = campaignPriorityScore(company);
+  const tierColor = priority.tier === 'Alta' ? '#059669' : priority.tier === 'Media' ? '#D97706' : '#DC2626';
+  const tierBg = priority.tier === 'Alta' ? '#ECFDF5' : priority.tier === 'Media' ? '#FFFBEB' : '#FEF2F2';
 
   // Approved compact view
   if (status === 'approved' && !expanded) {
@@ -1430,6 +1428,14 @@ function CompanyCard({
             {company.domain && (
               <span style={{ fontSize: 11, color: '#94A3B8' }}>{company.domain}</span>
             )}
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 11, fontWeight: 700, color: tierColor,
+              background: tierBg, padding: '1px 8px', borderRadius: 10,
+            }}>
+              {priority.score}
+              <span style={{ fontWeight: 500, fontSize: 10 }}>{priority.tier}</span>
+            </span>
           </div>
           <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
             {company.segment && (

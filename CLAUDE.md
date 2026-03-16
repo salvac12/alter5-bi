@@ -32,6 +32,10 @@ React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 - `python scripts/enrich_from_scraper.py --dry-run` — preview sin escribir
 - `python scripts/import_scraper_companies.py` — importar empresas del scraper que no están en CRM
 - `python scripts/import_scraper_companies.py --dry-run` — preview sin escribir
+- `python scripts/enrich_contacts.py --top 100` — enriquecer roles de contactos top 100 por prioridad campaña
+- `python scripts/enrich_contacts.py --domain X` — enriquecer contactos de una empresa concreta
+- `python scripts/enrich_contacts.py --unidentified` — solo empresas con contactos "No identificado"
+- `python scripts/enrich_contacts.py --dry-run` — preview sin escribir
 
 ## Architecture
 - **3 vistas**: Empresas (tabla CRM con ~5,550 empresas), Prospects (Kanban pre-pipeline) y Pipeline (Kanban Airtable con ~114 deals)
@@ -152,6 +156,7 @@ Se pueden enriquecer con contactos cuando se establezca relación comercial.
 - `src/utils/airtableVerified.js` — Airtable REST client para Verified-Companies (cache 5 min, upsert)
 - `scripts/enrich_from_scraper.py` — Cruza scraper_projects.json + spv_parent_mapping.json con CRM (fuzzy match)
 - `scripts/import_scraper_companies.py` — Importa empresas del scraper no en CRM (dominio .scraper.es)
+- `scripts/enrich_contacts.py` — Enriquece roles de contactos via Gemini + Google Search (LinkedIn)
 - `src/data/scraper_projects.json` — 5,652 proyectos renovables España (SPV, MW, tech, permisos)
 - `src/data/spv_parent_mapping.json` — 2,531 mapeos SPV→empresa matriz
 - `.github/workflows/process-emails.yml` — CI/CD diario + dispatch manual con opcion reprocess

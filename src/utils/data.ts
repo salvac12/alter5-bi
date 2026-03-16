@@ -445,6 +445,122 @@ function contactPriority(role) {
   return { rank: 4, label: role };
 }
 
+// ── Large utilities list (capped at 3 pts in campaign scoring) ──
+const LARGE_UTILITIES_SET = new Set([
+  'iberdrola', 'endesa', 'naturgy', 'enel', 'cepsa', 'repsol',
+  'acciona', 'edp', 'statkraft', 'totalenergies', 'engie', 'bp',
+]);
+
+function isLargeUtilityCompany(company) {
+  const name = (company.name || '').toLowerCase();
+  const domain = (company.domain || '').toLowerCase();
+  for (const u of LARGE_UTILITIES_SET) {
+    if (name.includes(u) || domain.includes(u)) return true;
+  }
+  return false;
+}
+
+/**
+ * Campaign Priority Score — ranks companies for outbound campaigns.
+ * Returns { score (0-100), tier ("Alta"|"Media"|"Baja"), breakdown }
+ */
+export function campaignPriorityScore(company) {
+  const breakdown: Record<string, number> = {};
+
+  // ── 1. Mid-market fit (max 30) ──
+  let midMarket = 12; // unknown default
+  const emp = company.employeeCount;
+  if (emp != null && emp > 0) {
+    if (isLargeUtilityCompany(company)) {
+      midMarket = 3;
+    } else if (emp >= 20 && emp <= 500) {
+      midMarket = 30;
+    } else if (emp > 500 && emp <= 1000) {
+      midMarket = 18;
+    } else if (emp >= 10 && emp < 20) {
+      midMarket = 15;
+    } else if (emp > 1000 && emp <= 5000) {
+      midMarket = 8;
+    } else if (emp > 5000) {
+      midMarket = 3;
+    } else {
+      midMarket = 12; // <10 employees
+    }
+  } else if (isLargeUtilityCompany(company)) {
+    midMarket = 3;
+  }
+  breakdown.midMarket = midMarket;
+
+  // ── 2. Utility-scale fit (max 30) ──
+  let utilityScale = 0;
+  // Project scale from enrichment (0-15)
+  const scale = company.projectScale || '';
+  if (scale === 'Utility-scale') utilityScale += 15;
+  else if (scale === 'Mixto') utilityScale += 10;
+  else if (scale === 'Distribuido') utilityScale += 3;
+
+  // MW presence via scraper or pipeline (0-10)
+  const totalMw = (company.scraperMw || 0) + (company.knownPipelineMw || 0);
+  if (totalMw >= 500) utilityScale += 10;
+  else if (totalMw >= 100) utilityScale += 7;
+  else if (totalMw >= 10) utilityScale += 4;
+  else if (totalMw > 0) utilityScale += 2;
+
+  // Business lines with utility/IPP (0-8)
+  const blines = company.businessLines || [];
+  const utilityLines = ['Utility-scale developer', 'IPP'];
+  const hasUtilityLine = blines.some(bl => utilityLines.includes(bl));
+  if (hasUtilityLine) utilityScale += 8;
+  else if (blines.length > 0) utilityScale += 3;
+
+  utilityScale = Math.min(30, utilityScale);
+  breakdown.utilityScale = utilityScale;
+
+  // ── 3. Contact readiness (max 25) ──
+  let contactScore = 0;
+  const contacts = company.detail?.contacts || [];
+  let bestRank = 99;
+  let decisionMakers = 0;
+  let totalContacts = contacts.length;
+
+  for (const ct of contacts) {
+    const r = (ct.role || '').toLowerCase().trim();
+    let rank = 99;
+    if (/\bceo\b|\bdg\b|director\s*general|managing\s*director/.test(r)) rank = 1;
+    else if (/\bcfo\b|\bdf\b|director\s*financier|chief\s*financial|head\s*of\s*finance/.test(r)) rank = 2;
+    else if (r.includes('financiaci') && r.includes('estructurada')) rank = 3;
+    else if (/\bm&a\b|\bm\s*&\s*a\b/.test(r)) rank = 4;
+    else if (r && r !== 'no identificado' && r !== 'nan') rank = 5;
+
+    if (rank < bestRank) bestRank = rank;
+    if (rank <= 2) decisionMakers++;
+  }
+
+  // Best contact score
+  if (bestRank === 1) contactScore += 15;       // CEO/DG
+  else if (bestRank === 2) contactScore += 12;   // CFO/DF
+  else if (bestRank === 3) contactScore += 10;   // Fin. Estructurada
+  else if (bestRank === 4) contactScore += 8;    // M&A
+  else if (bestRank === 5) contactScore += 5;    // Other known
+
+  // Bonus for multiple decision-makers or contacts
+  if (decisionMakers >= 2) contactScore += 7;
+  else if (totalContacts >= 2) contactScore += 3;
+
+  contactScore = Math.min(25, contactScore);
+  breakdown.contact = contactScore;
+
+  // ── 4. Data quality (max 15) ──
+  const dataQuality = Math.round((company.qualityScore || 0) * 0.15);
+  breakdown.dataQuality = dataQuality;
+
+  // ── Total ──
+  const score = Math.min(100, midMarket + utilityScale + contactScore + dataQuality);
+  const tier = score >= 70 ? 'Alta' : score >= 45 ? 'Media' : 'Baja';
+
+  return { score, tier, breakdown };
+}
+
 /** Split a full name into { nombre, apellidos }. */
 function splitName(fullName) {
   const parts = (fullName || "").trim().split(/\s+/);
