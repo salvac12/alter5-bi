@@ -14,7 +14,7 @@ import AppShell from './components/layout/AppShell';
 import blocklist from './data/blocklist.json';
 import type { ViewId } from './types';
 import type { AuthUser } from './utils/auth';
-import employees from './data/employees.json';
+import employeeList from './data/employees.json';
 
 // Lazy load non-default views
 const DetailPanel = lazy(() => import('./components/DetailPanel'));
@@ -87,7 +87,7 @@ export default function App({ authUser, onLogout }: AppProps) {
   const [currentUser, setCurrentUser] = useState(() => {
     // Map auth email to employee list, fallback to getCurrentUser() for backward compat
     const emailName = authUser.email.split('@')[0].toLowerCase(); // e.g. "salvador.carrillo"
-    const matched = employees.find(e => {
+    const matched = employeeList.find(e => {
       const empNorm = e.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '.');
       return empNorm === emailName || e.name.toLowerCase() === authUser.name?.toLowerCase();
     });
