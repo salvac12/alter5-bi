@@ -214,19 +214,22 @@ INSTRUCCIONES:
 1. Para cada contacto, busca en Google: "{{nombre}} {{empresa}} LinkedIn" o "{{nombre}} {{empresa}} cargo"
 2. Intenta encontrar su perfil de LinkedIn o menciones profesionales
 3. Determina su cargo real actual
-4. Si no encuentras información fiable, mantén "No identificado"
+4. Si encuentras su perfil de LinkedIn, incluye la URL completa (https://www.linkedin.com/in/...)
+5. Si no encuentras información fiable, mantén "No identificado"
 
 FORMATO DE RESPUESTA (JSON array, sin markdown):
 [
   {{
     "email": "email@ejemplo.com",
     "role": "Cargo identificado o No identificado",
+    "linkedin_url": "https://www.linkedin.com/in/username",
     "source": "linkedin|web|inferido",
     "confidence": "alta|media|baja"
   }}
 ]
 
 NOTAS:
+- "linkedin_url": URL completa del perfil LinkedIn. Si no encuentras perfil, devuelve cadena vacía ""
 - "source": "linkedin" si viene de perfil LinkedIn, "web" si de otra fuente, "inferido" si es deducción
 - "confidence": "alta" si dato verificado en LinkedIn/web, "media" si parcial, "baja" si inferido
 - Usa cargos en español cuando sea posible (ej: "Director General", "Director Financiero")
@@ -339,8 +342,9 @@ def save_companies(data, paths):
     print(f"  OK: Written {paths['compact']}")
 
 
-def get_contacts_needing_enrichment(company):
-    """Return contacts that need role enrichment (No identificado or empty)."""
+def get_contacts_needing_enrichment(company, force=False):
+    """Return contacts that need role enrichment (No identificado or empty).
+    If force=True, also include already-enriched contacts missing _linkedin_url."""
     raw_contacts = company.get("contacts", [])
     contacts = []
     for ct in raw_contacts:
@@ -349,11 +353,13 @@ def get_contacts_needing_enrichment(company):
             email = ct.get("email", "")
             role = ct.get("role", "")
             role_source = ct.get("_role_source")
+            linkedin_url = ct.get("_linkedin_url", "")
         elif isinstance(ct, list) and len(ct) >= 3:
             name = ct[0] or ""
             role = ct[1] or ""
             email = ct[2] or ""
             role_source = None
+            linkedin_url = ""
         else:
             continue
         if not email:
@@ -363,6 +369,10 @@ def get_contacts_needing_enrichment(company):
             not role or
             role.lower() in ("no identificado", "nan", "")
         )
+        # Force mode: re-enrich contacts that have role but no linkedin_url
+        if force and role_source and not linkedin_url:
+            contacts.append({"name": name, "email": email, "role": role})
+            continue
         # Don't overwrite if already enriched via this script
         if role_source and not needs_enrichment:
             continue
@@ -380,6 +390,7 @@ def main():
     single_domain = None
     unidentified_only = False
     dry_run = False
+    force = False
 
     i = 0
     while i < len(args):
@@ -394,6 +405,9 @@ def main():
             i += 1
         elif args[i] == "--dry-run":
             dry_run = True
+            i += 1
+        elif args[i] == "--force":
+            force = True
             i += 1
         else:
             print(f"Unknown arg: {args[i]}")
@@ -416,7 +430,7 @@ def main():
         role = enrichment.get("role", "")
         if role not in ("Originacion", "Originación"):
             continue
-        needs = get_contacts_needing_enrichment(company)
+        needs = get_contacts_needing_enrichment(company, force=force)
         if not needs:
             continue
         candidates[domain] = (company, needs)
@@ -429,7 +443,7 @@ def main():
             targets = {single_domain: candidates[single_domain]}
         elif single_domain in all_companies:
             company = all_companies[single_domain]
-            needs = get_contacts_needing_enrichment(company)
+            needs = get_contacts_needing_enrichment(company, force=force)
             if needs:
                 targets = {single_domain: (company, needs)}
             else:
@@ -517,17 +531,22 @@ def main():
             if not new_role or new_role.lower() in ("no identificado", "nan"):
                 continue
 
+            linkedin_url = enriched.get("linkedin_url", "")
+
             # Update the contact
             if isinstance(ct, dict):
                 ct["role"] = new_role
                 ct["_role_source"] = f"linkedin_search:{source}"
                 ct["_role_verified_at"] = now
                 ct["_role_confidence"] = confidence
+                if linkedin_url:
+                    ct["_linkedin_url"] = linkedin_url
             elif isinstance(ct, list) and len(ct) >= 3:
                 ct[1] = new_role  # role is at index 1
 
             updated += 1
-            print(f"    ✓ {enriched.get('email')}: {new_role} ({source}, {confidence})")
+            li_tag = f" | LinkedIn: {linkedin_url}" if linkedin_url else ""
+            print(f"    ✓ {enriched.get('email')}: {new_role} ({source}, {confidence}){li_tag}")
 
         if updated > 0:
             enriched_count += 1

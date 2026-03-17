@@ -937,6 +937,12 @@ FORMATO (JSON valido, sin markdown):
                         {ct.email && (
                           <div style={{ fontSize: 10, color: "#6B7F94", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ct.email}</div>
                         )}
+                        {ct.linkedinUrl && (
+                          <a href={ct.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                            style={{ fontSize: 10, color: '#0A66C2', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>
+                            LinkedIn ↗
+                          </a>
+                        )}
                       </div>
                     );
                   })}
@@ -1265,6 +1271,12 @@ FORMATO (JSON valido, sin markdown):
                               <div style={{ fontSize: 11, color: "#60A5FA", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {ct.email}
                               </div>
+                            )}
+                            {ct.linkedinUrl && (
+                              <a href={ct.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                                style={{ fontSize: 11, color: '#0A66C2', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>
+                                LinkedIn ↗
+                              </a>
                             )}
                           </div>
                         );

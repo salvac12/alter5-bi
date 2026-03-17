@@ -1512,6 +1512,18 @@ function CompanyCard({
                     {role}
                   </span>
                 )}
+                {ct.linkedinUrl && (
+                  <a href={ct.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#0A66C2', fontSize: 10, fontWeight: 800, textDecoration: 'none',
+                      width: 18, height: 18, borderRadius: 3, background: '#0A66C215',
+                      flexShrink: 0,
+                    }}
+                    title="Ver perfil LinkedIn">
+                    in
+                  </a>
+                )}
                 {ct.email === topEmail && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: '2px 6px',
