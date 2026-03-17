@@ -1,23 +1,30 @@
 #!/usr/bin/env python3
 """
 ===============================================================
-  Alter5 BI -- Contact Role Enrichment via Google Search
+  Alter5 BI -- Contact Role Enrichment via Perplexity / Gemini
 ===============================================================
 
   Enriches contacts whose role is "No identificado" or empty by
-  searching for their name + company on Google (via Gemini grounding)
-  to find LinkedIn profiles and infer their role.
+  searching for their name + company on the web to find LinkedIn
+  profiles and infer their role.
+
+  Backends:
+    - Perplexity Sonar (default) — best for LinkedIn URL discovery
+    - Gemini + Google Search grounding (fallback)
 
   Usage:
-    export GEMINI_API_KEY="AIza..."
+    export PERPLEXITY_API_KEY="pplx-..."   # preferred
+    export GEMINI_API_KEY="AIza..."         # fallback
 
-    python scripts/enrich_contacts.py --top 100          # top 100 by campaign priority
-    python scripts/enrich_contacts.py --domain X          # single company
-    python scripts/enrich_contacts.py --unidentified      # only companies with "No identificado" contacts
-    python scripts/enrich_contacts.py --dry-run            # preview without writing
+    python scripts/enrich_contacts.py --top 100
+    python scripts/enrich_contacts.py --domain X
+    python scripts/enrich_contacts.py --unidentified
+    python scripts/enrich_contacts.py --force            # re-enrich to get missing LinkedIn URLs
+    python scripts/enrich_contacts.py --dry-run
+    python scripts/enrich_contacts.py --backend gemini   # force Gemini backend
 
-  Estimated cost: ~1 Gemini call per company ~ $0.01-0.03 each
-  Estimated time: ~6s per company (Gemini + grounding)
+  Estimated cost (Perplexity Sonar): ~$5-8 per 1000 companies
+  Estimated time: ~2-3s per company
 ===============================================================
 """
 
@@ -44,6 +51,8 @@ from import_mailbox import get_data_paths, export_to_compact
 # Config
 # ---------------------------------------------------------------------------
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+PERPLEXITY_MODEL = os.environ.get("PERPLEXITY_MODEL", "sonar")
+RPM_DELAY = float(os.environ.get("ENRICH_RPM_DELAY", "1.5"))  # Perplexity allows 50 RPM at tier 0
 GEMINI_RPM_DELAY = float(os.environ.get("GEMINI_RPM_DELAY", "5"))
 
 # SSL context for Gemini API
@@ -192,7 +201,130 @@ def campaign_priority_score(domain, company):
 
 
 # ---------------------------------------------------------------------------
-# Gemini contact enrichment
+# Perplexity contact enrichment (preferred)
+# ---------------------------------------------------------------------------
+def enrich_contacts_with_perplexity(domain, company_name, contacts):
+    """Batch-enrich contacts using Perplexity Sonar (web search built-in)."""
+
+    contact_list = ""
+    for i, ct in enumerate(contacts, 1):
+        name = ct.get("name", "")
+        email = ct.get("email", "")
+        current_role = ct.get("role", "No identificado")
+        contact_list += f"  {i}. {name} <{email}> — cargo actual: \"{current_role}\"\n"
+
+    prompt = f"""Eres un analista de Alter5, consultora de financiación de energías renovables en España.
+
+TAREA: Identificar el cargo/rol profesional y el perfil de LinkedIn de los siguientes contactos de la empresa "{company_name}" (dominio: {domain}).
+
+CONTACTOS A INVESTIGAR:
+{contact_list}
+INSTRUCCIONES:
+1. Para cada contacto, busca en LinkedIn: "{{nombre}} {{empresa}}" o "{{nombre}} {domain}"
+2. Encuentra su perfil de LinkedIn y determina su cargo real actual
+3. La URL de LinkedIn DEBE ser del formato https://www.linkedin.com/in/username o https://linkedin.com/in/username
+4. Si no encuentras perfil de LinkedIn, intenta buscar en la web corporativa de {domain}
+5. Si no encuentras información fiable, mantén "No identificado"
+
+FORMATO DE RESPUESTA (JSON array, sin markdown ni explicaciones):
+[
+  {{
+    "email": "email@ejemplo.com",
+    "role": "Cargo identificado o No identificado",
+    "linkedin_url": "https://www.linkedin.com/in/username",
+    "source": "linkedin|web|inferido",
+    "confidence": "alta|media|baja"
+  }}
+]
+
+NOTAS:
+- "linkedin_url": URL COMPLETA del perfil LinkedIn (https://www.linkedin.com/in/...). Si no encuentras perfil, devuelve ""
+- "source": "linkedin" si el cargo viene de LinkedIn, "web" si de otra fuente, "inferido" si deducción
+- "confidence": "alta" si verificado en LinkedIn, "media" si de web corporativa, "baja" si inferido
+- Usa cargos en español cuando sea natural (ej: "Director General"), mantén en inglés si es el título oficial (ej: "CEO", "Head of Project Finance")
+- NO inventes cargos ni URLs. Si no hay información, mantén "No identificado" y linkedin_url vacío
+- Responde SOLO con el JSON array"""
+
+    api_key = os.environ.get("PERPLEXITY_API_KEY", "")
+    if not api_key:
+        return None
+
+    api_url = "https://api.perplexity.ai/chat/completions"
+
+    payload = json.dumps({
+        "model": PERPLEXITY_MODEL,
+        "messages": [
+            {"role": "system", "content": "Eres un asistente de investigación. Responde SOLO con JSON válido, sin markdown ni explicaciones."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.1,
+        "max_tokens": 1024,
+    }).encode("utf-8")
+
+    MAX_RETRIES = 3
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            req = urllib.request.Request(
+                api_url,
+                data=payload,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                },
+            )
+
+            with urllib.request.urlopen(req, context=SSL_CTX, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            text = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+
+            if not text:
+                print(f"  [warn] Empty Perplexity response for {domain}")
+                return None
+
+            # Clean markdown fences
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1]
+                if text.endswith("```"):
+                    text = text.rsplit("```", 1)[0]
+                text = text.strip()
+
+            result = json.loads(text)
+            if isinstance(result, list):
+                return result
+            return None
+
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 503) and attempt < MAX_RETRIES - 1:
+                wait = (attempt + 1) * 15
+                print(f"  [retry] Perplexity {e.code} for {domain}, waiting {wait}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(wait)
+                continue
+            body = e.read().decode("utf-8") if e.fp else ""
+            print(f"  [warn] Perplexity API error {e.code} for {domain}: {body[:200]}")
+            return None
+
+        except json.JSONDecodeError as e:
+            print(f"  [warn] JSON parse error for {domain}: {e}")
+            try:
+                json_match = re.search(r'\[[\s\S]*\]', text)
+                if json_match:
+                    return json.loads(json_match.group())
+            except Exception:
+                pass
+            return None
+
+        except Exception as e:
+            print(f"  [warn] Perplexity enrichment failed for {domain}: {e}")
+            return None
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Gemini contact enrichment (fallback)
 # ---------------------------------------------------------------------------
 def enrich_contacts_with_gemini(domain, company_name, contacts):
     """Batch-enrich contacts for one company using Gemini + Google Search grounding."""
@@ -391,6 +523,7 @@ def main():
     unidentified_only = False
     dry_run = False
     force = False
+    backend = None  # auto-detect
 
     i = 0
     while i < len(args):
@@ -409,33 +542,64 @@ def main():
         elif args[i] == "--force":
             force = True
             i += 1
+        elif args[i] == "--backend" and i + 1 < len(args):
+            backend = args[i + 1].lower().strip()
+            i += 2
+        elif args[i] == "--all-types":
+            # Enrich all company types, not just Originacion
+            os.environ["ENRICH_ALL_TYPES"] = "1"
+            i += 1
         else:
             print(f"Unknown arg: {args[i]}")
+            sys.exit(1)
+
+    # Auto-detect backend
+    if not backend:
+        if os.environ.get("PERPLEXITY_API_KEY"):
+            backend = "perplexity"
+        elif os.environ.get("GEMINI_API_KEY"):
+            backend = "gemini"
+        else:
+            print("  [error] No API key found. Set PERPLEXITY_API_KEY or GEMINI_API_KEY")
             sys.exit(1)
 
     if not top_n and not single_domain:
         top_n = 50  # default
 
+    # Select enrichment function
+    if backend == "perplexity":
+        enrich_fn = enrich_contacts_with_perplexity
+        delay = RPM_DELAY
+        backend_label = f"Perplexity ({PERPLEXITY_MODEL})"
+    else:
+        enrich_fn = enrich_contacts_with_gemini
+        delay = GEMINI_RPM_DELAY
+        backend_label = f"Gemini ({GEMINI_MODEL})"
+
     print("=" * 60)
     print("  Alter5 BI — Contact Role Enrichment")
+    print(f"  Backend: {backend_label}")
     print("=" * 60)
 
     data, paths = load_companies()
     all_companies = data.get("companies", {})
 
-    # Filter to Originacion companies with contacts needing enrichment
+    # Filter companies with contacts needing enrichment
+    enrich_all_types = os.environ.get("ENRICH_ALL_TYPES") == "1"
     candidates = {}
     for domain, company in all_companies.items():
-        enrichment = company.get("enrichment") or {}
-        role = enrichment.get("role", "")
-        if role not in ("Originacion", "Originación"):
-            continue
+        if not enrich_all_types:
+            enrichment = company.get("enrichment") or {}
+            role = enrichment.get("role", "")
+            if role not in ("Originacion", "Originación"):
+                continue
         needs = get_contacts_needing_enrichment(company, force=force)
         if not needs:
             continue
         candidates[domain] = (company, needs)
 
-    print(f"  Originacion companies with contacts to enrich: {len(candidates)}")
+    type_label = "all" if enrich_all_types else "Originacion"
+    print(f"  {type_label} companies with contacts to enrich: {len(candidates)}")
 
     # Build target list
     if single_domain:
@@ -490,21 +654,33 @@ def main():
                 print(f"    → {ct['name']} <{ct['email']}> — {ct['role'] or 'sin cargo'}")
             continue
 
-        # Call Gemini
-        print(f"    Calling Gemini...", end=" ", flush=True)
-        results = enrich_contacts_with_gemini(domain, name, needs)
+        # Call enrichment API
+        print(f"    Calling {backend}...", end=" ", flush=True)
+        results = enrich_fn(domain, name, needs)
 
         if not results:
             print("FAILED")
             failed_count += 1
-            time.sleep(GEMINI_RPM_DELAY)
+            time.sleep(delay)
             continue
 
-        # Build lookup by email
+        # Build lookup by email, validate LinkedIn URLs
         result_by_email = {}
         for r in results:
             email = (r.get("email") or "").lower().strip()
             if email:
+                # Validate LinkedIn URL: must be real format, reject obvious hallucinations
+                li_url = (r.get("linkedin_url") or "").strip()
+                if li_url:
+                    is_valid = (
+                        li_url.startswith("https://www.linkedin.com/in/") or
+                        li_url.startswith("https://linkedin.com/in/")
+                    )
+                    # Reject URLs with suspicious numeric-only slugs (likely hallucinated)
+                    slug = li_url.rstrip("/").split("/")[-1]
+                    has_only_hex = bool(re.match(r'^[0-9a-f]{8,}$', slug))
+                    if not is_valid or has_only_hex:
+                        r["linkedin_url"] = ""  # discard bad URL
                 result_by_email[email] = r
 
         # Update contacts in company data
@@ -527,7 +703,7 @@ def main():
             source = enriched.get("source", "")
             confidence = enriched.get("confidence", "baja")
 
-            # Skip if Gemini returned "No identificado" or empty
+            # Skip if API returned "No identificado" or empty
             if not new_role or new_role.lower() in ("no identificado", "nan"):
                 continue
 
@@ -554,7 +730,7 @@ def main():
         else:
             print(f"    (no new roles found)")
 
-        time.sleep(GEMINI_RPM_DELAY)
+        time.sleep(delay)
 
     # Summary
     print()
