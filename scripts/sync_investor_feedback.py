@@ -90,12 +90,14 @@ def fetch_all_workstream_records():
     page = 0
 
     # Only request fields we need
+    # "Investor" is a linked record to Stakeholders_Business_Units (tblbBsypFvEnooHlr)
+    # "Company (from Investor)" returns record IDs, not names — we resolve via Investor field
     fields = [
         "Name",
         "Workstream Status",
         "Workstream Notes",
         "Rejection Feedback",
-        "Company (from Investor)",
+        "Investor",
     ]
     field_params = "&".join(f"fields[]={urllib.parse.quote(f)}" for f in fields)
 
@@ -124,6 +126,49 @@ def fetch_all_workstream_records():
 
     print(f"  Total: {len(records)} records fetched")
     return records
+
+
+def resolve_investor_names(records):
+    """Resolve Investor linked record IDs to Business Unit Names via SBU table."""
+    # Collect unique investor record IDs
+    investor_ids = set()
+    for rec in records:
+        for iid in rec.get("fields", {}).get("Investor", []):
+            investor_ids.add(iid)
+
+    if not investor_ids:
+        return {}
+
+    print(f"  Resolving {len(investor_ids)} unique investor IDs...")
+    SBU_TABLE_ID = "tblbBsypFvEnooHlr"
+    SBU_API = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{SBU_TABLE_ID}"
+
+    id_to_name = {}
+    # Fetch in batches using filterByFormula with OR(RECORD_ID()=...)
+    id_list = list(investor_ids)
+    batch_size = 20  # safe URL length
+    for start in range(0, len(id_list), batch_size):
+        batch = id_list[start:start + batch_size]
+        or_parts = ",".join(f'RECORD_ID()="{rid}"' for rid in batch)
+        formula = f"OR({or_parts})"
+        params = urllib.parse.urlencode({
+            "filterByFormula": formula,
+            "fields[]": "Business Unit Name",
+        })
+        url = f"{SBU_API}?{params}"
+        req = urllib.request.Request(url, headers=airtable_headers())
+        try:
+            with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            for r in data.get("records", []):
+                name = r.get("fields", {}).get("Business Unit Name", "")
+                if name:
+                    id_to_name[r["id"]] = name.strip()
+        except Exception as e:
+            print(f"    [warn] Batch resolve failed: {e}")
+
+    print(f"  Resolved {len(id_to_name)} / {len(investor_ids)} investors")
+    return id_to_name
 
 
 # ---------------------------------------------------------------------------
@@ -236,17 +281,21 @@ def main():
     print(f"  {len(name_map)} name entries in map")
 
     # -- Fetch from Airtable --
-    print(f"\n[3/4] Fetching Airtable '{TABLE_NAME}'...")
+    print(f"\n[3/5] Fetching Airtable '{TABLE_NAME}'...")
     records = fetch_all_workstream_records()
 
+    # -- Resolve Investor IDs to names --
+    print(f"\n[4/5] Resolving investor names...")
+    investor_id_to_name = resolve_investor_names(records)
+
     # -- Process records and match to companies --
-    print("\n[4/4] Matching workstreams to companies...")
+    print("\n[5/5] Matching workstreams to companies...")
     stats = {
         "total_records": len(records),
         "exact_matched": 0,
         "fuzzy_matched": 0,
         "unmatched": 0,
-        "skipped_no_company": 0,
+        "skipped_no_investor": 0,
         "enriched_count": 0,
     }
 
@@ -261,16 +310,16 @@ def main():
         notes = fields.get("Workstream Notes", "")
         rejection = fields.get("Rejection Feedback", "")
 
-        # "Company (from Investor)" is a linked record field -> array of strings
-        company_names = fields.get("Company (from Investor)", [])
-        if not isinstance(company_names, list):
-            company_names = [company_names] if company_names else []
-
-        if not company_names:
-            stats["skipped_no_company"] += 1
+        # Resolve Investor linked record ID to company name
+        investor_ids = fields.get("Investor", [])
+        if not investor_ids:
+            stats["skipped_no_investor"] += 1
             continue
 
-        company_name = company_names[0]  # Use first element
+        company_name = investor_id_to_name.get(investor_ids[0])
+        if not company_name:
+            stats["skipped_no_investor"] += 1
+            continue
 
         # Try exact match
         norm = normalize_name(company_name)
@@ -336,7 +385,7 @@ def main():
     print(f"  Exact matched:        {stats['exact_matched']}")
     print(f"  Fuzzy matched:        {stats['fuzzy_matched']}")
     print(f"  Unmatched:            {stats['unmatched']}")
-    print(f"  Skipped (no company): {stats['skipped_no_company']}")
+    print(f"  Skipped (no investor):{stats['skipped_no_investor']}")
     print(f"  Companies enriched:   {stats['enriched_count']}")
 
     if unmatched_names:
