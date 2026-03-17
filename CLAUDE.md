@@ -35,10 +35,15 @@ React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 - `python scripts/enrich_contacts.py --top 100` — enriquecer roles de contactos top 100 por prioridad campaña
 - `python scripts/enrich_contacts.py --domain X` — enriquecer contactos de una empresa concreta
 - `python scripts/enrich_contacts.py --unidentified` — solo empresas con contactos "No identificado"
+- `python scripts/enrich_contacts.py --force` — re-enriquecer contactos con rol pero sin LinkedIn URL
+- `python scripts/enrich_contacts.py --all-types` — enriquecer todas las empresas (no solo Originacion)
+- `python scripts/enrich_contacts.py --backend gemini` — forzar backend Gemini (default: Perplexity)
 - `python scripts/enrich_contacts.py --dry-run` — preview sin escribir
+- `python scripts/merge_duplicates.py` — mergear empresas duplicadas (dominios redundantes)
+- `python scripts/merge_duplicates.py --dry-run` — preview sin escribir
 
 ## Architecture
-- **3 vistas**: Empresas (tabla CRM con ~5,550 empresas), Prospects (Kanban pre-pipeline) y Pipeline (Kanban Airtable con ~114 deals)
+- **3 vistas**: Empresas (tabla CRM con ~5,261 empresas), Prospects (Kanban pre-pipeline) y Pipeline (Kanban Airtable con ~114 deals)
 - **Datos empresas**: `src/data/companies.json` (compact), `companies_full.json` (dict by domain, trackeado en git)
 - **Datos pipeline**: live API Airtable (`src/utils/airtable.js`) + static `src/data/opportunities.json`
 - **Datos prospects**: live API Airtable (`src/utils/airtableProspects.js`), tabla "BETA-Prospects"
@@ -126,6 +131,55 @@ Dashboard:
 Nota: empresas importadas del scraper tienen dominio `.scraper.es` (pseudo-dominio) y 0 contactos/interacciones.
 Se pueden enriquecer con contactos cuando se establezca relación comercial.
 
+### Deduplicación de empresas
+```
+scripts/merge_duplicates.py
+    | MERGE_RULES: lista de (target_domain, [dominios_a_absorber])
+    | Merge: sources, contacts (dedup email), timeline, subjects, enrichment
+    | Tracking: enrichment._merged_from[], enrichment.aliases[]
+    |
+    | Batch 1 (17-mar-2026): 31 dominios → 20 targets (ABO Wind→ABO Energy, Apex, Sabadell...)
+    | Batch 2 (17-mar-2026): 100 dominios → 93 targets (OPDEnergy, Sancus, BBVA, Microsoft...)
+    | Total eliminados: 131 duplicados. CRM: 5,392 → 5,261 empresas
+```
+
+### Contact enrichment (roles + LinkedIn)
+```
+enrich_contacts.py (--top N, --domain X, --force, --all-types, --backend)
+    |
+    | Backend 1: Perplexity Sonar (default, PERPLEXITY_API_KEY)
+    |   - Busca en web: "{nombre} {empresa} LinkedIn"
+    |   - Devuelve: role, linkedin_url, source, confidence
+    |   - Coste: ~$5-8 / 1000 empresas
+    |   - NOTA: LinkedIn URLs de Perplexity son ALUCINADAS (19/20 falsas)
+    |   - Los ROLES sí son fiables (verificados por búsqueda web)
+    |
+    | Backend 2: Gemini + Google Search grounding (fallback, GEMINI_API_KEY)
+    |   - Similar pero no devuelve LinkedIn URLs
+    |
+    | Estado (17-mar-2026): 154 contactos con rol verificado en 74 empresas
+    | LinkedIn URLs: eliminadas (no fiables). Pendiente: integrar Apollo.io
+    |
+companies_full.json (contactos con _role_source, _role_confidence, _role_verified_at)
+    |
+companies.json (compact: contact[5] = linkedinUrl, vacío por ahora)
+    |
+DetailPanel.tsx + CandidateSearchView.tsx (UI preparada para mostrar LinkedIn URLs)
+```
+
+### Siguiente paso: Apollo.io (PENDIENTE)
+```
+Apollo.io API — enriquecer contactos con datos REALES de LinkedIn
+    | People Enrichment: nombre + empresa → LinkedIn URL real + email corporativo + cargo
+    | People Search: dominio → encontrar decisores (CFO, CEO, Head of BD) con email
+    | Coste estimado: ~$250 (plan Professional 2-3 meses)
+    | Coverage España: ~40-60% (Apollo es US-centric)
+    | API key: pendiente de configurar (APOLLO_API_KEY en .env)
+    |
+    | Integrar en enrich_contacts.py como --backend apollo
+    | Prioridad: LinkedIn URLs reales + emails corporativos nuevos
+```
+
 ## Key Files
 - `src/App.jsx` — main router, state management, 3 tabs (Empresas/Prospects/Pipeline)
 - `src/utils/airtable.js` — Airtable REST client Opportunities, normalizeRecord, stages
@@ -156,7 +210,8 @@ Se pueden enriquecer con contactos cuando se establezca relación comercial.
 - `src/utils/airtableVerified.js` — Airtable REST client para Verified-Companies (cache 5 min, upsert)
 - `scripts/enrich_from_scraper.py` — Cruza scraper_projects.json + spv_parent_mapping.json con CRM (fuzzy match)
 - `scripts/import_scraper_companies.py` — Importa empresas del scraper no en CRM (dominio .scraper.es)
-- `scripts/enrich_contacts.py` — Enriquece roles de contactos via Gemini + Google Search (LinkedIn)
+- `scripts/enrich_contacts.py` — Enriquece roles de contactos via Perplexity Sonar (default) o Gemini (fallback)
+- `scripts/merge_duplicates.py` — Merge de empresas duplicadas (TLDs, subdominios, typos, rebrands)
 - `src/data/scraper_projects.json` — 5,652 proyectos renovables España (SPV, MW, tech, permisos)
 - `src/data/spv_parent_mapping.json` — 2,531 mapeos SPV→empresa matriz
 - `.github/workflows/process-emails.yml` — CI/CD diario + dispatch manual con opcion reprocess
