@@ -15,6 +15,7 @@ export interface CompanyContact {
   role: string;
   email: string;
   linkedinUrl?: string;
+  photoUrl?: string;
 }
 
 export interface TimelineEntry {

@@ -355,7 +355,7 @@ def export_to_compact(all_companies):
             dated_subjects = c.get("dated_subjects", [])
 
             details[str(i)] = [
-                [[ct["name"], ct.get("role", ""), ct.get("email", ""), ct.get("nombre", ""), ct.get("apellido", ""), ct.get("_linkedin_url", "")] for ct in contacts[:5]],
+                [[ct["name"], ct.get("role", ""), ct.get("email", ""), ct.get("nombre", ""), ct.get("apellido", ""), ct.get("_linkedin_url", ""), ct.get("_photo_url", "")] for ct in contacts[:5]],
                 [[t["quarter"], t["emails"]] + ([t["summary"]] if t.get("summary") else []) for t in timeline[:8]],
                 context[:500],
                 source_breakdown,

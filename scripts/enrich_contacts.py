@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ===============================================================
-  Alter5 BI -- Contact Role Enrichment via Perplexity / Gemini
+  Alter5 BI -- Contact Role Enrichment via Apollo / Perplexity / Gemini
 ===============================================================
 
   Enriches contacts whose role is "No identificado" or empty by
@@ -9,11 +9,13 @@
   profiles and infer their role.
 
   Backends:
-    - Perplexity Sonar (default) — best for LinkedIn URL discovery
+    - Apollo.io (preferred) — real LinkedIn URLs + verified titles (1 credit/contact)
+    - Perplexity Sonar — web search, good for roles but LinkedIn URLs less reliable
     - Gemini + Google Search grounding (fallback)
 
   Usage:
-    export PERPLEXITY_API_KEY="pplx-..."   # preferred
+    export APOLLO_API_KEY="rogOo..."       # preferred
+    export PERPLEXITY_API_KEY="pplx-..."   # alternative
     export GEMINI_API_KEY="AIza..."         # fallback
 
     python scripts/enrich_contacts.py --top 100
@@ -21,10 +23,12 @@
     python scripts/enrich_contacts.py --unidentified
     python scripts/enrich_contacts.py --force            # re-enrich to get missing LinkedIn URLs
     python scripts/enrich_contacts.py --dry-run
-    python scripts/enrich_contacts.py --backend gemini   # force Gemini backend
+    python scripts/enrich_contacts.py --backend apollo   # force Apollo backend
+    python scripts/enrich_contacts.py --discover-dm      # discover CFO/Dir Financiero via Apollo Search (free)
 
+  Estimated cost (Apollo): 1 credit/contact, free tier 10,000/month
   Estimated cost (Perplexity Sonar): ~$5-8 per 1000 companies
-  Estimated time: ~2-3s per company
+  Estimated time (Apollo): ~1.5s per contact
 ===============================================================
 """
 
@@ -54,6 +58,8 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 PERPLEXITY_MODEL = os.environ.get("PERPLEXITY_MODEL", "sonar")
 RPM_DELAY = float(os.environ.get("ENRICH_RPM_DELAY", "1.5"))  # Perplexity allows 50 RPM at tier 0
 GEMINI_RPM_DELAY = float(os.environ.get("GEMINI_RPM_DELAY", "5"))
+APOLLO_RPM_DELAY = float(os.environ.get("APOLLO_RPM_DELAY", "1.3"))  # Apollo ~50 RPM free tier
+APOLLO_API_URL = "https://api.apollo.io/api/v1"
 
 # SSL context for Gemini API
 try:
@@ -201,7 +207,255 @@ def campaign_priority_score(domain, company):
 
 
 # ---------------------------------------------------------------------------
-# Perplexity contact enrichment (preferred)
+# Apollo.io contact enrichment (preferred — real LinkedIn data)
+# ---------------------------------------------------------------------------
+def _apollo_headers():
+    api_key = os.environ.get("APOLLO_API_KEY", "")
+    return {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": api_key,
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    }
+
+
+def _normalize_linkedin_url(url):
+    """Normalize LinkedIn URL to https://www.linkedin.com/in/..."""
+    if not url:
+        return ""
+    url = url.strip()
+    # Fix http -> https
+    if url.startswith("http://"):
+        url = "https://" + url[7:]
+    # Validate format
+    if "/in/" not in url:
+        return ""
+    return url
+
+
+def _split_name(contact):
+    """Split contact name into first_name + last_name for Apollo."""
+    nombre = contact.get("nombre", "")
+    apellido = contact.get("apellido", "")
+    if nombre:
+        return nombre, apellido or ""
+    name = contact.get("name", "")
+    parts = name.strip().split()
+    if len(parts) >= 2:
+        return parts[0], " ".join(parts[1:])
+    return name, ""
+
+
+def enrich_contacts_with_apollo(domain, company_name, contacts):
+    """Enrich contacts using Apollo People Match — returns real LinkedIn URLs + titles.
+    One API call per contact (1 credit each)."""
+
+    api_key = os.environ.get("APOLLO_API_KEY", "")
+    if not api_key:
+        return None
+
+    results = []
+    for ct in contacts:
+        first_name, last_name = _split_name(ct)
+        email = ct.get("email", "")
+
+        if not first_name:
+            results.append({
+                "email": email, "role": "No identificado",
+                "linkedin_url": "", "photo_url": "",
+                "source": "apollo", "confidence": "baja",
+            })
+            continue
+
+        # Try match by name+domain first, fall back to email
+        payload = json.dumps({
+            "first_name": first_name,
+            "last_name": last_name,
+            "domain": domain,
+            "reveal_personal_emails": False,
+        }).encode("utf-8")
+
+        try:
+            req = urllib.request.Request(
+                f"{APOLLO_API_URL}/people/match",
+                data=payload, method="POST",
+                headers=_apollo_headers(),
+            )
+            with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            person = data.get("person")
+            if not person:
+                results.append({
+                    "email": email, "role": "No identificado",
+                    "linkedin_url": "", "photo_url": "",
+                    "source": "apollo", "confidence": "baja",
+                })
+                time.sleep(APOLLO_RPM_DELAY)
+                continue
+
+            title = person.get("title") or ""
+            linkedin = _normalize_linkedin_url(person.get("linkedin_url") or "")
+            photo = person.get("photo_url") or ""
+            seniority = person.get("seniority") or ""
+
+            # Confidence based on data quality
+            confidence = "alta" if linkedin and title else "media" if title else "baja"
+
+            results.append({
+                "email": email,
+                "role": title or "No identificado",
+                "linkedin_url": linkedin,
+                "photo_url": photo,
+                "seniority": seniority,
+                "source": "apollo",
+                "confidence": confidence,
+            })
+
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                print(f"\n    [rate-limit] Apollo 429, waiting 30s...")
+                time.sleep(30)
+                # Retry once
+                try:
+                    req = urllib.request.Request(
+                        f"{APOLLO_API_URL}/people/match",
+                        data=payload, method="POST",
+                        headers=_apollo_headers(),
+                    )
+                    with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                    person = data.get("person")
+                    if person:
+                        results.append({
+                            "email": email,
+                            "role": person.get("title") or "No identificado",
+                            "linkedin_url": _normalize_linkedin_url(person.get("linkedin_url") or ""),
+                            "photo_url": person.get("photo_url") or "",
+                            "seniority": person.get("seniority") or "",
+                            "source": "apollo",
+                            "confidence": "alta" if person.get("linkedin_url") else "media",
+                        })
+                    else:
+                        results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja"})
+                except Exception:
+                    results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja"})
+            elif e.code == 422:
+                # Unprocessable — bad input, skip
+                results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja"})
+            else:
+                body = e.read().decode("utf-8") if e.fp else ""
+                print(f"\n    [warn] Apollo {e.code} for {first_name} {last_name}: {body[:150]}")
+                results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja"})
+
+        except Exception as e:
+            print(f"\n    [warn] Apollo failed for {first_name} {last_name}: {e}")
+            results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja"})
+
+        time.sleep(APOLLO_RPM_DELAY)
+
+    return results if results else None
+
+
+def discover_decision_makers_apollo(domain, company_name):
+    """Use Apollo People Search (FREE, no credits) to find CFO/Dir Financiero at a company.
+    Returns list of new contacts found."""
+
+    api_key = os.environ.get("APOLLO_API_KEY", "")
+    if not api_key:
+        return []
+
+    # Search for finance decision makers
+    seniorities = ["c_suite", "head", "director", "vp"]
+    titles = ["CFO", "Chief Financial Officer", "Director Financiero",
+              "Head of Finance", "Finance Director", "Project Finance",
+              "Financiación Estructurada", "Structured Finance",
+              "Director General", "CEO", "Managing Director"]
+
+    url = f"{APOLLO_API_URL}/mixed_people/api_search"
+    payload = json.dumps({
+        "q_organization_domains_list": [domain],
+        "person_seniorities": seniorities,
+        "person_titles": titles,
+        "per_page": 10,
+        "page": 1,
+    }).encode("utf-8")
+
+    try:
+        req = urllib.request.Request(url, data=payload, method="POST", headers=_apollo_headers())
+        with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        people = data.get("people", [])
+        if not people:
+            return []
+
+        # People Search returns obfuscated last names — we need to enrich to get full data
+        # But we get: first_name, title, and Apollo ID
+        discovered = []
+        for p in people[:5]:  # max 5 decision makers
+            apollo_id = p.get("id", "")
+            first_name = p.get("first_name", "")
+            title = p.get("title", "")
+            if not apollo_id or not first_name:
+                continue
+            discovered.append({
+                "apollo_id": apollo_id,
+                "first_name": first_name,
+                "title": title,
+            })
+
+        if not discovered:
+            return []
+
+        # Enrich each discovered person (1 credit each) to get full name, email, LinkedIn
+        enriched = []
+        for d in discovered:
+            try:
+                match_payload = json.dumps({"id": d["apollo_id"]}).encode("utf-8")
+                req = urllib.request.Request(
+                    f"{APOLLO_API_URL}/people/match",
+                    data=match_payload, method="POST",
+                    headers=_apollo_headers(),
+                )
+                with urllib.request.urlopen(req, context=SSL_CTX, timeout=30) as resp:
+                    match_data = json.loads(resp.read().decode("utf-8"))
+
+                person = match_data.get("person")
+                if not person:
+                    continue
+
+                email = person.get("email") or ""
+                if not email:
+                    continue  # No email = not useful for CRM
+
+                enriched.append({
+                    "name": person.get("name") or f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
+                    "nombre": person.get("first_name") or "",
+                    "apellido": person.get("last_name") or "",
+                    "email": email,
+                    "role": person.get("title") or "",
+                    "_role_source": "apollo:discovery",
+                    "_linkedin_url": _normalize_linkedin_url(person.get("linkedin_url") or ""),
+                    "_photo_url": person.get("photo_url") or "",
+                    "_role_confidence": "alta",
+                    "_role_verified_at": datetime.now(timezone.utc).isoformat(),
+                })
+                time.sleep(APOLLO_RPM_DELAY)
+
+            except Exception as e:
+                print(f"    [warn] Apollo enrich failed for {d['first_name']}: {e}")
+                time.sleep(APOLLO_RPM_DELAY)
+
+        return enriched
+
+    except Exception as e:
+        print(f"    [warn] Apollo search failed for {domain}: {e}")
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Perplexity contact enrichment
 # ---------------------------------------------------------------------------
 def enrich_contacts_with_perplexity(domain, company_name, contacts):
     """Batch-enrich contacts using Perplexity Sonar (web search built-in)."""
@@ -484,12 +738,16 @@ def get_contacts_needing_enrichment(company, force=False):
             name = ct.get("name", "")
             email = ct.get("email", "")
             role = ct.get("role", "")
+            nombre = ct.get("nombre", "")
+            apellido = ct.get("apellido", "")
             role_source = ct.get("_role_source")
             linkedin_url = ct.get("_linkedin_url", "")
         elif isinstance(ct, list) and len(ct) >= 3:
             name = ct[0] or ""
             role = ct[1] or ""
             email = ct[2] or ""
+            nombre = ct[3] if len(ct) > 3 else ""
+            apellido = ct[4] if len(ct) > 4 else ""
             role_source = None
             linkedin_url = ""
         else:
@@ -501,15 +759,16 @@ def get_contacts_needing_enrichment(company, force=False):
             not role or
             role.lower() in ("no identificado", "nan", "")
         )
+        entry = {"name": name, "email": email, "role": role, "nombre": nombre or "", "apellido": apellido or ""}
         # Force mode: re-enrich contacts that have role but no linkedin_url
         if force and role_source and not linkedin_url:
-            contacts.append({"name": name, "email": email, "role": role})
+            contacts.append(entry)
             continue
         # Don't overwrite if already enriched via this script
         if role_source and not needs_enrichment:
             continue
         if needs_enrichment:
-            contacts.append({"name": name, "email": email, "role": role})
+            contacts.append(entry)
     return contacts[:10]  # max 10 per company
 
 
@@ -524,6 +783,7 @@ def main():
     dry_run = False
     force = False
     backend = None  # auto-detect
+    discover_dm = False
 
     i = 0
     while i < len(args):
@@ -549,25 +809,34 @@ def main():
             # Enrich all company types, not just Originacion
             os.environ["ENRICH_ALL_TYPES"] = "1"
             i += 1
+        elif args[i] == "--discover-dm":
+            discover_dm = True
+            i += 1
         else:
             print(f"Unknown arg: {args[i]}")
             sys.exit(1)
 
     # Auto-detect backend
     if not backend:
-        if os.environ.get("PERPLEXITY_API_KEY"):
+        if os.environ.get("APOLLO_API_KEY"):
+            backend = "apollo"
+        elif os.environ.get("PERPLEXITY_API_KEY"):
             backend = "perplexity"
         elif os.environ.get("GEMINI_API_KEY"):
             backend = "gemini"
         else:
-            print("  [error] No API key found. Set PERPLEXITY_API_KEY or GEMINI_API_KEY")
+            print("  [error] No API key found. Set APOLLO_API_KEY, PERPLEXITY_API_KEY or GEMINI_API_KEY")
             sys.exit(1)
 
     if not top_n and not single_domain:
         top_n = 50  # default
 
     # Select enrichment function
-    if backend == "perplexity":
+    if backend == "apollo":
+        enrich_fn = enrich_contacts_with_apollo
+        delay = 0  # Apollo function handles its own delays per contact
+        backend_label = "Apollo.io (People Match)"
+    elif backend == "perplexity":
         enrich_fn = enrich_contacts_with_perplexity
         delay = RPM_DELAY
         backend_label = f"Perplexity ({PERPLEXITY_MODEL})"
@@ -708,15 +977,18 @@ def main():
                 continue
 
             linkedin_url = enriched.get("linkedin_url", "")
+            photo_url = enriched.get("photo_url", "")
 
             # Update the contact
             if isinstance(ct, dict):
                 ct["role"] = new_role
-                ct["_role_source"] = f"linkedin_search:{source}"
+                ct["_role_source"] = f"{source}_search:{source}" if source != "apollo" else "apollo"
                 ct["_role_verified_at"] = now
                 ct["_role_confidence"] = confidence
                 if linkedin_url:
                     ct["_linkedin_url"] = linkedin_url
+                if photo_url:
+                    ct["_photo_url"] = photo_url
             elif isinstance(ct, list) and len(ct) >= 3:
                 ct[1] = new_role  # role is at index 1
 
@@ -732,15 +1004,93 @@ def main():
 
         time.sleep(delay)
 
+    # --- Discover decision makers mode ---
+    dm_discovered = 0
+    if discover_dm and backend == "apollo" and not dry_run:
+        print()
+        print("-" * 60)
+        print("  Phase 2: Discovering decision makers (Apollo Search)")
+        print("-" * 60)
+
+        # Find Originacion companies WITHOUT decision makers
+        dm_targets = []
+        for domain, company in all_companies.items():
+            enrichment = company.get("enrichment") or {}
+            role = enrichment.get("role", "")
+            if role not in ("Originacion", "Originación"):
+                continue
+            raw_contacts = company.get("contacts", [])
+            has_dm = False
+            existing_emails = set()
+            for ct in raw_contacts:
+                if isinstance(ct, dict):
+                    r = (ct.get("role") or "").lower()
+                    existing_emails.add((ct.get("email") or "").lower().strip())
+                elif isinstance(ct, list) and len(ct) >= 3:
+                    r = (ct[1] or "").lower()
+                    existing_emails.add((ct[2] or "").lower().strip())
+                else:
+                    continue
+                if re.search(r'ceo|cfo|director.*(general|financ)|chief.*(executive|financial)|head.*(finance|project finance)', r, re.I):
+                    has_dm = True
+                    break
+            if not has_dm:
+                dm_targets.append((domain, company, existing_emails))
+
+        if single_domain:
+            dm_targets = [(d, c, e) for d, c, e in dm_targets if d == single_domain]
+
+        if top_n:
+            # Sort by priority and take top N
+            dm_scored = [(d, campaign_priority_score(d, c), c, e) for d, c, e in dm_targets]
+            dm_scored.sort(key=lambda x: x[1], reverse=True)
+            dm_targets = [(d, c, e) for d, _, c, e in dm_scored[:top_n]]
+
+        print(f"  Companies without decision maker: {len(dm_targets)}")
+
+        for idx, (domain, company, existing_emails) in enumerate(dm_targets, 1):
+            name = company.get("name", domain)
+            print(f"  [{idx}/{len(dm_targets)}] {name} ({domain})...", end=" ", flush=True)
+
+            new_contacts = discover_decision_makers_apollo(domain, name)
+
+            # Filter out contacts we already have
+            added = 0
+            for nc in new_contacts:
+                nc_email = nc.get("email", "").lower().strip()
+                if nc_email in existing_emails:
+                    continue
+                # Add to company contacts
+                all_companies[domain].setdefault("contacts", []).append(nc)
+                existing_emails.add(nc_email)
+                added += 1
+                dm_discovered += 1
+                li = nc.get("_linkedin_url", "")
+                li_tag = f" | {li}" if li else ""
+                print(f"\n    + {nc['name']}: {nc['role']} <{nc['email']}>{li_tag}")
+
+            if added == 0:
+                print("(no new DM found)")
+
+            time.sleep(APOLLO_RPM_DELAY)
+
+        print(f"\n  New decision makers discovered: {dm_discovered}")
+
+    elif discover_dm and backend != "apollo":
+        print("\n  [warn] --discover-dm requires --backend apollo (or APOLLO_API_KEY)")
+
     # Summary
     print()
     print("=" * 60)
     print(f"  Companies processed: {len(targets)}")
     print(f"  Companies with updates: {enriched_count}")
     print(f"  Contacts enriched: {contacts_enriched}")
+    if dm_discovered:
+        print(f"  New decision makers discovered: {dm_discovered}")
     print(f"  Failed: {failed_count}")
 
-    if not dry_run and contacts_enriched > 0:
+    total_changes = contacts_enriched + dm_discovered
+    if not dry_run and total_changes > 0:
         save_companies(data, paths)
     elif dry_run:
         print("  (dry run — no files written)")

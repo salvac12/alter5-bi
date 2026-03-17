@@ -930,20 +930,28 @@ FORMATO (JSON valido, sin markdown):
                       <div key={i} style={{
                         flex: 1, padding: "8px 10px", background: "#0A1628",
                         borderRadius: 6, border: "1px solid #1B3A5C",
+                        display: "flex", alignItems: "center", gap: 8,
                       }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#FFFFFF", marginBottom: 2 }}>
-                          {ct.nombre ? `${ct.nombre} ${ct.apellido || ""}` : ct.name}
+                        {ct.photoUrl ? (
+                          <img src={ct.photoUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                        ) : (
+                          <div style={{ width: 28, height: 28, borderRadius: "50%", background: color + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
+                            {(ct.nombre || ct.name || "?")[0]?.toUpperCase()}
+                          </div>
+                        )}
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#FFFFFF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {ct.nombre ? `${ct.nombre} ${ct.apellido || ""}` : ct.name}
+                            </span>
+                            {ct.linkedinUrl && (
+                              <a href={ct.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, borderRadius: 2, background: "#0A66C215", color: "#0A66C2", fontSize: 8, fontWeight: 800, textDecoration: "none", flexShrink: 0 }}
+                                title="LinkedIn">in</a>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 10, color: color, fontWeight: 600 }}>{label}</div>
                         </div>
-                        <div style={{ fontSize: 10, color: color, fontWeight: 600 }}>{label}</div>
-                        {ct.email && (
-                          <div style={{ fontSize: 10, color: "#6B7F94", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ct.email}</div>
-                        )}
-                        {ct.linkedinUrl && (
-                          <a href={ct.linkedinUrl} target="_blank" rel="noopener noreferrer"
-                            style={{ fontSize: 10, color: '#0A66C2', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>
-                            LinkedIn ↗
-                          </a>
-                        )}
                       </div>
                     );
                   })}
@@ -1254,30 +1262,40 @@ FORMATO (JSON valido, sin markdown):
                           onMouseEnter={(e) => { e.currentTarget.style.background = rank <= 3 ? color + "20" : "#132238"; e.currentTarget.style.transform = "translateY(-2px)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.background = rank <= 3 ? color + "10" : "#0A1628"; e.currentTarget.style.transform = "translateY(0)"; }}
                           >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                              <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF", flex: 1, lineHeight: 1.3 }}>
-                                {ct.nombre ? <>{ct.nombre} <span style={{ fontWeight: 400 }}>{ct.apellido}</span></> : ct.name}
-                              </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                              {ct.photoUrl ? (
+                                <img src={ct.photoUrl} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `2px solid ${color}40` }} />
+                              ) : (
+                                <div style={{ width: 36, height: 36, borderRadius: "50%", background: color + "20", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color, flexShrink: 0 }}>
+                                  {(ct.nombre || ct.name || "?")[0]?.toUpperCase()}
+                                </div>
+                              )}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {ct.nombre ? <>{ct.nombre} <span style={{ fontWeight: 400 }}>{ct.apellido}</span></> : ct.name}
+                                  </span>
+                                  {ct.linkedinUrl && (
+                                    <a href={ct.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: 3, background: "#0A66C215", color: "#0A66C2", fontSize: 9, fontWeight: 800, textDecoration: "none", flexShrink: 0 }}
+                                      title="Ver perfil LinkedIn">in</a>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 10, color: "#6B7F94", fontWeight: 600 }}>
+                                  {ct.role || "Cargo desconocido"}
+                                </div>
+                              </div>
                               <span style={{
                                 fontSize: 9, fontWeight: 700, letterSpacing: "0.5px",
                                 padding: "3px 7px", borderRadius: 4,
                                 background: color + "30", color,
-                                textTransform: "uppercase", whiteSpace: "nowrap", marginLeft: 8,
+                                textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0,
                               }}>{label}</span>
                             </div>
-                            <div style={{ fontSize: 10, color: "#6B7F94", marginBottom: ct.email ? 4 : 0, fontWeight: 600 }}>
-                              {ct.role || "Cargo desconocido"}
-                            </div>
                             {ct.email && (
-                              <div style={{ fontSize: 11, color: "#60A5FA", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <div style={{ fontSize: 11, color: "#60A5FA", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingLeft: 46 }}>
                                 {ct.email}
                               </div>
-                            )}
-                            {ct.linkedinUrl && (
-                              <a href={ct.linkedinUrl} target="_blank" rel="noopener noreferrer"
-                                style={{ fontSize: 11, color: '#0A66C2', fontWeight: 600, textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>
-                                LinkedIn ↗
-                              </a>
                             )}
                           </div>
                         );
