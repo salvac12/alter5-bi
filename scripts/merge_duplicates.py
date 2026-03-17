@@ -29,29 +29,107 @@ from import_mailbox import export_to_compact
 # target = the canonical domain that survives
 # ──────────────────────────────────────────────────────────────
 MERGE_RULES = [
-    # === Known rebrands ===
+    # ═══ Batch 1 (already merged) ═══
     ("aboenergy.com", ["abo-wind.es", "abo-wind.fr"]),
-
-    # === Same company, different TLD / subdomain ===
     ("apexgroup.com", ["apexfs.group", "apexfs.com", "apexfunds.co.uk"]),
     ("acoboo.com", ["acoboo.atlassian.net", "acoboo.help"]),
     ("bancsabadell.com", ["comunica.bancsabadell.com"]),
     ("atainsights.com", ["ata.email", "em-577710.atainsights.com", "email.atainsights.com", "my.atainsights.com"]),
-    ("bankinter.com", ["bakinter.com"]),  # typo
-    ("gruposantander.com", ["gruposantander.es"]),
-    ("ithaka.com", ["ithaka.es"]),  # nota: ithaka.es tiene 127 interactions
+    ("bankinter.com", ["bakinter.com"]),
+    ("gruposantander.com", ["gruposantander.es", "servexternos.gruposantander.com", "events.gruposantander.com"]),
+    ("ithaka.com", ["ithaka.es"]),
     ("grupotec.es", ["grupotec.com"]),
     ("eversheds-sutherland.es", ["eversheds-sutherland.com"]),
     ("caixabank.com", ["empresas.caixabank.com", "email.caixabank.com", "events.caixabank.com"]),
     ("soltec.com", ["external.soltec.com"]),
     ("crowdcube.com", ["info.crowdcube.com", "crowdcube.zendesk.com"]),
-    ("enerlandgroup.com", ["enerlandgorup.com"]),  # typo
+    ("enerlandgroup.com", ["enerlandgorup.com"]),
     ("triodos.es", ["triodos.nl"]),
     ("mirabaud-msl.com", ["mirabaud.com"]),
     ("ignis.es", ["ignis.com"]),
     ("cinkcoworking.es", ["cink-emprende.es", "cinkcoworking.com"]),
     ("deloitte.es", ["bdhnotifications.deloitte.com"]),
     ("qenergy.com", ["qualitasenergy.com"]),
+
+    # ═══ Batch 2 — Clientes/prospects relevantes ═══
+    # Rebrands / same company different TLD
+    ("gruposantander.com", ["produban.com"]),  # subsidiary
+    ("sancuscapital.es", ["sancuscapital.com"]),
+    ("aream.de", ["aream"]),  # domain sin TLD
+    ("nomura.com", ["uk.nomura.com"]),
+    ("nordestada.es", ["handriv.com"]),  # same entity, odd domain
+    ("opdenergy.com", ["opde.net", "opdenergy.net"]),
+    ("univergysolar.com", ["ext.univergysolar.com"]),
+    ("met.com", ["themetgroup.com"]),
+    ("ecoener.es", ["ecoenerone.com"]),
+    ("bbva.com", ["bbva-unassisted-visits-sp.appspotmail.com", "grupobbva.com"]),
+    ("everwoodcapital.com", ["everwodcapital.com"]),  # typo
+    ("aquila-capital.de", ["aquila.capital"]),
+    ("arcanopartners.com", ["cd.arcanopartners.com", "arcanopartners.con"]),  # typo .con
+    ("santanderam.com", ["servexternos.santanderam.com"]),
+    ("franklintempleton.com", ["franklinresources.com"]),
+    ("comunidad.solar", ["comunidadsolar.es"]),
+    ("greenalia.es", ["greenalia.us"]),
+    ("altanoenergy.com", ["altano.eu"]),
+    ("kfw.de", ["kfw-ipex-bank.de", "service.kfw.com"]),
+    ("baywa-re.com", ["baywa.de", "baywa-re.es"]),
+    ("dnv.com", ["e.dnv.com"]),
+    ("matrixrenewables.com", ["matrixrenewable.com"]),  # typo
+    ("cambioenergetico.com", ["cambioenergeticoslu.onmicrosoft.com"]),
+    ("icex.es", ["comunicaciones.icex.es", "comercio.mineco.es"]),
+    ("sanza-energy.com", ["sanzaenergy.com"]),  # keep the one with more
+    ("islandgp.com", ["slandgp.com"]),  # typo
+    ("ibercaja.es", ["ibercaja.com", "gestionfondos.ibercaja.es"]),
+    ("galp.com", ["galpsolar.com"]),
+    ("finergreen.com", ["finergreen.fr"]),
+    ("enlightenergy.eu", ["enlightenergy.co.il"]),
+    ("emeren.com", ["renesolapower.com"]),  # rebrand
+    ("kommunalkredit.at", ["kommunalkreditaustria.onmicrosoft.com"]),
+    ("cee-group.de", ["cee-group.lu"]),
+    ("nextenergycapital.com", ["nextenergygroup.com"]),
+    ("macquarie.com", ["macquarie.com.au"]),
+    ("totalenergies.com", ["totalenergies-fr.com", "totelenergies.com"]),  # typo
+    ("erbienergia.com", ["erbienergia.eu"]),
+    ("renewablepowercapital.com", ["renewablepowercappital.com"]),  # typo
+    ("axpo.com", ["solar.axpo.com", "axpogrp.mail.onmicrosoft.com"]),
+    ("risenenergy.com", ["risenenergy.eu"]),
+    ("europeanenergy.com", ["europeanenergy.dk"]),
+    ("hanwha.com", ["hanwa.com"]),  # typo
+    ("bancamarch.es", ["bancamarch.onmicrosoft.com"]),
+    ("cubeim.com", ["cubeinfrastructure.com"]),
+    ("perezllorca.com", ["perezllorca.co"]),
+    ("ardian.com", ["ardian-investment.com"]),
+    ("eurazeo.com", ["eurazeo.onmicrosoft.com"]),
+    ("nteaser.es", ["nteaser.com"]),
+    ("alqua.io", ["alqua.co"]),
+    ("rp-global.com", ["rpi-e.com"]),
+    ("gelt.com", ["es.gelt.com"]),
+    ("repsol.com", ["rg.repsol.com"]),
+    ("mutua.es", ["informacion.mutua.es"]),
+    ("deducible.es", ["muydeducible.com", "joindeducible.com", "deducibleplus.com"]),
+    ("ext.eif.org", ["eif30yearsevents.org", "em5979.eif30yearsevents.org"]),
+    ("garrigues.com", ["garrigues.partners"]),  # garriguescapital.com is separate entity
+    ("mizuhogroup.com", ["americas.mizuhogroup.com"]),
+    ("bnpparibas.com", ["uk.bnpparibas.com"]),
+    ("dlapiper.com", ["us.dlapiper.com"]),
+    ("kpmg.com", ["jp.kpmg.com"]),
+    ("pimco.com", ["uk.pimco.com", "de.pimco.com"]),
+
+    # ═══ Batch 2 — Herramientas/servicios (less important but clean) ═══
+    ("trello.com", ["boards.trello.com"]),
+    ("pipedrive.com", ["email2.pipedrive.com", "em5721.pipedrivebilling.com", "email.pipedrive.com"]),
+    ("terrapinn.com", ["tp2.terrapinn.com", "events.terrapinn.com"]),
+    ("fundspeople.com", ["email.fundspeople.com"]),
+    ("reutersevents.com", ["1.reutersevents.com"]),
+    ("expansion.com", ["e.expansion.com"]),
+    ("ifema.es", ["madrid.ifema.es"]),
+    ("mailgun.com", ["learn.mailgun.com", "mailgun.zendesk.com"]),
+    ("microsoft.com", ["communication.microsoft.com", "microsoftstore.microsoft.com", "microsoftonline.com",
+                        "email.microsoft.com", "mail.microsoft365.com", "email.microsoft365.com",
+                        "mail.support.microsoft.com", "email.microsoftemail.com", "experience.microsoft.com"]),
+    ("ie.edu", ["student.ie.edu", "alumni.ie.edu"]),
+    ("informa.com", ["cc.informa.com"]),
+    ("nomura.com", ["uk.nomura.com"]),
 ]
 
 
