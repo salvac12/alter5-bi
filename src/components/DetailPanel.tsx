@@ -588,6 +588,7 @@ FORMATO (JSON valido, sin markdown):
             { id: 'timeline', label: 'Timeline' },
             { id: 'contactos', label: 'Contactos' },
             ...(c.scraperProjects > 0 ? [{ id: 'proyectos', label: `Proyectos (${c.scraperProjects})` }] : []),
+            ...(c.role === "Inversión" && (c.atWorkstreams?.length > 0 || c.atStrategicNotes || investorNotes?.get?.(c.name)) ? [{ id: 'feedback', label: `Feedback${c.atWorkstreams?.length ? ` (${c.atWorkstreams.length})` : ''}` }] : []),
             { id: 'detalles', label: 'Datos' },
           ].map(tab => (
             <button
@@ -1555,6 +1556,235 @@ FORMATO (JSON valido, sin markdown):
                   ))}
                 </div>
               </details>
+            )}
+          </div>
+        )}
+
+        {/* ═══ TAB: Feedback (Inversión only) ═══ */}
+        {activeTab === 'feedback' && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+            {/* ── Strategic Notes ── */}
+            {(c.atStrategicNotes || investorNotes?.get?.(c.name)) && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "14px 16px",
+                border: "1px solid #10B98140", borderLeft: "4px solid #10B981",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#10B981", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 10,
+                }}>Notas Estrategicas</div>
+                {c.atStrategicNotes && (
+                  <p style={{ fontSize: 12, color: "#D1FAE5", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{c.atStrategicNotes}</p>
+                )}
+                {!c.atStrategicNotes && investorNotes?.get?.(c.name) && (
+                  <div>
+                    {investorNotes.get(c.name).map((note: string, i: number) => (
+                      <p key={i} style={{
+                        fontSize: 12, color: "#D1FAE5", lineHeight: 1.6, margin: i > 0 ? "8px 0 0 0" : 0,
+                      }}>{note}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Workstream History ── */}
+            {c.atWorkstreams?.length > 0 && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "14px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                <div style={{
+                  fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                  letterSpacing: "1.5px", fontWeight: 700, marginBottom: 12,
+                }}>Historial de Workstreams</div>
+
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #1B3A5C" }}>
+                      {["Deal", "Status", "Notas", "Rechazo"].map(h => (
+                        <th key={h} style={{
+                          fontSize: 10, color: "#6B7F94", fontWeight: 700,
+                          textTransform: "uppercase", letterSpacing: "0.5px",
+                          padding: "6px 8px", textAlign: "left",
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {c.atWorkstreams.map((ws: any, i: number) => {
+                      const statusColors: Record<string, { bg: string; color: string }> = {
+                        "Declined Consideration": { bg: "rgba(239,68,68,0.15)", color: "#EF4444" },
+                        "Analysis": { bg: "rgba(59,130,246,0.15)", color: "#3B82F6" },
+                        "Dataroom": { bg: "rgba(16,185,129,0.15)", color: "#10B981" },
+                        "Term Sheet": { bg: "rgba(245,158,11,0.15)", color: "#F59E0B" },
+                        "Closing": { bg: "rgba(16,185,129,0.15)", color: "#10B981" },
+                      };
+                      const sc = statusColors[ws.status] || { bg: "rgba(107,127,148,0.15)", color: "#6B7F94" };
+                      return (
+                        <tr key={i} style={{ borderBottom: "1px solid #0A1628" }}>
+                          <td style={{ fontSize: 12, color: "#CBD5E1", padding: "8px 8px", fontWeight: 600 }}>{ws.deal || "—"}</td>
+                          <td style={{ padding: "8px 8px" }}>
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: "3px 8px",
+                              borderRadius: 5, background: sc.bg, color: sc.color,
+                              whiteSpace: "nowrap",
+                            }}>{ws.status || "—"}</span>
+                          </td>
+                          <td style={{ fontSize: 11, color: "#94A3B8", padding: "8px 8px", maxWidth: 200, lineHeight: 1.4 }}>
+                            {ws.notes ? (ws.notes.length > 100 ? ws.notes.slice(0, 100) + "..." : ws.notes) : "—"}
+                          </td>
+                          <td style={{ fontSize: 11, padding: "8px 8px", maxWidth: 200, lineHeight: 1.4 }}>
+                            {ws.rejection ? (
+                              <span style={{ color: "#EF4444" }}>{ws.rejection.length > 100 ? ws.rejection.slice(0, 100) + "..." : ws.rejection}</span>
+                            ) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Rejection feedback highlight */}
+                {c.atWorkstreams.some((ws: any) => ws.rejection) && (
+                  <div style={{
+                    marginTop: 12, background: "rgba(239,68,68,0.08)", borderRadius: 8,
+                    padding: "10px 14px", border: "1px solid rgba(239,68,68,0.2)",
+                  }}>
+                    <div style={{ fontSize: 9, color: "#EF4444", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 6 }}>
+                      Feedback de Rechazo
+                    </div>
+                    {c.atWorkstreams.filter((ws: any) => ws.rejection).map((ws: any, i: number) => (
+                      <div key={i} style={{ marginBottom: i < c.atWorkstreams.filter((w: any) => w.rejection).length - 1 ? 8 : 0 }}>
+                        <div style={{ fontSize: 10, color: "#F59E0B", fontWeight: 700, marginBottom: 2 }}>{ws.deal}</div>
+                        <p style={{ fontSize: 12, color: "#FCA5A5", lineHeight: 1.5, margin: 0 }}>{ws.rejection}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Investment Profile Summary ── */}
+            <div style={{
+              background: "#132238", borderRadius: 10, padding: "14px 16px",
+              border: "1px solid #1B3A5C",
+            }}>
+              <div style={{
+                fontSize: 9, color: "#6B7F94", textTransform: "uppercase",
+                letterSpacing: "1.5px", fontWeight: 700, marginBottom: 10,
+              }}>Perfil de Inversion</div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                {/* Trust Level */}
+                {c.atTrustLevel != null && (
+                  <div style={{ flex: "1 1 120px" }}>
+                    <div style={{ fontSize: 10, color: "#6B7F94", marginBottom: 4 }}>Trust Level</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ flex: 1, height: 6, background: "#0A1628", borderRadius: 3 }}>
+                        <div style={{
+                          width: `${Math.min(100, (c.atTrustLevel / 5) * 100)}%`, height: "100%",
+                          background: c.atTrustLevel >= 4 ? "#10B981" : c.atTrustLevel >= 2 ? "#F59E0B" : "#EF4444",
+                          borderRadius: 3, transition: "width 0.3s ease",
+                        }} />
+                      </div>
+                      <span style={{ fontSize: 12, color: "#CBD5E1", fontWeight: 700, minWidth: 20, textAlign: "right" }}>{c.atTrustLevel}/5</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Ticket Range */}
+                {(c.atTicketMin || c.atTicketMax || c.ticketSize) && (
+                  <div style={{ flex: "1 1 120px" }}>
+                    <div style={{ fontSize: 10, color: "#6B7F94", marginBottom: 4 }}>Ticket</div>
+                    <span style={{
+                      fontSize: 13, color: "#10B981", fontWeight: 700,
+                    }}>
+                      {c.atTicketMin || c.atTicketMax
+                        ? `${c.atTicketMin ? (c.atTicketMin >= 1e6 ? `${(c.atTicketMin / 1e6).toFixed(0)}M` : c.atTicketMin.toLocaleString()) : "?"}${c.atTicketMax ? `-${c.atTicketMax >= 1e6 ? `${(c.atTicketMax / 1e6).toFixed(0)}M` : c.atTicketMax.toLocaleString()}` : "+"}€`
+                        : c.ticketSize || "—"
+                      }
+                    </span>
+                  </div>
+                )}
+
+                {/* Sentiment */}
+                {c.sentiment && (
+                  <div style={{ flex: "1 1 120px" }}>
+                    <div style={{ fontSize: 10, color: "#6B7F94", marginBottom: 4 }}>Sentiment</div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
+                      background: c.sentiment === "Positivo" ? "rgba(16,185,129,0.15)" : c.sentiment === "Negativo" ? "rgba(239,68,68,0.15)" : "rgba(245,158,11,0.15)",
+                      color: c.sentiment === "Positivo" ? "#10B981" : c.sentiment === "Negativo" ? "#EF4444" : "#F59E0B",
+                    }}>{c.sentiment}</span>
+                  </div>
+                )}
+
+                {/* Phase */}
+                {c.investorPhase && (
+                  <div style={{ flex: "1 1 120px" }}>
+                    <div style={{ fontSize: 10, color: "#6B7F94", marginBottom: 4 }}>Fase</div>
+                    <span style={{ fontSize: 12, color: "#CBD5E1", fontWeight: 600 }}>{c.investorPhase}</span>
+                  </div>
+                )}
+
+                {/* Subtype */}
+                {c.investorSubtype && (
+                  <div style={{ flex: "1 1 120px" }}>
+                    <div style={{ fontSize: 10, color: "#6B7F94", marginBottom: 4 }}>Subtipo</div>
+                    <span style={{ fontSize: 12, color: "#CBD5E1", fontWeight: 600 }}>{c.investorSubtype}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Criteria + Next Action + Deals ── */}
+            {(c.investmentCriteria || c.nextAction || c.dealsMentioned?.length > 0) && (
+              <div style={{
+                background: "#132238", borderRadius: 10, padding: "14px 16px",
+                border: "1px solid #1B3A5C",
+              }}>
+                {c.investmentCriteria && (
+                  <div style={{ marginBottom: (c.nextAction || c.dealsMentioned?.length) ? 12 : 0 }}>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
+                      Criterios de Inversion
+                    </div>
+                    <p style={{
+                      fontSize: 12, color: "#CBD5E1", lineHeight: 1.6, margin: 0,
+                      background: "#0A1628", borderRadius: 6, padding: "8px 10px",
+                      border: "1px solid #1B3A5C",
+                    }}>{c.investmentCriteria}</p>
+                  </div>
+                )}
+                {c.nextAction && (
+                  <div style={{ marginBottom: c.dealsMentioned?.length ? 12 : 0 }}>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
+                      Siguiente Accion
+                    </div>
+                    <div style={{
+                      fontSize: 12, color: "#10B981", lineHeight: 1.5,
+                      background: "#10B98110", borderRadius: 6, padding: "8px 10px",
+                      border: "1px solid #10B98130", fontWeight: 500,
+                    }}>{c.nextAction}</div>
+                  </div>
+                )}
+                {c.dealsMentioned?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 9, color: "#6B7F94", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: 700, marginBottom: 4 }}>
+                      Deals Mencionados
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                      {c.dealsMentioned.map((d: string) => (
+                        <span key={d} style={{
+                          padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 600,
+                          background: "#F59E0B15", color: "#FBBF24", border: "1px solid #F59E0B30",
+                        }}>{d}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}

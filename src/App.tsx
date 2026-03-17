@@ -1144,6 +1144,7 @@ export default function App({ authUser, onLogout }: AppProps) {
             onClearBulkSelection={() => setBulkSelection(new Set())}
             onBulkCampaignNew={() => { setShowCampaignCreation(true); }}
             onBulkCampaignAdd={() => setShowAddToCampaign(true)}
+            investorMode={selGroups.length === 1 && (selGroups[0] === "Inversión" || selGroups[0] === "Inversion")}
           />
         </div>
       ) : activeView === "prospects" ? (

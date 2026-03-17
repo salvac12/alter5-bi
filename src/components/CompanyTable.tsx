@@ -38,6 +38,20 @@ const COLUMNS = [
   { key: "score",        label: "Score",       sortable: true },
 ];
 
+const INVESTOR_COLUMNS = [
+  { key: "name",         label: "Inversor",    sortable: true },
+  { key: null,           label: "Sentiment",   sortable: false },
+  { key: null,           label: "Fase",        sortable: false },
+  { key: null,           label: "Subtipo",     sortable: false },
+  { key: null,           label: "Ticket",      sortable: false },
+  { key: null,           label: "Deals",       sortable: false },
+  { key: null,           label: "Notas",       sortable: false },
+  { key: null,           label: "Rechazos",    sortable: false },
+  { key: "interactions", label: "Emails",      sortable: true },
+  { key: "monthsAgo",   label: "Ultimo",       sortable: true },
+  { key: "score",        label: "Score",       sortable: true },
+];
+
 /* ── Sub-components ── */
 
 function ScoreChip({ score }: { score: number }) {
@@ -269,6 +283,7 @@ export default function CompanyTable({
   verifiedCompanies,
   bulkSelection, onToggleBulkSelect, onSelectAllPage, onBulkHide, onClearBulkSelection,
   onBulkCampaignNew, onBulkCampaignAdd,
+  investorMode,
 }: any) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -318,7 +333,7 @@ export default function CompanyTable({
               )}
 
               {/* Data columns */}
-              {COLUMNS.map((col, i) => (
+              {(investorMode ? INVESTOR_COLUMNS : COLUMNS).map((col, i) => (
                 <SortTh
                   key={i}
                   label={col.label}
@@ -456,89 +471,186 @@ export default function CompanyTable({
                     </div>
                   </td>
 
-                  {/* Role */}
-                  <td style={{ padding: "10px 12px" }}>
-                    <RoleBadge role={c.role} />
-                  </td>
+                  {investorMode ? (<>
+                    {/* Sentiment */}
+                    <td style={{ padding: "10px 12px" }}>
+                      {c.sentiment ? (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
+                          background: c.sentiment === "Positivo" ? "rgba(16,185,129,0.12)" : c.sentiment === "Negativo" ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
+                          color: c.sentiment === "Positivo" ? "#10B981" : c.sentiment === "Negativo" ? "#EF4444" : "#F59E0B",
+                          whiteSpace: "nowrap",
+                        }}>{c.sentiment}</span>
+                      ) : <span style={{ fontSize: 11, color: "#CBD5E1" }}>&mdash;</span>}
+                    </td>
 
-                  {/* Seg / Tipo */}
-                  <td style={{ padding: "10px 12px" }}>
-                    <SegmentTypeCell segment={c.segment} companyType={c.companyType} />
-                  </td>
+                    {/* Fase */}
+                    <td style={{ padding: "10px 12px", fontSize: 12, color: "#94A3B8" }}>
+                      {c.investorPhase || "—"}
+                    </td>
 
-                  {/* Market Role */}
-                  <td style={{ padding: "10px 12px" }}>
-                    <MarketRoleCell roles={c.marketRoles} />
-                  </td>
+                    {/* Subtipo */}
+                    <td style={{ padding: "10px 12px", fontSize: 12, color: "#94A3B8" }}>
+                      {c.investorSubtype || "—"}
+                    </td>
 
-                  {/* Producto */}
-                  <td style={{ padding: "10px 12px" }}>
-                    <ProductMatchCell companyIdx={c.idx} productMatches={productMatches} />
-                  </td>
+                    {/* Ticket */}
+                    <td style={{ padding: "10px 12px", fontSize: 12, color: "#10B981", fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {(() => {
+                        const min = c.atTicketMin;
+                        const max = c.atTicketMax;
+                        if (min || max) {
+                          const fmt = (v: number) => v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v.toLocaleString();
+                          return `${min ? fmt(min) : "?"}${max ? `-${fmt(max)}` : "+"}€`;
+                        }
+                        return c.ticketSize || "—";
+                      })()}
+                    </td>
 
-                  {/* Estado */}
-                  <td style={{ padding: "10px 12px" }}>
-                    <StatusDot status={c.status} />
-                  </td>
+                    {/* Deals */}
+                    <td style={{ padding: "10px 12px" }}>
+                      {c.dealsMentioned?.length > 0 ? (
+                        <span title={c.dealsMentioned.join(", ")} style={{
+                          fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
+                          background: "#F59E0B15", color: "#FBBF24", cursor: "help",
+                        }}>{c.dealsMentioned.length}</span>
+                      ) : <span style={{ fontSize: 11, color: "#CBD5E1" }}>&mdash;</span>}
+                    </td>
 
-                  {/* Emails */}
-                  <td style={{
-                    padding: "10px 12px", fontWeight: 600, fontSize: 13,
-                    fontVariantNumeric: "tabular-nums", color: "#0F172A",
-                  }}>
-                    {c.interactions.toLocaleString()}
-                  </td>
+                    {/* Strategic Notes (truncated) */}
+                    <td style={{ padding: "10px 12px", maxWidth: 180 }}>
+                      {c.atStrategicNotes ? (
+                        <span style={{ fontSize: 11, color: "#94A3B8", lineHeight: 1.3, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {c.atStrategicNotes.length > 60 ? c.atStrategicNotes.slice(0, 60) + "..." : c.atStrategicNotes}
+                        </span>
+                      ) : <span style={{ fontSize: 11, color: "#CBD5E1" }}>&mdash;</span>}
+                    </td>
 
-                  {/* Contacts */}
-                  <td style={{
-                    padding: "10px 12px", fontSize: 13,
-                    fontVariantNumeric: "tabular-nums", color: "#64748B",
-                  }}>
-                    {c.nContacts}
-                  </td>
+                    {/* Rechazos */}
+                    <td style={{ padding: "10px 12px" }}>
+                      {(() => {
+                        const rejections = (c.atWorkstreams || []).filter((ws: any) => ws.rejection);
+                        if (rejections.length > 0) {
+                          return (
+                            <span title={rejections.map((ws: any) => `${ws.deal}: ${ws.rejection}`).join("\n")} style={{
+                              fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5,
+                              background: "rgba(239,68,68,0.12)", color: "#EF4444", cursor: "help",
+                            }}>{rejections.length}</span>
+                          );
+                        }
+                        const wsCount = (c.atWorkstreams || []).length;
+                        if (wsCount > 0) {
+                          return <span style={{ fontSize: 11, color: "#6B7F94" }}>{wsCount} ws</span>;
+                        }
+                        return <span style={{ fontSize: 11, color: "#CBD5E1" }}>&mdash;</span>;
+                      })()}
+                    </td>
 
-                  {/* Employee count (max of verified vs enrichment) */}
-                  <td style={{
-                    padding: "10px 12px", fontSize: 13,
-                    fontVariantNumeric: "tabular-nums", color: "#64748B",
-                  }}>
-                    {(() => {
-                      const v = verifiedCompanies?.get?.(c.domain);
-                      const a = v?.employeeCount || 0;
-                      const b = c.employeeCount || 0;
-                      const emp = Math.max(a, b) || null;
-                      return emp ? emp.toLocaleString() : "—";
-                    })()}
-                  </td>
+                    {/* Emails */}
+                    <td style={{
+                      padding: "10px 12px", fontWeight: 600, fontSize: 13,
+                      fontVariantNumeric: "tabular-nums", color: "#0F172A",
+                    }}>
+                      {c.interactions.toLocaleString()}
+                    </td>
 
-                  {/* MW (scraper) */}
-                  <td style={{
-                    padding: "10px 12px", fontSize: 12,
-                    fontVariantNumeric: "tabular-nums", color: "#64748B",
-                  }}>
-                    {c.scraperMw > 0 ? (
-                      <span style={{
-                        fontWeight: 700, color: "#F59E0B", fontSize: 12,
-                      }}>
-                        {c.scraperMw >= 1000 ? `${(c.scraperMw / 1000).toFixed(1)}k` : c.scraperMw.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span style={{ color: "#CBD5E1" }}>&mdash;</span>
-                    )}
-                  </td>
+                    {/* Last date */}
+                    <td style={{
+                      padding: "10px 12px", fontSize: 12, color: "#94A3B8",
+                      fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+                    }}>
+                      {c.lastDate}
+                    </td>
 
-                  {/* Last date */}
-                  <td style={{
-                    padding: "10px 12px", fontSize: 12, color: "#94A3B8",
-                    fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
-                  }}>
-                    {c.lastDate}
-                  </td>
+                    {/* Score */}
+                    <td style={{ padding: "10px 12px" }}>
+                      <ScoreChip score={qScore} />
+                    </td>
+                  </>) : (<>
+                    {/* Role */}
+                    <td style={{ padding: "10px 12px" }}>
+                      <RoleBadge role={c.role} />
+                    </td>
 
-                  {/* Score */}
-                  <td style={{ padding: "10px 12px" }}>
-                    <ScoreChip score={qScore} />
-                  </td>
+                    {/* Seg / Tipo */}
+                    <td style={{ padding: "10px 12px" }}>
+                      <SegmentTypeCell segment={c.segment} companyType={c.companyType} />
+                    </td>
+
+                    {/* Market Role */}
+                    <td style={{ padding: "10px 12px" }}>
+                      <MarketRoleCell roles={c.marketRoles} />
+                    </td>
+
+                    {/* Producto */}
+                    <td style={{ padding: "10px 12px" }}>
+                      <ProductMatchCell companyIdx={c.idx} productMatches={productMatches} />
+                    </td>
+
+                    {/* Estado */}
+                    <td style={{ padding: "10px 12px" }}>
+                      <StatusDot status={c.status} />
+                    </td>
+
+                    {/* Emails */}
+                    <td style={{
+                      padding: "10px 12px", fontWeight: 600, fontSize: 13,
+                      fontVariantNumeric: "tabular-nums", color: "#0F172A",
+                    }}>
+                      {c.interactions.toLocaleString()}
+                    </td>
+
+                    {/* Contacts */}
+                    <td style={{
+                      padding: "10px 12px", fontSize: 13,
+                      fontVariantNumeric: "tabular-nums", color: "#64748B",
+                    }}>
+                      {c.nContacts}
+                    </td>
+
+                    {/* Employee count (max of verified vs enrichment) */}
+                    <td style={{
+                      padding: "10px 12px", fontSize: 13,
+                      fontVariantNumeric: "tabular-nums", color: "#64748B",
+                    }}>
+                      {(() => {
+                        const v = verifiedCompanies?.get?.(c.domain);
+                        const a = v?.employeeCount || 0;
+                        const b = c.employeeCount || 0;
+                        const emp = Math.max(a, b) || null;
+                        return emp ? emp.toLocaleString() : "—";
+                      })()}
+                    </td>
+
+                    {/* MW (scraper) */}
+                    <td style={{
+                      padding: "10px 12px", fontSize: 12,
+                      fontVariantNumeric: "tabular-nums", color: "#64748B",
+                    }}>
+                      {c.scraperMw > 0 ? (
+                        <span style={{
+                          fontWeight: 700, color: "#F59E0B", fontSize: 12,
+                        }}>
+                          {c.scraperMw >= 1000 ? `${(c.scraperMw / 1000).toFixed(1)}k` : c.scraperMw.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span style={{ color: "#CBD5E1" }}>&mdash;</span>
+                      )}
+                    </td>
+
+                    {/* Last date */}
+                    <td style={{
+                      padding: "10px 12px", fontSize: 12, color: "#94A3B8",
+                      fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
+                    }}>
+                      {c.lastDate}
+                    </td>
+
+                    {/* Score */}
+                    <td style={{ padding: "10px 12px" }}>
+                      <ScoreChip score={qScore} />
+                    </td>
+                  </>)}
                 </tr>
               );
             })}

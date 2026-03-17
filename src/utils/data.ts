@@ -225,6 +225,13 @@ export function parseCompanies(rawData: any) {
       nextAction: enrichment.next_action || null,
       dealsMentioned: enrichment.deals_mentioned || [],
       investorSubtype: enrichment.inv_subtipo || null,
+      // Airtable synced investor data (sync_investor_feedback.py)
+      atStrategicNotes: enrichment.at_notes || null,
+      atTrustLevel: enrichment.at_trust_level ?? null,
+      atTicketMin: enrichment.at_ticket_min ?? null,
+      atTicketMax: enrichment.at_ticket_max ?? null,
+      atWorkstreams: enrichment.at_workstreams || [],
+      atTarget: enrichment.at_target ?? false,
       // Scraper enrichment (enrich_from_scraper.py)
       scraperProjects: scraperData?.n_projects || 0,
       scraperMw: scraperData?.mw_total || 0,
