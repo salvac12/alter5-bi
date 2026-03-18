@@ -61,15 +61,15 @@ GEMINI_RPM_DELAY = float(os.environ.get("GEMINI_RPM_DELAY", "5"))
 APOLLO_RPM_DELAY = float(os.environ.get("APOLLO_RPM_DELAY", "1.3"))  # Apollo ~50 RPM free tier
 APOLLO_API_URL = "https://api.apollo.io/api/v1"
 
-# SSL context for Gemini API
+# SSL context for API calls — try system certs first, fall back to certifi
+SSL_CTX = ssl.create_default_context()
 try:
     import certifi
-    SSL_CTX = ssl.create_default_context(cafile=certifi.where())
+    # Only use certifi if system certs fail (some envs have proxy/firewall certs
+    # that certifi's bundle doesn't include)
+    _test_ctx = ssl.create_default_context(cafile=certifi.where())
 except ImportError:
-    SSL_CTX = ssl.create_default_context()
-    if not os.environ.get("CI"):
-        SSL_CTX.check_hostname = False
-        SSL_CTX.verify_mode = ssl.CERT_NONE
+    pass
 
 # ---------------------------------------------------------------------------
 # Large utilities (capped in scoring)
@@ -314,8 +314,8 @@ def enrich_contacts_with_apollo(domain, company_name, contacts):
 
         except urllib.error.HTTPError as e:
             if e.code == 429:
-                print(f"\n    [rate-limit] Apollo 429, waiting 30s...")
-                time.sleep(30)
+                print(f"\n    [rate-limit] Apollo 429, waiting 60s...")
+                time.sleep(60)
                 # Retry once
                 try:
                     req = urllib.request.Request(
@@ -337,7 +337,13 @@ def enrich_contacts_with_apollo(domain, company_name, contacts):
                             "confidence": "alta" if person.get("linkedin_url") else "media",
                         })
                     else:
-                        results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja"})
+                        results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja", "_rate_limited": True})
+                except urllib.error.HTTPError as retry_e:
+                    if retry_e.code == 429:
+                        # Still rate-limited — signal caller to stop
+                        print(f"\n    [rate-limit] Still 429 after retry. Hourly limit likely reached.")
+                        return None  # Return None to trigger early stop
+                    results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja"})
                 except Exception:
                     results.append({"email": email, "role": "No identificado", "linkedin_url": "", "photo_url": "", "source": "apollo", "confidence": "baja"})
             elif e.code == 422:
@@ -911,6 +917,9 @@ def main():
     enriched_count = 0
     contacts_enriched = 0
     failed_count = 0
+    consecutive_rate_limits = 0
+    SAVE_EVERY = 10  # incremental save every N companies
+    MAX_CONSECUTIVE_RATE_LIMITS = 5  # stop after N consecutive 429s
 
     for idx, (domain, (company, needs)) in enumerate(targets.items(), 1):
         name = company.get("name", domain)
@@ -930,8 +939,15 @@ def main():
         if not results:
             print("FAILED")
             failed_count += 1
+            # Track consecutive rate-limit failures (Apollo returns empty on 429 retry fail)
+            consecutive_rate_limits += 1
+            if consecutive_rate_limits >= MAX_CONSECUTIVE_RATE_LIMITS:
+                print(f"\n  [stop] {MAX_CONSECUTIVE_RATE_LIMITS} consecutive failures — rate limit likely hit. Stopping.")
+                break
             time.sleep(delay)
             continue
+
+        consecutive_rate_limits = 0  # reset on success
 
         # Build lookup by email, validate LinkedIn URLs
         result_by_email = {}
@@ -999,6 +1015,10 @@ def main():
         if updated > 0:
             enriched_count += 1
             contacts_enriched += updated
+            # Incremental save every SAVE_EVERY enriched companies
+            if enriched_count % SAVE_EVERY == 0:
+                print(f"  [checkpoint] Saving after {enriched_count} companies enriched...")
+                save_companies(data, paths)
         else:
             print(f"    (no new roles found)")
 
