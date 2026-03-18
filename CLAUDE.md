@@ -51,6 +51,7 @@ React 18 + Vite 5 frontend, Python scripts, Airtable API, Vercel deploy.
 - **Verificacion**: Agente Gemini + Google Search que verifica clasificaciones vs web real, persiste en Airtable "Verified-Companies"
 - **Scraper España**: 5,652 proyectos renovables (SPVs, MW, tecnologías, permisos) cruzados con CRM. 738 empresas con datos scraper (129 existentes + 609 importadas)
 - **Quality Score**: `qualityScore` (0-100) en `data.ts` mide completitud de datos (enrichment, roles contacto, timeline, contexto, market roles, scraper). Labels: alta/media/baja. Dot visual en CompanyTable
+- **Campaign System**: Outreach automatizado Bridge Energy Debt. GAS Web App (campaignBackend.gs) + Vercel proxy + React. Leticia como agente principal. Gemini IA para follow-ups, clasificacion respuestas, composicion emails. Doc completo: `docs/BRIDGE_CAMPAIGN_SYSTEM.md`
 
 ### Flujo de ventas
 ```
@@ -199,6 +200,7 @@ Ejecutar enrich_contacts.py en batches para cubrir las ~1,087 empresas restantes
 ```
 
 ## Key Files
+- `SISTEMA_EMAILS.md` — Descriptivo completo del pipeline automatico Gmail → empresas (8 secciones: componentes, datos, taxonomia, protecciones, flujo diario)
 - `src/App.jsx` — main router, state management, 3 tabs (Empresas/Prospects/Pipeline)
 - `src/utils/airtable.js` — Airtable REST client Opportunities, normalizeRecord, stages
 - `src/utils/airtableProspects.js` — Airtable REST client Prospects, convertToOpportunity, stages
@@ -233,6 +235,20 @@ Ejecutar enrich_contacts.py en batches para cubrir las ~1,087 empresas restantes
 - `src/data/scraper_projects.json` — 5,652 proyectos renovables España (SPV, MW, tech, permisos)
 - `src/data/spv_parent_mapping.json` — 2,531 mapeos SPV→empresa matriz
 - `.github/workflows/process-emails.yml` — CI/CD diario + dispatch manual con opcion reprocess
+- `scripts/gas/campaignBackend.gs` — Campaign Backend GAS: 30+ handlers, Gemini IA, Gmail, Pipeline
+- `api/campaign-proxy.js` — Vercel proxy: rutas GET/POST, inyeccion token GAS
+- `src/utils/campaignApi.ts` — API client campanas (todas las acciones via proxy)
+- `src/utils/senderConfig.ts` — CRUD remitentes campana (localStorage)
+- `src/utils/airtableCandidates.ts` — CRUD CampaignTargets (Airtable, waves)
+- `src/utils/bridgeProspectSync.ts` — Sync Bridge pipeline → Prospects stages
+- `src/components/CampaignsView.tsx` — Lista campanas con KPIs y filtros
+- `src/components/CampaignCreationPanel.tsx` — Wizard 6 pasos crear campana
+- `src/components/CampaignDetailView.tsx` — Detalle campana: metricas, conversaciones, follow-ups
+- `src/components/BridgeCampaignView.jsx` — Dashboard Bridge: tabla contactos + pipeline Kanban
+- `src/components/BridgeExplorerView.tsx` — Explorer candidatas + preview email Bridge
+- `src/components/BridgeSlideOverPanel.tsx` — Panel lateral: conversacion, draft editor, IA
+- `src/components/AddToCampaignModal.tsx` — Anadir empresas a campana existente
+- `docs/BRIDGE_CAMPAIGN_SYSTEM.md` — Documentacion exhaustiva del sistema Bridge Campaign
 
 ## Airtable Tables
 - **Opportunities** — Pipeline deals (9 stages, filtro: Transaction + Active)
