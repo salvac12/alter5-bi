@@ -216,6 +216,7 @@ def _apollo_headers():
         "Cache-Control": "no-cache",
         "X-Api-Key": api_key,
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     }
 
 
