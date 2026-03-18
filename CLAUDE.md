@@ -269,6 +269,10 @@ Ejecutar enrich_contacts.py en batches para cubrir las ~1,087 empresas restantes
   - Client: `src/utils/airtableVerified.js` (cache 5 min)
   - Prioridad en pipeline: Verified-Companies > known_companies.json > Gemini classification
   - Valores singleSelect SIN acentos (ej: "Originacion", "Inversion", "Asesor tecnico")
+- **CampaignTargets** — Empresas revisadas/aprobadas para campanas por wave
+  - Campos: Domain, CompanyName, Status (pending/approved/rejected), SelectedContacts (JSON), CampaignRef (wave ID), Segment, CompanyType, Technologies, ReviewedBy, ReviewedAt, Notes
+  - Client: `src/utils/airtableCandidates.ts`
+  - Waves: Bridge_Q1, Bridge_Q1_W2, etc.
 - Base ID: `appVu3TvSZ1E4tj0J`
 - Token: `VITE_AIRTABLE_PAT` (env var, scopes: data.records:read/write, schema.bases:read/write)
 
