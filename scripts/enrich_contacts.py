@@ -774,6 +774,9 @@ def get_contacts_needing_enrichment(company, force=False):
         # Don't overwrite if already enriched via this script
         if role_source and not needs_enrichment:
             continue
+        # Skip contacts already attempted (source set but still unidentified)
+        if role_source and needs_enrichment and not force:
+            continue
         if needs_enrichment:
             contacts.append(entry)
     return contacts[:10]  # max 10 per company
@@ -989,8 +992,11 @@ def main():
             source = enriched.get("source", "")
             confidence = enriched.get("confidence", "baja")
 
-            # Skip if API returned "No identificado" or empty
+            # Skip if API returned "No identificado" or empty — but mark as attempted
             if not new_role or new_role.lower() in ("no identificado", "nan"):
+                if isinstance(ct, dict) and source:
+                    ct["_role_source"] = source
+                    ct["_role_verified_at"] = now
                 continue
 
             linkedin_url = enriched.get("linkedin_url", "")
