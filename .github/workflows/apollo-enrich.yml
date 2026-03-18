@@ -49,14 +49,19 @@ jobs:
           import json
           with open('src/data/companies_full.json') as f:
               data = json.load(f)
+          companies = data.get('companies', data)
           remaining = 0
-          for d, c in data.items():
+          for d, c in companies.items():
+              if not isinstance(c, dict):
+                  continue
               enrichment = c.get('enrichment', {})
               role = enrichment.get('role', '')
-              if role != 'Originacion':
+              if role not in ('Originacion', 'Originación'):
                   continue
               contacts = c.get('contacts', [])
               for ct in contacts:
+                  if not isinstance(ct, dict):
+                      continue
                   r = ct.get('role', 'No identificado')
                   src = ct.get('_role_source', '')
                   if r == 'No identificado' and src != 'apollo':
