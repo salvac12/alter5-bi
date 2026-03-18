@@ -160,24 +160,42 @@ enrich_contacts.py (--top N, --domain X, --force, --all-types, --backend)
     | Estado (17-mar-2026): 154 contactos con rol verificado en 74 empresas
     | LinkedIn URLs: eliminadas (no fiables). Pendiente: integrar Apollo.io
     |
+    | Backend 3: Apollo.io People Match (preferred, APOLLO_API_KEY)
+    |   - Nombre + dominio → LinkedIn URL REAL + cargo verificado + foto
+    |   - 1 crédito por contacto, free tier 10,000/mes
+    |   - Rate limit: ~200 requests/hora (free tier)
+    |   - Coverage España: ~40-60% (Apollo es US-centric)
+    |   - NOTA: LinkedIn URLs de Apollo son REALES (verificadas)
+    |
+    | Backend 3b: Apollo.io People Search (discovery, FREE)
+    |   - Dominio → encontrar decisores (CFO, CEO, Head of BD)
+    |   - No consume créditos (búsqueda gratis, nombres obfuscados)
+    |   - Enrich posterior con People Match (1 crédito) para datos completos
+    |   - Uso: --discover-dm para descubrir decision makers nuevos
+    |
+    | Estado Apollo (18-mar-2026):
+    |   - API key configurada (APOLLO_API_KEY en .env)
+    |   - Batch 1: 7 contactos enriquecidos en 3 empresas (Ignis, Enfinity, Recurrent Energy)
+    |   - LinkedIn URLs reales + cargos: CEO, COO, CGO, Dir. Desarrollo, GM Operations
+    |   - Rate limit alcanzado tras ~200 requests. Ejecutar en batches espaciados ~1h
+    |   - 1,087 empresas Originación pendientes de enriquecer
+    |
 companies_full.json (contactos con _role_source, _role_confidence, _role_verified_at)
     |
-companies.json (compact: contact[5] = linkedinUrl, vacío por ahora)
+companies.json (compact: contact[5] = linkedinUrl)
     |
 DetailPanel.tsx + CandidateSearchView.tsx (UI preparada para mostrar LinkedIn URLs)
 ```
 
-### Siguiente paso: Apollo.io (PENDIENTE)
+### Siguiente paso: Apollo.io (EN PROGRESO)
 ```
-Apollo.io API — enriquecer contactos con datos REALES de LinkedIn
-    | People Enrichment: nombre + empresa → LinkedIn URL real + email corporativo + cargo
-    | People Search: dominio → encontrar decisores (CFO, CEO, Head of BD) con email
-    | Coste estimado: ~$250 (plan Professional 2-3 meses)
-    | Coverage España: ~40-60% (Apollo es US-centric)
-    | API key: pendiente de configurar (APOLLO_API_KEY en .env)
+Ejecutar enrich_contacts.py en batches para cubrir las ~1,087 empresas restantes:
+    | python scripts/enrich_contacts.py --backend apollo --top 100
+    | Espaciar ejecuciones ~1 hora por rate limit (~200 req/h free tier)
+    | Estimado: ~5-6 batches para cubrir todas las empresas
     |
-    | Integrar en enrich_contacts.py como --backend apollo
-    | Prioridad: LinkedIn URLs reales + emails corporativos nuevos
+    | Después: --discover-dm para encontrar decisores nuevos en empresas sin CFO/CEO
+    | python scripts/enrich_contacts.py --backend apollo --top 100 --discover-dm
 ```
 
 ## Key Files
