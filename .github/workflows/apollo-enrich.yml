@@ -2,7 +2,7 @@ name: Apollo Contact Enrichment
 
 on:
   schedule:
-    - cron: '15 * * * *'  # every hour at :15
+    # - cron: '15 * * * *'  # every hour at :15 — disabled: Apollo key in use elsewhere
   workflow_dispatch:
     inputs:
       top:
