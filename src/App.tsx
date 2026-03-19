@@ -1188,13 +1188,13 @@ export default function App({ authUser, onLogout }: AppProps) {
         <PlaceholderView title="Distribution" description="Distribucion y sindicacion de operaciones." icon="Send" />
       ) : activeView === "closing" ? (
         <PlaceholderView title="Closing" description="Gestion de cierre de operaciones." icon="CheckCircle2" />
-      ) : (
+      ) : activeView === "pipeline" ? (
         <KanbanView
           key={kanbanKey}
           onSelectOpportunity={handleSelectOpp}
           onCreateOpportunity={handleCreateOpp}
         />
-      )}
+      ) : null}
       </Suspense>
 
       {/* ── Company Detail overlay ── */}

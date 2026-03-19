@@ -69,7 +69,7 @@ export default function AppShell({
       <main style={{
         marginLeft: layout.sideNavWidth,
         marginTop: layout.headerHeight,
-        minHeight: `calc(100vh - ${layout.headerHeight}px)`,
+        height: `calc(100vh - ${layout.headerHeight}px)`,
         background: colors.contentBg,
         borderTopLeftRadius: layout.borderRadius.xl,
         overflow: 'hidden',
