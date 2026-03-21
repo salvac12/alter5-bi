@@ -5,6 +5,15 @@
   "git": {
     "deploymentEnabled": true
   },
+  "rewrites": [
+    { "source": "/api/airtable-proxy", "destination": "/api/at-proxy" },
+    { "source": "/api/campaign-proxy", "destination": "/api/camp-proxy" },
+    { "source": "/api/gemini-proxy", "destination": "/api/gem-proxy" },
+    { "source": "/api/fetch-gdoc", "destination": "/api/gdoc-fetch" },
+    { "source": "/api/github-dispatch", "destination": "/api/gh-dispatch" },
+    { "source": "/api/notify-task", "destination": "/api/task-notify" },
+    { "source": "/api/auth/verify", "destination": "/api/auth/check" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
