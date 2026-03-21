@@ -1,17 +1,15 @@
-/**
- * Vercel serverless proxy to fetch public Google Docs as plain text.
- * Bypasses CORS restrictions that block browser-side fetches.
- *
- * Usage: GET /api/fetch-gdoc?url=https://docs.google.com/document/d/XXXX/edit
- */
+// Vercel serverless proxy — fetches public Google Docs as plain text.
+// Bypasses CORS. Usage: GET /api/fetch-gdoc?url=https://docs.google.com/document/d/XXXX/edit
+
 export default async function handler(req, res) {
-  // CORS headers
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app';
+
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // Validate proxy secret to prevent open SSRF
+  // Validate proxy secret (prevents open SSRF)
   const secret = req.headers['x-proxy-secret'] || req.query.secret;
   const expected = process.env.CAMPAIGN_PROXY_SECRET;
   if (!expected || secret !== expected) {
@@ -21,12 +19,12 @@ export default async function handler(req, res) {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'Falta parametro ?url=' });
 
-  // Validate that the URL is specifically a Google Docs URL
+  // Only allow Google Docs URLs
   if (!url.startsWith('https://docs.google.com/')) {
     return res.status(400).json({ error: 'Solo se permiten URLs de Google Docs' });
   }
 
-  // Extract doc ID
+  // Extract doc ID from URL
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (!match) return res.status(400).json({ error: 'URL de Google Doc no valida' });
 
@@ -47,7 +45,7 @@ export default async function handler(req, res) {
 
     const text = await response.text();
 
-    // Sanity check — Google sometimes returns HTML login page instead of doc content
+    // Google sometimes returns an HTML login page instead of doc content
     if (text.trimStart().startsWith('<!DOCTYPE') || text.trimStart().startsWith('<html')) {
       return res.status(403).json({
         error: 'El documento no es publico. Google devolvio una pagina de login en vez del contenido.',

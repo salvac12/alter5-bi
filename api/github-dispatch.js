@@ -1,24 +1,20 @@
-/**
- * Vercel serverless proxy for GitHub Actions dispatch.
- * Calls GitHub API server-side using GITHUB_TOKEN (fine-grained PAT).
- *
- * Env vars (server-side only):
- *   GITHUB_TOKEN           — fine-grained PAT with Actions write permission
- *   CAMPAIGN_PROXY_SECRET  — shared secret between browser ↔ proxy
- */
+// Vercel serverless proxy for GitHub Actions dispatch.
+// Env: GITHUB_TOKEN (fine-grained PAT), CAMPAIGN_PROXY_SECRET
 
 const GITHUB_REPO = "salvac12/alter5-bi";
 
 export default async function handler(req, res) {
-  // CORS
   const allowedOrigin = process.env.ALLOWED_ORIGIN || "https://alter5-bi.vercel.app";
+
+  // CORS headers
   res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-proxy-secret");
+
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-  // Validate proxy secret
+  // Validate shared proxy secret
   const secret = req.headers["x-proxy-secret"];
   const expected = process.env.CAMPAIGN_PROXY_SECRET;
   if (!expected || secret !== expected) {

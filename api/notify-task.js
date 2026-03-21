@@ -1,17 +1,16 @@
-/**
- * Vercel Serverless Function — POST /api/notify-task
- *
- * Sends email notification via Resend API when a task is assigned.
- *
- * Body: { to, toName, taskText, taskDescription, prospectName, assignedBy, dueDate, prospectContext, dashboardUrl }
- * Env:  RESEND_API_KEY
- */
+// POST /api/notify-task — Send email notification via Resend when a task is assigned.
+// Body: { to, toName, taskText, taskDescription, prospectName, assignedBy, dueDate, prospectContext, dashboardUrl }
+// Env: RESEND_API_KEY
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { to, toName, taskText, taskDescription, prospectName, assignedBy, dueDate, prospectContext, dashboardUrl } = req.body || {};
+  const {
+    to, toName, taskText, taskDescription, prospectName,
+    assignedBy, dueDate, prospectContext, dashboardUrl,
+  } = req.body || {};
 
   if (!to || !taskText || !prospectName) {
     return res.status(400).json({ error: 'Missing required fields: to, taskText, prospectName' });
@@ -22,8 +21,12 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'RESEND_API_KEY not configured' });
   }
 
-  // HTML-escape user-controlled strings to prevent HTML injection
-  const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // HTML-escape user-controlled strings to prevent injection
+  const esc = (s) => String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 
   const safeToName = esc(toName) || esc(to.split('@')[0]);
   const safeProspectName = esc(prospectName);
@@ -36,7 +39,7 @@ export default async function handler(req, res) {
   const dueLine = dueDate ? `<p><strong>Fecha limite:</strong> ${safeDueDate}</p>` : '';
   const descLine = taskDescription ? `<p><strong>Descripcion:</strong> ${safeTaskDescription}</p>` : '';
 
-  // Truncate context to first 500 chars for email
+  // Truncate context to 500 chars max for the email body
   let contextBlock = '';
   if (prospectContext) {
     const trimmed = prospectContext.length > 500 ? prospectContext.slice(0, 500) + '...' : prospectContext;

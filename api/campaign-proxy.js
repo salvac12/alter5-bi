@@ -1,66 +1,26 @@
 /**
  * Vercel serverless proxy for Campaign/FollowUp operations.
- * Forwards requests to Google Apps Script Web App with token injected server-side.
- *
- * Some GAS actions live in doGet (dashboard, pipeline, getConversation, etc.)
- * while mutations live in doPost. The proxy auto-routes based on the action.
- *
- * Env vars (server-side only, NOT VITE_*):
- *   GAS_WEB_APP_URL    — deployed Web App URL
- *   GAS_API_TOKEN       — shared POST auth token
- *   CAMPAIGN_PROXY_SECRET — shared secret between browser ↔ proxy
+ * Forwards requests to Google Apps Script Web App.
  */
 
-// Actions handled by GAS doGet (query string params, no token needed)
 const GET_ACTIONS = new Set([
-  'dashboard',
-  'pipeline',
-  'getConversation',
-  'getConversacionCompleta',
-  'getFollowUpCandidates',
-  'getConversaciones',
-  // These are also in doGet in the deployed GAS
-  'getCampaigns',
-  'getCampaign',
+  'dashboard', 'pipeline', 'getConversation', 'getConversacionCompleta',
+  'getFollowUpCandidates', 'getConversaciones', 'getCampaigns', 'getCampaign',
 ]);
 
-// Actions handled by GAS doPost (JSON body with token)
 const POST_ACTIONS = new Set([
-  'getCampaigns',
-  'getCampaign',
-  'getFollowUps',
-  'getCampaignRecipients',
-  'createCampaign',
-  'startCampaign',
-  'updateCampaignStatus',
-  'addRecipients',
-  'scheduleFollowUp',
-  'cancelFollowUp',
-  'getCampaignDashboard',
-  'updateCampaign',
-  'sendDraft',
-  'saveDraft',
-  'composeAndSaveDraft',
-  'composeFromInstructions',
-  'classifyReply',
-  'generateFollowUpBatch',
-  'sendFollowUpBatch',
-  'moveStage',
-  'addNote',
-  'generateFollowUp',
-  'improveMessage',
-  'uploadMeetingNotes',
-  'sendTestEmail',
-  'createDrafts',
-  'sendDrafts',
-  'updateCampaign',
-  'getCampaignDashboard',
+  'getCampaigns', 'getCampaign', 'getFollowUps', 'getCampaignRecipients',
+  'createCampaign', 'startCampaign', 'updateCampaignStatus', 'addRecipients',
+  'scheduleFollowUp', 'cancelFollowUp', 'getCampaignDashboard', 'updateCampaign',
+  'sendDraft', 'saveDraft', 'composeAndSaveDraft', 'composeFromInstructions',
+  'classifyReply', 'generateFollowUpBatch', 'sendFollowUpBatch',
+  'moveStage', 'addNote', 'generateFollowUp', 'improveMessage',
+  'uploadMeetingNotes', 'sendTestEmail', 'createDrafts', 'sendDrafts',
 ]);
 
 const ALL_ACTIONS = new Set([...GET_ACTIONS, ...POST_ACTIONS]);
 
 export default async function handler(req, res) {
-  // CORS
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app';
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -68,7 +28,6 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  // Validate proxy secret
   const secret = req.headers['x-proxy-secret'];
   const expected = process.env.CAMPAIGN_PROXY_SECRET;
   if (!expected || secret !== expected) {
@@ -89,15 +48,10 @@ export default async function handler(req, res) {
   try {
     let gasRes;
 
-    // Try GET first for actions that exist in doGet
     if (GET_ACTIONS.has(action)) {
       const qs = new URLSearchParams({ action, ...params });
-      gasRes = await fetch(`${gasUrl}?${qs}`, {
-        method: 'GET',
-        redirect: 'follow',
-      });
+      gasRes = await fetch(`${gasUrl}?${qs}`, { method: 'GET', redirect: 'follow' });
     } else {
-      // POST with token for mutations
       const gasBody = { action, token: gasToken, ...params };
       gasRes = await fetch(gasUrl, {
         method: 'POST',
@@ -111,7 +65,6 @@ export default async function handler(req, res) {
     let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
 
-    // If GET returned no useful data and action also exists in POST, try POST
     if (GET_ACTIONS.has(action) && POST_ACTIONS.has(action)) {
       const isEmpty = !data || (Array.isArray(data.campaigns) && data.campaigns.length === 0 && !data.success);
       if (isEmpty) {

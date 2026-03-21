@@ -1,18 +1,13 @@
-/**
- * Vercel serverless proxy for Gemini API.
- * Keeps GEMINI_API_KEY server-side only.
- *
- * Env vars (server-side, NOT VITE_*):
- *   GEMINI_API_KEY          — Google Gemini API key
- *   CAMPAIGN_PROXY_SECRET   — shared secret between browser <-> proxy
- *   ALLOWED_ORIGIN          — CORS origin (default: https://alter5-bi.vercel.app)
- */
+// Vercel serverless proxy for Gemini API — keeps GEMINI_API_KEY server-side.
+// Env: GEMINI_API_KEY, CAMPAIGN_PROXY_SECRET, ALLOWED_ORIGIN
 
 export default async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app';
+
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-proxy-secret');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
@@ -31,11 +26,13 @@ export default async function handler(req, res) {
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
     const requestBody = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature },
     };
-    // Support optional tools (e.g. google_search grounding)
+
+    // Attach optional tools (e.g. google_search grounding)
     if (tools) requestBody.tools = tools;
 
     const geminiRes = await fetch(url, {

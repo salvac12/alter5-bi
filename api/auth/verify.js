@@ -1,12 +1,11 @@
-/**
- * Verifies Google ID token and returns user info.
- * Env: GOOGLE_CLIENT_ID
- */
+// Verify Google ID token and return user info. Env: GOOGLE_CLIENT_ID
+
 export default async function handler(req, res) {
-  // CORS
+  // CORS — allow all origins for auth verification
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
@@ -18,7 +17,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'GOOGLE_CLIENT_ID not configured on server' });
     }
 
-    // Verify with Google's tokeninfo endpoint
+    // Verify token with Google's tokeninfo endpoint
     const verifyRes = await fetch(
       `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`
     );
@@ -30,14 +29,14 @@ export default async function handler(req, res) {
 
     const payload = await verifyRes.json();
 
-    // Verify audience matches our client ID
+    // Audience must match our client ID
     if (payload.aud !== clientId) {
       return res.status(401).json({
         error: `Audience mismatch: token aud=${payload.aud}, expected=${clientId}`,
       });
     }
 
-    // Restrict to @alter-5.com domain
+    // Restrict access to @alter-5.com domain only
     const email = payload.email || '';
     if (!email.endsWith('@alter-5.com')) {
       return res.status(403).json({ error: `Solo cuentas @alter-5.com (got ${email})` });
