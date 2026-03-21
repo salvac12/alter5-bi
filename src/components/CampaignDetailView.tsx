@@ -41,7 +41,13 @@ async function proxyFetch(action, params = {}) {
     headers: { 'Content-Type': 'application/json', 'x-proxy-secret': secret },
     body: JSON.stringify({ action, ...params }),
   });
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Campaign proxy returned non-JSON (${res.status}): ${text.slice(0, 200)}`);
+  }
   if (!res.ok || data.error) throw new Error(data.error || `Proxy error ${res.status}`);
   return data;
 }

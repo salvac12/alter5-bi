@@ -22,7 +22,13 @@ export async function proxyFetch(action, params = {}) {
     body: JSON.stringify({ action, ...params }),
   });
 
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Campaign proxy returned non-JSON (${res.status}): ${text.slice(0, 200)}`);
+  }
   if (!res.ok || data.error) {
     throw new Error(data.error || `Proxy error ${res.status}`);
   }
@@ -34,15 +40,16 @@ export async function proxyFetch(action, params = {}) {
 const AT_CAMPAIGNS_TABLE = 'Campaigns';
 
 async function fetchCampaignsFromAirtable(filters: any = {}) {
-  const formula = filters.status ? `{Status} = '${filters.status}'` : undefined;
+  try {
+    const formula = filters.status ? `{Status} = '${filters.status}'` : undefined;
 
-  const data = await airtableProxy({
-    table: AT_CAMPAIGNS_TABLE,
-    method: 'GET',
-    ...(formula ? { formula } : {}),
-  });
+    const data = await airtableProxy({
+      table: AT_CAMPAIGNS_TABLE,
+      method: 'GET',
+      ...(formula ? { formula } : {}),
+    });
 
-  const campaigns = (data.records || []).map(r => {
+    const campaigns = (data.records || []).map(r => {
     const f = r.fields || {};
     return {
       id: r.id,
@@ -67,7 +74,11 @@ async function fetchCampaignsFromAirtable(filters: any = {}) {
     };
   });
 
-  return { success: true, campaigns, total: campaigns.length };
+    return { success: true, campaigns, total: campaigns.length };
+  } catch (err) {
+    console.warn('[Campaigns] Airtable fallback failed:', err);
+    return { success: true, campaigns: [], total: 0 };
+  }
 }
 
 // -- Campaigns ----------------------------------------------------------------

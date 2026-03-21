@@ -43,10 +43,14 @@ export async function airtableProxy(params: {
     body: JSON.stringify(params),
   });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Airtable proxy ${res.status}: ${body}`);
+    const body = await res.text().catch(() => `(unreadable, status ${res.status})`);
+    throw new Error(`Airtable proxy ${res.status}: ${body.slice(0, 300)}`);
   }
-  return res.json();
+  try {
+    return await res.json();
+  } catch {
+    throw new Error(`Airtable proxy returned non-JSON (${res.status})`);
+  }
 }
 
 // -- Gemini Proxy -------------------------------------------------------------
