@@ -4,7 +4,7 @@
 const GITHUB_REPO = "salvac12/alter5-bi";
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || "https://alter5-bi.vercel.app";
+  const allowedOrigin = (process.env.ALLOWED_ORIGIN || "https://alter5-bi.vercel.app").trim();
 
   // CORS headers
   res.setHeader("Access-Control-Allow-Origin", allowedOrigin);

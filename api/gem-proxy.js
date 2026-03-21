@@ -2,7 +2,7 @@
 // Env: GEMINI_API_KEY, CAMPAIGN_PROXY_SECRET, ALLOWED_ORIGIN
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app';
+  const allowedOrigin = (process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app').trim();
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

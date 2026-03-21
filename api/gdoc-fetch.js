@@ -2,7 +2,7 @@
 // Bypasses CORS. Usage: GET /api/fetch-gdoc?url=https://docs.google.com/document/d/XXXX/edit
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app';
+  const allowedOrigin = (process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app').trim();
 
   // CORS
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
