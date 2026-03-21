@@ -23,6 +23,7 @@
 13. [Sincronización Bridge → Prospects](#13-sincronización-bridge--prospects)
 14. [Tabla CampaignTargets (Airtable)](#14-tabla-campaigntargets-airtable)
 15. [Referencia Completa de Llamadas — Airtable y GAS](#15-referencia-completa-de-llamadas--airtable-y-gas)
+16. [Bridge Energy Debt — Detalle Completo de la Campaña](#16-bridge-energy-debt--detalle-completo-de-la-campaña)
 
 ---
 
@@ -1385,6 +1386,713 @@ function sanitizeLinkedRecords(fields) {
 | `Config - Users` | `tblb3kyXSnXS0GPjy` | Prospects (tasks) | GET (lookup) |
 | `CampaignTargets` | — | Campañas (candidatos) | GET, POST, PATCH, DELETE |
 | `Verified-Companies` | `tbl1Zdil8FeljzpBa` | Empresas (verificación) | GET, POST, PATCH |
+
+---
+
+## 16. Bridge Energy Debt — Detalle Completo de la Campaña
+
+Esta sección describe en detalle el producto Bridge Energy Debt, cómo se visualizan sus resultados en el dashboard, cómo se mapean los contactos en el pipeline y el estado actual del sistema a Q1 2026.
+
+### 16.1 El Producto Bridge Energy Debt
+
+**Bridge Debt Energy Program** es el producto de financiación principal de Alter5 en Q1 2026. Surge como respuesta a tres problemas estructurales del mercado de renovables español:
+
+| Problema de mercado | Impacto en promotores |
+|--------------------|-----------------------|
+| Precios del pool en mínimos históricos | Los proyectos sin PPA no justifican deuda tradicional |
+| Niveles de PPA que comprometen rentabilidad | Los PPAs disponibles son a precios deprimidos |
+| Restricción en financiación merchant | Los bancos no financian sin cobertura de precio |
+
+**Términos exactos del instrumento** (tal como aparecen en el email de campaña):
+
+| Parámetro | Valor |
+|-----------|-------|
+| Instrumento | Préstamo tipo bullet |
+| Plazo | 5 años |
+| Coste | Desde Euribor + 3,00% |
+| Apalancamiento | Hasta el 100% del Capex/Inversión |
+| Garantía | Corporativa limitada, solo activable en default (cura del préstamo) |
+| Estructura | A nivel SPV |
+| Respaldo | Fondo Europeo de Inversiones (FEI) |
+| Instrumentación | Deuda tradicional o Bono garantizado parcialmente por FEI |
+| Activos elegibles | Solar FV, Eólica, BESS, Biomasa, Hidrógeno verde |
+
+**Target principal**: promotores con proyectos **RTB (Ready-to-Build) o ya construidos con equity** que no tienen estructura de deuda por la coyuntura de mercado.
+
+**URL de referencia**: `https://alto.alter-5.com/bridge`
+
+**Remitente fijo de la campaña**: `Leticia Menéndez <leticia.menendez@alter-5.com>`
+
+---
+
+### 16.2 Template del Email (Variante A — único template en uso)
+
+El template está hardcodeado en `BridgeExplorerView.tsx` y se usa en todas las waves:
+
+**Asunto**: `Financiación Merchant para proyectos renovables`
+
+**Cuerpo HTML** (con placeholders):
+
+```html
+<p>Hola {{nombre}},</p>
+
+<p>Ante la coyuntura actual del mercado —caracterizada por precios del pool en mínimos
+históricos, niveles de PPA que comprometen la rentabilidad y una restricción severa en la
+financiación merchant tradicional— hemos diseñado una alternativa estratégica para
+desbloquear el valor de proyectos renovables.</p>
+
+<p>En colaboración con diversas instituciones financieras y el respaldo del Fondo Europeo
+de Inversiones (FEI), hemos lanzado el <strong>Bridge Debt Energy Program</strong>.
+Este programa está específicamente dirigido a promotores con proyectos Ready-to-Build o
+ya construidos con equity que, debido a la volatilidad del mercado, carecen hoy de una
+estructura de deuda.</p>
+
+<p>El programa permite ejecutar la construcción de forma inmediata, evitando la necesidad
+de desinvertir en un mercado a la baja o de comprometer el activo con un PPA a precios
+deprimidos. Se resume en los siguientes términos clave:</p>
+<ul>
+  <li><strong>Instrumento:</strong> Préstamo tipo bullet a 5 años.</li>
+  <li><strong>Coste:</strong> Desde Euribor + 3,00%.</li>
+  <li><strong>Apalancamiento:</strong> Hasta el 100% del Capex/Inversión.</li>
+  <li><strong>Estructura:</strong> A nivel SPV con garantía corporativa limitada
+    (activable únicamente en escenarios de default para cura del préstamo).</li>
+  <li><strong>Instrumentación:</strong> Tradicional o Bono garantizado parcialmente
+    por el FEI según perfil del activo.</li>
+  <li><strong>Tipos de activos:</strong> Solar fotovoltaico, eólico, BESS, biomasa
+    e hidrógeno verde.</li>
+</ul>
+<p>Si considera que este programa puede resultar de interés para {{empresa}}, puede
+consultar los detalles completos y solicitar un term sheet indicativo de forma 100%
+online en:</p>
+<p><a href="https://alto.alter-5.com/bridge">Bridge Debt Energy Program</a></p>
+<p>Quedamos a su disposición para cualquier aclaración.<br/>
+Un cordial saludo,<br/>Leticia<br/>Structured Finance — Alter5</p>
+```
+
+**Placeholders disponibles** (GAS los sustituye antes del envío):
+- `{{nombre}}` / `{{name}}` → primer nombre del contacto
+- `{{empresa}}` / `{{organization}}` / `{{company}}` → nombre de la organización
+
+**Sin variante B**: `abTestPercent: 0`, `subjectB: ""`, `bodyB: ""` — no hay A/B test activo en Bridge.
+
+---
+
+### 16.3 Scoring de Candidatas (BridgeExplorerView)
+
+Cada empresa del CRM recibe un **Bridge Score (0–100)** calculado con la función `bridgeScore()`:
+
+```typescript
+function bridgeScore(company) {
+  let score = 0;
+
+  // Factor 1: Tipo de empresa (40 pts máx — factor dominante)
+  const tp = (company.companyType || '').toLowerCase();
+  if (tp.includes('developer') && tp.includes('ipp')) score += 40;  // Developer+IPP ideal
+  else if (tp.includes('developer'))                  score += 35;  // Developer puro
+  else if (tp === 'ipp')                              score += 30;  // IPP puro
+
+  // Factor 2: Segmento (25 pts máx)
+  if (company.segment === 'Project Finance')          score += 25;
+  else if (company.segment === 'Corporate Finance')   score +=  5;
+
+  // Factor 3: Fase del activo (25 pts máx — RTB/Construcción necesitan bridge AHORA)
+  const phase = (company.assetPhase || '').toLowerCase();
+  if (phase === 'rtb' || phase.includes('construc'))  score += 25;
+  else if (phase === 'desarrollo')                    score += 18;
+  else if (phase === 'operativo')                     score +=  3;
+
+  // Factor 4: Tecnologías utility-scale (10 pts máx)
+  const techs = company.technologies || [];
+  if (techs.includes('Solar') || techs.includes('Eólica')) score += 7;
+  if (techs.includes('BESS'))                              score += 3;
+
+  return Math.min(100, score);
+}
+```
+
+**Score máximo**: Developer+IPP (40) + Project Finance (25) + RTB (25) + Solar+BESS (10) = **100 pts**
+
+**Colores visuales en la UI**:
+- ≥ 70 → círculo verde (candidata óptima)
+- ≥ 40 → círculo ámbar (candidata válida)
+- < 40 → círculo gris (candidata marginal)
+
+### 16.4 Prioridad de Contacto dentro de cada empresa
+
+Cuando hay varios contactos, se selecciona el de mayor prioridad:
+
+| Rango | Roles que clasifica | Color UI |
+|-------|--------------------|----|
+| 1 — CEO/DG | CEO, Director General, Managing Director, MD | Verde `#059669` |
+| 2 — CFO/DF | CFO, Director Financiero, Head of Finance, Chief Financial | Ámbar `#D97706` |
+| 3 — Fin. Estructurada | "financiación estructurada" en el cargo | Azul `#2563EB` |
+| 4 — M&A | "m&a" en el cargo | Morado |
+| 5 — Otros directivos | Director, Head, Jefe... | Índigo `#6366F1` |
+| 6 — Sin rol | "No identificado", "nan", vacío | Gris |
+
+---
+
+### 16.5 Los 7 Escudos Anti-Duplicado
+
+`BridgeExplorerView` aplica 7 capas de filtrado para **nunca enviar dos veces a la misma empresa**:
+
+```
+Shield 1: bridgeContactDomains   — dominio ya presente en contactos del GAS (tracking live)
+Shield 2: trackingDomains        — dominio ya enviado (fetchSentDomains de GAS)
+Shield 3: allSentDomains         — dominio aprobado/enviado en CUALQUIER wave Bridge (Airtable)
+Shield 4: leticiaDomains         — Leticia ya contactó esta empresa en el CRM (cualquier buzón)
+Shield 5: previousTargets        — ya aprobados/enviados en waves anteriores (prop externa)
+Shield 6a: companyEmails vs sentEmails/bridgeContactEmails/atTargetEmails
+           — email exacto ya enviado (cubre dominios genéricos como gmail.com)
+Shield 7: sentCompanyNames/atTargetNames
+           — nombre de empresa ya enviado (fallback cuando dominio no coincide)
+```
+
+**Filtros obligatorios adicionales** (no son shields, son requisitos):
+- `company.role === 'Originación'` — solo empresas que buscan financiación
+- Al menos un contacto con email válido en `company.detail.contacts`
+
+**Filtros de UI** (el usuario puede activar/desactivar):
+
+| Filtro UI | Tipo | Campo |
+|-----------|------|-------|
+| Segmento | Pills multi | `company.segment` |
+| Tipo empresa | Pills multi | `company.companyType` |
+| Tecnologías | Pills multi | `company.technologies[]` |
+| Geografía | Pills multi | `company.geography[]` |
+| Target priority | Pills multi | prioridad del mejor contacto |
+| Status | Radio | `pending` / `skipped` / todos |
+| Score mínimo | Slider | `bridgeScore >= minScore` |
+| Búsqueda | Input | nombre o dominio |
+
+---
+
+### 16.6 Ordenación con IA (LLM Ordering)
+
+El explorer incluye un panel colapsable que usa **Gemini para reordenar candidatas** según instrucciones en lenguaje natural:
+
+```
+Ejemplo de instrucción del usuario:
+"Prioriza empresas con CEO o Director Financiero identificado,
+ que trabajen en solar utility-scale y estén en España o Portugal,
+ con más de 100MW de pipeline scraper"
+```
+
+**Implementación técnica**:
+- Procesa batches de 150 empresas
+- Temperatura: 0.2 (conservador, determinista)
+- Respuesta: array JSON `[{domain, score: 0-100, reason: "frase corta"}]`
+- El `reason` se muestra como tooltip en cursiva violeta bajo cada empresa
+- Cuando activo: ordena primero por `llmScore`, desempate por `bridgeScore`
+- La instrucción se puede guardar en localStorage para reutilizar
+
+---
+
+### 16.7 Flujo de Envío (Send Wizard — 2 pasos)
+
+**Acceso**: desde `BridgeCampaignView` → botón "Preparar nueva wave" → abre `BridgeExplorerView`
+
+**Detección automática del próximo wave ID**:
+```typescript
+const { allTargets, maxWave } = await fetchAllBridgeTargets("Bridge_Q1");
+const nextWave = maxWave + 1;
+// Si maxWave = 2, nextWaveRef = "Bridge_Q1_W3"
+```
+
+**Paso 1 — Revisión de candidatos**:
+- Lista de empresas seleccionadas con sus contactos elegidos
+- Posibilidad de eliminar destinatarios individuales antes de enviar
+- Muestra Bridge Score, contacto seleccionado y su cargo
+
+**Paso 2 — Confirmar y Enviar**:
+
+```
+A. "Enviar prueba" 
+   → sendTestEmail(campaignId, "salvador.carrillo@alter-5.com")
+   → GAS envía copia con asunto "[TEST] Financiación Merchant..."
+
+B. "Crear N borradores en Gmail"
+   → addRecipients(campaignId, recipients[])
+   → GAS crea drafts en Gmail de Leticia para revisión manual previa al envío
+   → Todos los dominios marcados como 'sent' en Airtable CampaignTargets
+
+C. Revisión manual en Gmail de Leticia (fuera del dashboard)
+
+D. "Ejecutar envío de borradores"
+   → sendDrafts → GAS envía todos los borradores
+   → status: 'sent' en Recipients sheet
+```
+
+**Parámetros fijos de campaña** en el GAS:
+```typescript
+{
+  name: "Bridge_Q1_W3",              // o el wave correspondiente
+  type: 'mass',
+  senderEmail: 'leticia.menendez@alter-5.com',
+  senderName: 'Leticia Menéndez',
+  subjectA: 'Financiación Merchant para proyectos renovables',
+  bodyA: BRIDGE_EMAIL_TEMPLATE,      // con {{nombre}} y {{empresa}}
+  subjectB: '',
+  bodyB: '',
+  abTestPercent: 0,                  // sin A/B test
+  recipients: [],                    // se añaden después
+}
+```
+
+**Rate limit**: 1 email/segundo (`Utilities.sleep(1000)` entre envíos en GAS).
+
+---
+
+### 16.8 Sistema de Waves (Oleadas)
+
+```
+Bridge_Q1       → Wave 1 (primera oleada, referencia base)
+Bridge_Q1_W2    → Wave 2 (segunda oleada)
+Bridge_Q1_W3    → Wave 3
+Bridge_Q1_WN    → Wave N
+```
+
+**Regla de exclusión entre waves**: las empresas de waves anteriores se excluyen automáticamente de waves nuevas via los 7 shields. Cada empresa solo puede recibir el email una vez.
+
+**Estado por empresa en CampaignTargets** (evolución posible):
+
+```
+pending → selected → approved → sent
+         ↘ skipped   ↘ rejected
+```
+
+| Status | Descripción |
+|--------|-------------|
+| `pending` | Sin revisar en el explorer |
+| `skipped` | Saltada por ahora (puede recuperarse) |
+| `selected` | Seleccionada para la wave actual |
+| `approved` | Aprobada por el revisor |
+| `sent` | Email enviado — excluida de waves futuras |
+| `rejected` | Descartada permanentemente |
+
+---
+
+### 16.9 Dashboard BridgeCampaignView — Estructura y Métricas
+
+El dashboard es la pantalla principal para ver el estado de la campaña. Se alimenta de dos fuentes combinadas:
+
+**Fuente 1: GAS `dashboard` action** (GET, sin token)
+```
+proxyFetch('dashboard') → GAS handleDashboard()
+→ fusiona Legacy Tracking sheet + Recipients sheet nuevo
+→ retorna { contactos[], metricas{Global, A, B, Final} }
+```
+
+**Fuente 2: Airtable CampaignTargets** (via `fetchAllBridgeTargets`)
+```
+→ si GAS devuelve < 10 contactos pero Airtable tiene más
+→ construye "contactos sintéticos" desde targets aprobados/enviados
+→ campo _augmentedFromAirtable = true
+```
+
+#### KPIs calculados en tiempo real
+
+```javascript
+// Todos calculados sobre el array contacts[] del GAS
+Total contactos   = contacts.length
+Enviados          = contacts.filter(c => c.estado && !c.estado.startsWith("Error")).length
+Errores           = contacts.filter(c => c.estado?.startsWith("Error")).length
+Abiertos (≥1 ap.) = contacts.filter(c => c.numAperturas > 0).length
+Clics             = contacts.filter(c => c.numClics > 0).length
+Respondidos       = contacts.filter(c => c.respondido === "Si" || c.respondido === "Sí"
+                                      || c.estado === "Respondido").length
+```
+
+#### Funnel visual
+
+```
+Total contactos → [████████████████████] 100%
+Enviados        → [████████████████░░░░]  X%  (sin errores)
+Abiertos        → [████████░░░░░░░░░░░░]  X%  (tasa apertura)
+Clics           → [█████░░░░░░░░░░░░░░░]  X%  (tasa clic)
+Respondidos     → [███░░░░░░░░░░░░░░░░░]  X%  (tasa respuesta)
+```
+
+Colores de la barra de apertura: verde ≥40%, naranja ≥25%, rojo <25%.
+
+#### Métricas por variante (A/B — aunque Bridge solo usa variante A)
+
+```typescript
+metricas.A = {
+  enviados: number,
+  abiertos: number,
+  clics: number,
+  respondidos: number,
+  tasaApertura: number,   // 0.0–1.0
+  tasaClics: number,
+  tasaRespuesta: number,
+}
+metricas.B = { ... }      // igual, para variante B si existe
+metricas.Global = { ... } // suma de A + B
+metricas.Final = {
+  total: number,          // emails del "grupo final" (sin asignación A/B)
+  pendientes: number,
+}
+```
+
+El badge **"● MEJOR"** aparece junto a la variante ganadora cuando ambas tienen ≥5 enviados.
+
+#### Estructura de datos por contacto
+
+Cada objeto en `contacts[]`:
+
+```typescript
+{
+  email: string,
+  nombre: string,
+  apellido: string,
+  organizacion: string,
+  estado: "Respondido" | "Clic" | "Abierto" | "Enviado" | "Error" | "",
+  numAperturas: number,
+  numClics: number,
+  respondido: "Si" | "Sí" | "" | boolean,
+  fechaEnvio: string,        // ISO datetime
+  primeraApertura: string,   // ISO datetime o ""
+  primerClic: string,        // ISO datetime o ""
+  respuestaEnviada: "Si" | "",
+  seguimientosEnviados: number,
+}
+```
+
+---
+
+### 16.10 Tabla de Empresas (Tab "Empresas")
+
+Empresas agrupadas por `organizacion` con `buildCompanyData()`:
+
+```javascript
+// Por empresa, el estado mostrado es el del contacto con mayor engagement
+// Orden de prioridad: Respondido > Clic > Abierto > Enviado > (vacío) > Error
+const STATUS_RANK = {
+  'Respondido': 5, 'Clic': 4, 'Abierto': 3, 'Enviado': 2, '': 1, 'Error': 0
+};
+```
+
+**Columnas de la tabla**:
+
+| Columna | Fuente | Descripción |
+|---------|--------|-------------|
+| Empresa | `organizacion` | Nombre de la empresa |
+| Estado | `bestStatus` del grupo | Estado del contacto más activo |
+| Contactos | count | Número de contactos de esa empresa en la campaña |
+| Aperturas | suma `numAperturas` | Total de aperturas de todos los contactos |
+| Clics | suma `numClics` | Total de clics |
+| Respuestas | suma respondidos | Número de respondidos |
+| Wave | `CampaignRef` (Airtable) | `Bridge_Q1`, `Bridge_Q1_W2`, etc. |
+
+**Filtros disponibles**:
+- Pills de estado: Todos / Respondido / Clic / Abierto / Enviado
+- Búsqueda: nombre empresa o email
+
+**Click en empresa** → abre `BridgeSlideOverPanel` con el contacto de mayor engagement de esa empresa.
+
+---
+
+### 16.11 Pipeline Bridge (Tab "Pipeline")
+
+El Pipeline Bridge es un **Kanban paralelo e independiente** de Prospects Airtable. Vive en Google Sheets (tabla `Pipeline`) y representa el estado de comunicación/avance comercial de cada contacto de la campaña.
+
+#### Etapas del Pipeline Bridge
+
+```
+nurturing → reunion → subida_docs → doc_completada | descartado
+```
+
+| Etapa GAS | Label UI | Color | Relación con Prospects Airtable |
+|-----------|----------|-------|--------------------------------|
+| `nurturing` | Nurturing | Azul `#3B82F6` | No mapea (aún no hay señal de avance) |
+| `reunion` | Reunión | Ámbar `#F59E0B` | → `"Reunion"` en BETA-Prospects |
+| `subida_docs` | Subida docs | Naranja `#F97316` | → `"Documentacion Pendiente"` |
+| `doc_completada` | Doc completada | Verde `#10B981` | → `"Listo para Term-Sheet"` |
+| `descartado` | Descartado | Gris `#6B7280` | No genera sugerencia de avance |
+
+#### Estructura de una card de Pipeline
+
+```javascript
+{
+  email: "contacto@empresa.es",     // PK en Pipeline sheet
+  etapa: "nurturing",               // etapa actual
+  etapaAnterior: "",                // para tracking de movimientos
+  fechaCambio: "2026-03-10T...",    // timestamp del último cambio
+  fechaCreacion: "2026-02-15T...",  // cuando entró al pipeline
+  notas: [                          // array de notas añadidas manualmente
+    { texto: "Reunión el 20 marzo", fecha: "2026-03-15T...", autor: "Leticia" }
+  ],
+  historial: [                      // todos los movimientos de etapa
+    { etapa: "nurturing", fecha: "2026-02-15T..." },
+    { etapa: "reunion", fecha: "2026-03-10T..." }
+  ],
+  // Datos enriquecidos desde Recipients sheet:
+  nombre: "Carlos",
+  apellido: "Ruiz",
+  organizacion: "SolarEn",
+  numAperturas: 3,
+  numClics: 1,
+  respondido: "Si",
+}
+```
+
+#### Sugerencias automáticas de avance en el Pipeline
+
+```javascript
+function getSuggestions(card, contactData) {
+  // Señal de engagement alto: ≥4 interacciones en nurturing → sugerir reunion
+  if (card.etapa === 'nurturing') {
+    const interactions = (contactData?.numAperturas || 0) + (contactData?.numClics || 0);
+    if (interactions >= 4) return { stage: 'reunion', label: 'Sugerir → Reunión' };
+  }
+
+  // Señal en notas: palabras de reunión detectadas
+  const notesStr = JSON.stringify(card.notas || []).toLowerCase();
+  const meetingKw = ['reunion', 'reunión', 'llamada', 'meeting', 'call', 'agenda'];
+  if (meetingKw.some(k => notesStr.includes(k))) {
+    return { stage: 'reunion', label: 'Sugerir → Reunión' };
+  }
+
+  // Señal negativa: palabras de rechazo
+  const rejectKw = ['no interesa', 'no estamos interesados', 'unsubscribe', 'baja'];
+  if (rejectKw.some(k => notesStr.includes(k))) {
+    return { stage: 'descartado', label: 'Sugerir → Descartado' };
+  }
+
+  return null;
+}
+```
+
+#### moveStage() — Mover contacto entre etapas
+
+```typescript
+// Llamada desde el botón de la card del Kanban Bridge
+await proxyFetch('moveStage', { email: card.email, newStage: targetStage });
+
+// GAS handleMoveStage():
+// 1. getOrCreatePipelineRow(email) → crea fila si no existe
+// 2. etapaAnterior = etapa actual
+// 3. etapa = newStage
+// 4. fechaCambio = now()
+// 5. historial.push({ etapa: newStage, fecha: now() })
+```
+
+---
+
+### 16.12 Sincronización Bridge Pipeline → Prospects Airtable
+
+Este es el mecanismo que conecta ambos sistemas de forma automática (no-bloquente):
+
+#### Flujo de detección
+
+```
+ProspectsView.tsx (al cargar)
+  → fetchBridgePipelineCards() [GET /pipeline desde GAS]
+  → computeSyncSuggestions(prospects, bridgeCards, companies)
+       ↓
+  Para cada Prospect en BETA-Prospects:
+    1. matchProspectToBridge(prospect, bridgeCards)
+       → extrae dominios de todos los emails del prospect
+       → busca cards de Pipeline cuyo email tenga ese dominio
+       → excluye 'descartado'
+       → elige la etapa más avanzada (BRIDGE_ORDER: nurturing < reunion < subida_docs < doc_completada)
+       → si etapa mapeada existe y es más avanzada que el stage actual → sugiere avance
+
+    2. detectMeetingFromCRM(prospect, matchedCRMCompany)
+       → busca en company.detail.datedSubjects[].subject + extract
+       → busca en company.detail.subjects[]
+       → keywords: 'reunion','reunión','llamada','meeting','call','agenda','convocatoria','videollamada','teams','zoom'
+       → si detecta → sugiere 'Reunion' (si más avanzado que el actual)
+
+    3. Toma la más avanzada entre ambas señales
+       → genera SyncSuggestion[] solo si suggestedStage > currentStage
+```
+
+#### Mapa de etapas Bridge → Prospects
+
+```
+Bridge Pipeline (GAS Sheets)   →   Prospects Kanban (Airtable)
+────────────────────────────────────────────────────────
+nurturing                       →   [sin sugerencia]
+reunion                         →   Reunion
+subida_docs                     →   Documentacion Pendiente
+doc_completada                  →   Listo para Term-Sheet
+descartado                      →   [sin sugerencia]
+```
+
+#### Resultado visual: banner de sugerencias
+
+Cuando hay sugerencias activas, aparece un banner en la parte superior del Kanban de Prospects:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│ ⚡ N sugerencias de avance detectadas (Bridge / CRM)                                │
+│                                                                                      │
+│ "SolarEn SA"  Lead → Reunion                                                        │
+│  Bridge: etapa 'reunion' (carlos@solaren.es)              [Aplicar]  [✕ Ignorar]   │
+│                                                                                      │
+│ "GreenfieldPV"  Interesado → Documentacion Pendiente                                │
+│  Bridge: etapa 'subida_docs' (jorge@greenfieldpv.eu)      [Aplicar]  [✕ Ignorar]   │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **"Aplicar"** → `updateProspect(id, { Stage: suggestedStage })` + elimina la sugerencia
+- **"✕ Ignorar"** → añade `prospectId` a Set `syncDismissed` (solo en sesión, no persiste)
+
+---
+
+### 16.13 Respuestas y Follow-ups con IA
+
+#### Clasificación automática de respuestas (Gemini)
+
+Cuando Leticia recibe una respuesta, el GAS la clasifica automáticamente:
+
+```
+Categorías: interesado | reunion | no_interesado | informacion | fuera_oficina | otro
+Sentimiento: positivo | neutro | negativo
+```
+
+Esta clasificación se usa para:
+- Colorear el badge de estado en la tabla de empresas
+- Priorizar la cola de follow-up
+
+#### Cola de follow-up prioritizada
+
+En la sección "Resumen" del dashboard, los contactos se priorizan para follow-up así:
+
+```
+Prioridad 1 (urgente): Respondidos donde Leticia NO ha contestado aún
+Prioridad 2 (cálido):  Clickers (clic en enlace Bridge pero sin respuesta)
+Prioridad 3 (tibio):   Warm opens (≥3 aperturas, sin clics ni respuesta)
+
+Límite: máximo 1 contacto por empresa (el de mayor prioridad)
+Máximo total: 15 en la vista
+```
+
+#### Generación de respuestas con Gemini
+
+**Instrucción al agente** (en `BridgeSlideOverPanel`):
+```
+[Textarea de instrucciones libres]
+Ejemplo: "Responde que estamos disponibles para reunión esta semana,
+          propón martes 25 o miércoles 26 por la mañana, 
+          y adjunta el one-pager de Bridge"
+```
+
+El GAS construye el prompt completo:
+```
+Eres un asesor de inversión de Alter5 Capital (financiación energías renovables).
+Genera un email de seguimiento profesional en español.
+Destinatario: {nombre} de {organización}
+Instrucciones del usuario: {instrucciones}
+Conversación previa: [últimos 5 mensajes del thread Gmail]
+Responde SOLO con el cuerpo del email en HTML.
+Tono profesional pero cercano. Call-to-action claro.
+```
+
+**Temperatura Gemini**: 0.7 (más creativo para respuestas personalizadas).
+
+---
+
+### 16.14 Estado Actual a Q1 2026
+
+#### Waves ejecutadas
+
+El sistema de waves está operativo con las siguientes referencias en Airtable `CampaignTargets`:
+
+| Wave | `CampaignRef` | Estado |
+|------|--------------|--------|
+| Wave 1 | `Bridge_Q1` | Completada |
+| Wave 2 | `Bridge_Q1_W2` | Completada |
+| Wave N | `Bridge_Q1_WN` | Se detecta automáticamente al abrir el explorer |
+
+El número exacto de waves activas se obtiene con `fetchAllBridgeTargets("Bridge_Q1")` que devuelve `{ maxWave }`. La próxima wave siempre es `maxWave + 1`.
+
+#### Referencia de datos de benchmark (mock data del sistema)
+
+El sistema incluye mock data que refleja el benchmark de referencia para evaluar el rendimiento real:
+
+```
+Total contactos:   156 (referencia de tamaño batch)
+Variante A (test batch de 16):
+  - Tasa apertura:  68,75% (11/16)
+  - Tasa clics:     31,25% (5/16)
+  - Tasa respuesta: 18,75% (3/16)
+
+Variante B (test batch de 16):
+  - Tasa apertura:  56,25% (9/16)
+  - Tasa clics:     43,75% (7/16)
+  - Tasa respuesta: 25,00% (4/16)
+```
+
+> **Nota**: Estos datos son el mock de referencia del sistema, no los datos reales de la campaña. Los datos reales están en el Google Sheet de Leticia y se consultan via `proxyFetch('dashboard')`.
+
+#### Empresas en el Pipeline Bridge (ejemplos del mock)
+
+```
+carlos.ruiz@solaren.es       → nurturing    (50MW en Extremadura)
+jorge.vidal@greenfield.eu    → reunion      (reunión 25 feb)
+marcos.diaz@solardev.es      → nurturing    (30MW RTB)
+carmen.navarro@ibervolt.com  → subida_docs  (balance+proyecciones enviados, falta PPA)
+```
+
+#### Límites técnicos actuales
+
+| Límite | Valor | Razón |
+|--------|-------|-------|
+| Emails/día GAS (Workspace) | ~2.000 | Cuota Google Workspace |
+| Emails/día GAS (cuenta gratuita) | ~100 | Cuota Gmail gratuita |
+| Rate de envío | 1 email/segundo | `Utilities.sleep(1000)` entre envíos |
+| Empresas en CRM elegibles | ~1.087 Originación con contactos | Estado a 18-mar-2026 |
+| Batch de LLM ordering | 150 empresas | Límite del prompt de Gemini |
+| Batch de follow-up IA | 15 contactos | Límite por coste y tiempo de respuesta |
+
+#### Próximos pasos identificados en la arquitectura
+
+1. **Apollo.io enriquecimiento** — ~1.087 empresas de Originación pendientes de enriquecer contactos (CEO/CFO) para mejorar el targeting
+2. **Nuevas waves** — se pueden lanzar desde el botón "Preparar nueva wave" → el sistema auto-detecta el siguiente wave ID
+3. **Follow-up batch** — empresas con aperturas ≥3 sin respuesta son candidatas a follow-up automático via Gemini
+
+---
+
+### 16.15 Configuración Completa del Sistema Bridge
+
+#### Remitente y test
+
+```typescript
+// Hardcodeado en BridgeExplorerView.tsx openWizard()
+senderEmail = "leticia.menendez@alter-5.com"
+senderName  = "Leticia Menéndez"
+testEmail   = "salvador.carrillo@alter-5.com"  // siempre recibe el test
+```
+
+#### GAS Script Properties requeridas
+
+```
+API_TOKEN          → token de auth para doPost (= GAS_API_TOKEN de Vercel)
+GEMINI_API_KEY     → clave Gemini 2.0 Flash
+LEGACY_SHEET_ID    → ID del Google Sheet de tracking Bridge original (datos históricos)
+CAMPAIGN_SHEET_ID  → auto-guardado en primera ejecución (si no existe, se crea)
+SENDER_EMAIL       → leticia.menendez@alter-5.com
+SENDER_NAME        → Leticia Menéndez
+NOTES_FOLDER_ID    → carpeta Drive para meeting notes
+```
+
+#### Vercel Environment Variables
+
+```
+GAS_WEB_APP_URL         → URL del GAS Web App desplegado
+GAS_API_TOKEN           → token compartido con GAS
+CAMPAIGN_PROXY_SECRET   → secret para validar header x-proxy-secret
+ALLOWED_ORIGIN          → https://alter5-bi.vercel.app (CORS)
+```
+
+#### Vite (frontend, no sensibles)
+
+```
+VITE_CAMPAIGN_PROXY_SECRET  → mismo valor que CAMPAIGN_PROXY_SECRET
+```
 
 ---
 
