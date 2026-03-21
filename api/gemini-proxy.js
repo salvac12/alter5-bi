@@ -8,7 +8,7 @@
  *   ALLOWED_ORIGIN          — CORS origin (default: https://alter5-bi.vercel.app)
  */
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app';
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

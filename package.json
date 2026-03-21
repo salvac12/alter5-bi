@@ -2,6 +2,7 @@
   "name": "alter5-business-intelligence",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

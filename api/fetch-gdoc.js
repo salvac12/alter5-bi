@@ -4,7 +4,7 @@
  *
  * Usage: GET /api/fetch-gdoc?url=https://docs.google.com/document/d/XXXX/edit
  */
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS headers
   const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://alter5-bi.vercel.app';
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);

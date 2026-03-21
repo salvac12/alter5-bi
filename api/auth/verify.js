@@ -2,7 +2,7 @@
  * Verifies Google ID token and returns user info.
  * Env: GOOGLE_CLIENT_ID
  */
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
