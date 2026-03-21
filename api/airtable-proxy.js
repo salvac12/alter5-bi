@@ -6,6 +6,8 @@
  *   AIRTABLE_PAT           — Airtable Personal Access Token
  *   CAMPAIGN_PROXY_SECRET   — shared secret between browser <-> proxy
  *   ALLOWED_ORIGIN          — CORS origin (default: https://alter5-bi.vercel.app)
+ *
+ * @version 2 — rebuilt for Node 20.x
  */
 
 export default async function handler(req, res) {
