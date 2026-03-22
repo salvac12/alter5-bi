@@ -2143,4 +2143,241 @@ Además de las variables documentadas en la guía de Empresas:
 
 ---
 
+## 17. Detalle de Campaña — Elementos Interactivos (CampaignDetailView)
+
+Al hacer clic en "Ver detalle" desde la lista de campañas, se abre la vista `CampaignDetailView`. Esta sección describe exactamente qué muestra cada elemento y qué ocurre al interactuar con él.
+
+### 17.1 Estructura general
+
+La vista tiene una cabecera fija y 4 tabs de contenido:
+
+```
+┌─ Cabecera ──────────────────────────────────────────────────────────────┐
+│  [← Volver]  Nombre campaña  [● Activa]   [Pausar] [Editar] [Copiar]  │
+│  Campaña Masiva · Leticia Menéndez · Del 15 de enero 2026 · 156 contactos│
+└─────────────────────────────────────────────────────────────────────────┘
+
+[Resumen]  [Contactos (156)]  [Respuestas (8)]  [Seguimiento]
+```
+
+Los números entre paréntesis en los tabs son contadores en tiempo real:
+- **Contactos**: total de contactos de la campaña
+- **Respuestas**: número de contactos que han respondido (badge naranja)
+
+---
+
+### 17.2 Tab "Resumen" — Cards KPI (no interactivas)
+
+Las 4 cards superiores son **solo visuales**, no tienen acción al hacer clic:
+
+```
+┌─ Enviados ──────┐  ┌─ Abiertos ──────┐  ┌─ Con clic ──────┐  ┌─ Respondidos ───┐
+│  ✉ icono azul   │  │  👁 icono naranja│  │  🖱 icono morado │  │  💬 icono verde  │
+│                 │  │                 │  │                 │  │                 │
+│       143       │  │       87        │  │       23        │  │        8        │
+│  de 156         │  │    60,8%        │  │    16,1%        │  │     5,6%        │
+└─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘
+  Borde azul arriba    Borde naranja        Borde morado          Borde verde
+```
+
+**Fórmulas de cálculo**:
+- `Enviados` = contactos sin error / total contactos
+- `Abiertos %` = abiertos / enviados
+- `Con clic %` = clics / enviados
+- `Respondidos %` = respondidos / enviados
+
+Debajo de las cards hay dos secciones adicionales:
+
+**Embudo de conversión** (barras horizontales animadas):
+```
+Total contactos  ████████████████████  156
+Enviados         ████████████████░░░░  143
+Abiertos         ████████░░░░░░░░░░░░   87
+Clics            ████░░░░░░░░░░░░░░░░   23
+Respondidos      ██░░░░░░░░░░░░░░░░░░    8
+```
+
+**Test A/B** (solo si la campaña tiene variante B):
+- Columna A: subject A + enviados, aperturas %, clics %, respondidos %
+- Columna B: subject B + mismas métricas
+- Grupo Final: emails enviados al grupo ganador o sin asignación A/B
+
+**Panel de información**:
+- Remitente, tipo (masiva / 1-a-1), fecha de creación, estado, % A/B, ganador A/B
+
+---
+
+### 17.3 Tab "Contactos" — Filas expandibles al hacer clic
+
+Cada fila de la tabla es **clickable** y expande un panel de detalle debajo.
+
+**Vista normal de una fila**:
+```
+| email@empresa.es | Carlos García | Empresa XYZ | A | ● Abierto | 3 | 1 | 21 ene |
+```
+
+Columnas: Email / Nombre / Empresa / Variante (A o B) / Estado / Aperturas / Clics / Fecha envío
+
+Las columnas "Apert." y "Clics" son **ordenables** haciendo clic en su cabecera.
+
+**Al hacer clic en una fila** → se expande el timeline de tracking:
+
+```
+▼ [fondo #F8FAFC]
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Enviado:            21 ene, 09:15                                          │
+│ Primera apertura:   21 ene, 11:42  ← en verde                             │
+│ Primer clic:        21 ene, 11:44  ← en ámbar                             │
+│ Aperturas totales:  3                                                      │
+│ Clics totales:      1                                                      │
+│ Grupo:              Final                                                  │
+│ Ha respondido       Resp. enviada  ← si ha respondido y se le contestó    │
+│ Follow-ups:         1              ← si tiene seguimientos enviados        │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Filtros de estado** (pills encima de la tabla):
+
+| Filtro | Qué muestra |
+|--------|-------------|
+| Todos | Todos los contactos |
+| Enviado | `status: sent` — email enviado, sin apertura |
+| Abierto | `status: opened` — abrió el email |
+| Clic | `status: clicked` — hizo clic en el enlace |
+| Respondido | `status: replied` — respondió al email |
+| Pendiente | `status: pending` — aún sin enviar |
+| Error | `status: error` — fallo en el envío |
+
+**Búsqueda**: filtra por email, nombre o empresa (case-insensitive).
+
+**Colores de los badges de estado**:
+
+| Estado | Fondo | Texto |
+|--------|-------|-------|
+| Enviado | `#ECFDF5` | `#059669` verde |
+| Abierto | `#ECFDF5` | `#059669` verde |
+| Clic | `#F5F3FF` | `#7C3AED` morado |
+| Respondido | `#FFF7ED` | `#EA580C` naranja |
+| Error | `#FEF2F2` | `#DC2626` rojo |
+| Pendiente | `#F1F5F9` | `#CBD5E1` gris |
+
+---
+
+### 17.4 Tab "Respuestas" — Cards que abren la conversación completa
+
+Este tab muestra **solo los contactos que han respondido**. Cada card es interactiva y tiene funcionalidad completa de respuesta.
+
+**Filtros del tab**:
+- **Pendientes (N)** → respondieron pero Leticia aún no les ha contestado
+- **Resp. enviada (N)** → ya se envió respuesta
+
+**Vista colapsada de una card**:
+```
+[Empresa XYZ · Carlos García · carlos@empresa.es]  [● Respondido]  [Resp. enviada]  [Responder ▼]
+```
+
+**Al hacer clic en la card** (o en "Responder") → se despliega todo:
+
+```
+┌─ EXPANDIDO ─────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│  ┌─ Respuesta del contacto [fondo naranja] ─────────────────────────────┐  │
+│  │ "Muchas gracias por la información, nos parece muy interesante el    │  │
+│  │  programa Bridge. ¿Podríamos hablar la semana que viene?"            │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌─ Borrador existente [fondo azul] — si hay draft preparado ──────────┐  │
+│  │ Borrador existente (listo)                                          │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  Borrador de respuesta                    [Generar con IA]                 │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                                                                      │  │
+│  │  [textarea editable, 6 filas]                                        │  │
+│  │  (se pre-rellena con el borrador Gmail si existe)                    │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│  [Guardar borrador]        [Enviar]                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Qué hace cada botón**:
+
+| Botón | Acción GAS | Comportamiento |
+|-------|-----------|----------------|
+| "Generar con IA" | `composeFromInstructions` | Gemini lee el hilo Gmail completo y genera un email HTML de respuesta. Se rellena automáticamente en el textarea. |
+| "Guardar borrador" | `saveDraft` | Guarda el texto del textarea como borrador en Gmail de Leticia. Si ya hay un borrador, lo reemplaza. |
+| "Enviar" | `sendDraft` | Envía el email. Si el texto fue editado, borra el draft anterior, crea uno nuevo con el texto editado y lo envía. Si no fue editado, envía el draft directamente. |
+
+**Flujo habitual de trabajo**:
+1. Leticia ve la respuesta del contacto
+2. Pulsa "Generar con IA" → Gemini propone una respuesta contextual
+3. Revisa y edita el texto en el textarea
+4. Opcional: "Guardar borrador" para revisarla después en Gmail
+5. "Enviar" → el email sale desde la cuenta de Gmail de Leticia
+
+---
+
+### 17.5 Tab "Seguimiento" — KPIs + acciones de batch
+
+Las 4 cards superiores son **solo visuales** (no clickables):
+
+```
+┌─ Elegibles ─────┐  ┌─ Programados ──┐  ┌─ Generando ─────┐  ┌─ Enviados ──────┐
+│ 👥 icono azul   │  │ ⏱ icono morado │  │ ✉ icono ámbar   │  │ 💬 icono verde  │
+│                 │  │                │  │                 │  │                 │
+│       12        │  │       3        │  │        0        │  │        5        │
+└─────────────────┘  └────────────────┘  └─────────────────┘  └─────────────────┘
+  Borde azul            Borde morado        Borde ámbar           Borde verde
+```
+
+**Definiciones**:
+- **Elegibles follow-up**: contactos con `status: opened` o `status: clicked` que **no** han respondido — son los que vale la pena perseguir con un segundo email
+- **Programados**: follow-ups en estado `scheduled` o `draft_ready` (listos para enviar)
+- **Generando**: follow-ups que Gemini está procesando en este momento (`status: generating`)
+- **Enviados**: follow-ups con `status: sent`
+
+**Los dos botones de acción** (debajo de las cards):
+
+| Botón | Condición | Acción GAS | Qué hace |
+|-------|----------|-----------|---------|
+| "Activar seguimiento (N elegibles)" | Siempre visible si hay elegibles | `generateFollowUpBatch` | Gemini genera un borrador HTML de follow-up para cada contacto elegible. El GAS lee el hilo Gmail de cada uno para personalizar el mensaje. |
+| "Guardar borrador (N)" | Solo aparece si hay borradores listos (`draft_ready`) | `sendFollowUpBatch` | Envía todos los borradores listos de una vez via GmailApp. |
+
+**Lista de follow-ups** (debajo de los botones):
+
+Cada fila muestra nombre/email + badge de estado + fecha programada:
+
+| Badge | Color | Significado |
+|-------|-------|-------------|
+| Programado | Morado | Creado, esperando generación de borrador |
+| Generando | Ámbar | Gemini está generando el HTML del email |
+| Borrador listo | Azul | El borrador está listo para revisar/enviar |
+| Enviado | Verde | El email ya fue enviado |
+| Cancelado | Rojo | Fue cancelado antes de enviar |
+
+---
+
+### 17.6 Resumen visual — Qué es clickable y qué no
+
+| Elemento | ¿Clickable? | Qué hace al hacer clic |
+|----------|------------|----------------------|
+| Cards KPI de "Resumen" (Enviados, Abiertos, Clic, Respondidos) | ❌ No | Solo visual |
+| Embudo de conversión | ❌ No | Solo visual |
+| Panel Test A/B | ❌ No | Solo visual |
+| Tabs (Resumen / Contactos / Respuestas / Seguimiento) | ✅ Sí | Cambia el contenido mostrado |
+| Pills de filtro en "Contactos" | ✅ Sí | Filtra la tabla por estado |
+| Cabeceras "Apert." y "Clics" en la tabla | ✅ Sí | Ordena la tabla por esa columna |
+| Filas de la tabla de Contactos | ✅ Sí | Expande el timeline de tracking individual |
+| Cards de Respuestas | ✅ Sí | Abre conversación Gmail + editor de borrador |
+| Botón "Generar con IA" | ✅ Sí | Llama a Gemini para redactar respuesta |
+| Botón "Guardar borrador" | ✅ Sí | Guarda en Gmail de Leticia |
+| Botón "Enviar" | ✅ Sí | Envía el email definitivo |
+| Cards KPI de "Seguimiento" | ❌ No | Solo visual |
+| Botón "Activar seguimiento" | ✅ Sí | Genera borradores de follow-up con IA |
+| Botón "Guardar borrador" (batch) | ✅ Sí | Envía todos los follow-ups listos |
+| Filas de follow-ups | ❌ No | Solo visual (muestra estado) |
+
+---
+
 *Documento generado el 21 de marzo de 2026. Refleja el estado técnico actual del sistema.*
