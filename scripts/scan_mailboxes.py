@@ -159,11 +159,13 @@ def scan_mailbox(mailbox, state, blocklist, days_override=None):
         after_dt = datetime.now(timezone.utc) - timedelta(days=days_override)
     elif email in state and state[email]:
         # Resume from last scan timestamp
+        entry = state[email]
+        ts_str = entry.get("last_scan_timestamp") if isinstance(entry, dict) else entry
         try:
-            last_ts = datetime.fromisoformat(state[email].replace("Z", "+00:00"))
+            last_ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
             # Add 1-hour overlap to avoid gaps
             after_dt = last_ts - timedelta(hours=1)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, AttributeError):
             after_dt = datetime.now(timezone.utc) - timedelta(days=1)
     else:
         # New mailbox without state — scan last 7 days
@@ -506,8 +508,13 @@ def main():
         scan_results.append(result)
         print(f"    Dominios encontrados: {len(result)}")
 
-        # Update state timestamp for this mailbox
-        state[mailbox["email"]] = datetime.now(timezone.utc).isoformat()
+        # Update state timestamp for this mailbox (preserve dict schema if present)
+        email_key = mailbox["email"]
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if isinstance(state.get(email_key), dict):
+            state[email_key]["last_scan_timestamp"] = now_iso
+        else:
+            state[email_key] = {"last_scan_timestamp": now_iso}
 
     # [5/9] Merge all mailbox results
     print(f"\n  [5/9] Combinando resultados de {len(mailboxes)} buzones...")
