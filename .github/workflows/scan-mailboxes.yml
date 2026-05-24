@@ -103,9 +103,29 @@ jobs:
           done
           if git diff --cached --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "data: actualizacion automatica desde Gmail API directo
-
-            $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            git push
+            exit 0
           fi
+          git commit -m "data: actualizacion automatica desde Gmail API directo
+
+          $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          for attempt in 1 2 3 4 5; do
+            echo "Push attempt $attempt..."
+            git pull --rebase origin main || {
+              echo "Rebase failed (probably scan_state.json conflict). Re-applying our commit on top of remote."
+              git rebase --abort || true
+              git fetch origin main
+              git reset --soft origin/main
+              for f in src/data/companies.json src/data/companies_full.json src/data/employees.json src/data/opportunities.json config/scan_state.json; do
+                [ -f "$f" ] && git add "$f"
+              done
+              git diff --cached --quiet && { echo "Nothing left to commit after reset"; exit 0; }
+              git commit -m "data: actualizacion automatica desde Gmail API directo
+
+          $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }
+            git push && exit 0
+            echo "Push rejected, sleeping before retry..."
+            sleep 10
+          done
+          echo "ERROR: Push failed after 5 attempts."
+          exit 1
