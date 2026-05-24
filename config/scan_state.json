@@ -1,27 +1,30 @@
 {
   "salvador.carrillo@alter-5.com": {
-    "last_scan_timestamp": "2026-03-11T08:47:09.552500+00:00",
-    "calendar_last_scan": "2026-03-17T13:06:04.090123+00:00"
+    "last_scan_timestamp": "2026-05-24T08:40:25.094789+00:00",
+    "calendar_last_scan": "2026-05-24T08:45:47.470182+00:00"
   },
   "leticia.menendez@alter-5.com": {
-    "last_scan_timestamp": "2026-03-11T08:47:10.091860+00:00",
-    "calendar_last_scan": "2026-03-17T13:06:04.090123+00:00"
+    "last_scan_timestamp": "2026-05-24T08:40:28.920285+00:00",
+    "calendar_last_scan": "2026-05-24T08:45:47.470182+00:00"
   },
   "javier.ruiz@alter-5.com": {
-    "last_scan_timestamp": "2026-03-11T08:47:10.900817+00:00",
-    "calendar_last_scan": "2026-03-17T13:06:04.090123+00:00"
+    "last_scan_timestamp": "2026-05-24T08:40:32.727979+00:00",
+    "calendar_last_scan": "2026-05-24T08:45:47.470182+00:00"
   },
   "miguel.solana@alter-5.com": {
-    "last_scan_timestamp": "2026-03-11T08:47:11.598242+00:00",
-    "calendar_last_scan": "2026-03-17T13:06:04.090123+00:00"
+    "last_scan_timestamp": "2026-05-24T08:40:39.694007+00:00",
+    "calendar_last_scan": "2026-05-24T08:45:47.470182+00:00"
   },
   "carlos.almodovar@alter-5.com": {
-    "calendar_last_scan": "2026-03-17T13:06:04.090123+00:00"
+    "calendar_last_scan": "2026-05-24T08:45:47.470182+00:00",
+    "last_scan_timestamp": "2026-05-24T08:40:40.138222+00:00"
   },
   "gonzalo.degracia@alter-5.com": {
-    "calendar_last_scan": "2026-03-17T13:06:04.090123+00:00"
+    "calendar_last_scan": "2026-05-24T08:45:47.470182+00:00",
+    "last_scan_timestamp": "2026-05-24T08:40:40.937935+00:00"
   },
   "rafael.nevado@alter-5.com": {
-    "calendar_last_scan": "2026-03-17T13:06:04.090123+00:00"
+    "calendar_last_scan": "2026-05-24T08:45:47.470182+00:00",
+    "last_scan_timestamp": "2026-05-24T08:40:41.660740+00:00"
   }
 }
