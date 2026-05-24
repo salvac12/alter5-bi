@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      max_results:
+        description: 'Cap mensajes por buzón (default 500, subir para backfills)'
+        required: false
+        default: ''
+        type: string
       fix_subjects:
         description: 'Fix dated_subjects: stuck (30 old), empty, or all'
         required: false
@@ -32,7 +37,7 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -53,6 +58,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           INPUT_DAYS: ${{ github.event.inputs.days }}
           INPUT_REENRICH: ${{ github.event.inputs.reenrich }}
+          INPUT_MAX_RESULTS: ${{ github.event.inputs.max_results }}
         run: |
           DAYS_ARG=""
           if [ -n "$INPUT_DAYS" ]; then
@@ -62,7 +68,11 @@ jobs:
           if [ "$INPUT_REENRICH" = "true" ]; then
             REENRICH_ARG="--reenrich"
           fi
-          python scripts/scan_mailboxes.py $DAYS_ARG $REENRICH_ARG
+          MAX_RESULTS_ARG=""
+          if [ -n "$INPUT_MAX_RESULTS" ]; then
+            MAX_RESULTS_ARG="--max-results $INPUT_MAX_RESULTS"
+          fi
+          python scripts/scan_mailboxes.py $DAYS_ARG $REENRICH_ARG $MAX_RESULTS_ARG
 
       - name: Fix dated_subjects
         if: ${{ github.event.inputs.fix_subjects != '' }}

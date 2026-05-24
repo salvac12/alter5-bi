@@ -139,7 +139,7 @@ def parse_from_header(from_str):
 # ---------------------------------------------------------------------------
 # Core scanning
 # ---------------------------------------------------------------------------
-def scan_mailbox(mailbox, state, blocklist, days_override=None):
+def scan_mailbox(mailbox, state, blocklist, days_override=None, max_results=500):
     """Scan a single mailbox via Gmail API. Returns grouped data by domain.
 
     Args:
@@ -147,6 +147,7 @@ def scan_mailbox(mailbox, state, blocklist, days_override=None):
         state: dict of scan_state.json
         blocklist: set of domains to skip
         days_override: if set, override scan window to N days ago
+        max_results: cap mensajes por buzón (default 500, subir para backfills)
 
     Returns:
         dict of domain -> {employees, contacts, subjects, dated_subjects, snippets}
@@ -183,8 +184,8 @@ def scan_mailbox(mailbox, state, blocklist, days_override=None):
         return {}
 
     # Fetch message IDs
-    msg_ids = fetch_message_ids(service, email, after_date)
-    print(f"    Mensajes encontrados: {len(msg_ids)}")
+    msg_ids = fetch_message_ids(service, email, after_date, max_results=max_results)
+    print(f"    Mensajes encontrados: {len(msg_ids)} (cap={max_results})")
 
     if not msg_ids:
         return {}
@@ -442,6 +443,8 @@ def main():
                         help="Override: escanear los ultimos N dias (default: usa scan_state)")
     parser.add_argument("--reenrich", action="store_true",
                         help="Re-enriquecer empresas sin enrichment (skip Gmail scan)")
+    parser.add_argument("--max-results", type=int, default=500,
+                        help="Cap mensajes por buzón (default 500, subir para backfills)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -504,7 +507,9 @@ def main():
 
     for i, mailbox in enumerate(mailboxes):
         print(f"\n  --- Buzon {i+1}/{len(mailboxes)}: {mailbox['nombre']} ---")
-        result = scan_mailbox(mailbox, state, blocked_domains, days_override=args.days)
+        result = scan_mailbox(mailbox, state, blocked_domains,
+                              days_override=args.days,
+                              max_results=args.max_results)
         scan_results.append(result)
         print(f"    Dominios encontrados: {len(result)}")
 
