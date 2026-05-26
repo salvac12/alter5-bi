@@ -22,6 +22,7 @@
 import argparse
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -45,6 +46,69 @@ from process_sheet_emails import classify_domains_with_gemini, PERSONAL_DOMAINS
 # ---------------------------------------------------------------------------
 # Gmail API helpers
 # ---------------------------------------------------------------------------
+RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+
+
+def _parse_retry_after(error):
+    """Return seconds to wait based on Retry-After header or 'Retry after <ISO>' body.
+
+    Returns None if nothing parseable.
+    """
+    from googleapiclient.errors import HttpError
+
+    if not isinstance(error, HttpError):
+        return None
+
+    resp = getattr(error, "resp", None)
+    if resp is not None:
+        ra = resp.get("retry-after")
+        if ra:
+            if ra.isdigit():
+                return float(ra)
+            try:
+                from email.utils import parsedate_to_datetime
+                ra_dt = parsedate_to_datetime(ra)
+                if ra_dt:
+                    return max(1.0, (ra_dt - datetime.now(timezone.utc)).total_seconds())
+            except Exception:
+                pass
+
+    content = getattr(error, "content", b"") or b""
+    match = re.search(rb"Retry after (\S+)", content)
+    if match:
+        ts = match.group(1).decode(errors="ignore").rstrip("Z")
+        try:
+            retry_dt = datetime.fromisoformat(ts + "+00:00")
+            return max(1.0, (retry_dt - datetime.now(timezone.utc)).total_seconds())
+        except ValueError:
+            return None
+
+    return None
+
+
+def execute_with_retry(request, max_attempts=6, label=""):
+    """Execute a googleapiclient request with exponential backoff on 429/5xx.
+
+    For parsed Retry-After: cap wait at 90s.
+    Without Retry-After: exponential backoff capped at 30s.
+    """
+    from googleapiclient.errors import HttpError
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return request.execute()
+        except HttpError as e:
+            if e.resp.status not in RETRYABLE_STATUSES or attempt == max_attempts:
+                raise
+            parsed = _parse_retry_after(e)
+            if parsed is not None:
+                wait = min(parsed, 90.0)
+            else:
+                wait = min(2 ** attempt + random.random(), 30.0)
+            print(f"    [retry {attempt}/{max_attempts}] {label}: status={e.resp.status}, sleep {wait:.1f}s")
+            time.sleep(wait)
+
+
 def get_gmail_service(email):
     """Build Gmail API service using Service Account with domain delegation."""
     from google.oauth2 import service_account
@@ -78,7 +142,10 @@ def fetch_message_ids(service, email, after_date, max_results=500):
         if page_token:
             kwargs["pageToken"] = page_token
 
-        result = service.users().messages().list(**kwargs).execute()
+        result = execute_with_retry(
+            service.users().messages().list(**kwargs),
+            label=f"list:{email}",
+        )
         messages = result.get("messages", [])
         ids.extend(m["id"] for m in messages)
 
@@ -89,35 +156,90 @@ def fetch_message_ids(service, email, after_date, max_results=500):
     return ids[:max_results]
 
 
-def fetch_messages_batch(service, email, msg_ids):
-    """Fetch messages using batch API (100 per request). Returns parsed list."""
-    from googleapiclient.http import BatchHttpRequest
+def fetch_messages_batch(service, email, msg_ids, max_attempts=5):
+    """Fetch messages using batch API (100 per request).
+
+    Critical: BatchHttpRequest.execute() does NOT raise HttpError when a
+    sub-request returns 429/5xx — the batch endpoint replies 200 OK and the
+    per-item HttpError is delivered to the callback. We collect failed ids
+    and retry only those, with exponential backoff.
+
+    Returns list of parsed messages. Logs WARN if some ids cannot be fetched.
+    """
+    from googleapiclient.errors import HttpError
 
     all_messages = []
     BATCH_SIZE = 100
+    pending = list(msg_ids)
+    attempt = 0
+    retry_after_seconds = None
 
-    for batch_start in range(0, len(msg_ids), BATCH_SIZE):
-        batch_ids = msg_ids[batch_start:batch_start + BATCH_SIZE]
-        batch_results = []
+    while pending and attempt < max_attempts:
+        attempt += 1
+        retry_ids = []
+        rate_limited = False
 
-        def callback(request_id, response, exception):
-            if exception:
-                return
-            if response:
-                batch_results.append(response)
+        def make_callback():
+            def callback(request_id, response, exception):
+                nonlocal rate_limited, retry_after_seconds
+                if exception is None:
+                    if response:
+                        all_messages.append(response)
+                    return
+                if isinstance(exception, HttpError) and exception.resp.status in RETRYABLE_STATUSES:
+                    retry_ids.append(request_id)
+                    rate_limited = True
+                    parsed = _parse_retry_after(exception)
+                    if parsed is not None:
+                        if retry_after_seconds is None or parsed > retry_after_seconds:
+                            retry_after_seconds = parsed
+                else:
+                    print(f"    [batch-error] {request_id}: {type(exception).__name__}: {exception}")
+            return callback
 
-        batch = service.new_batch_http_request(callback=callback)
-        for mid in batch_ids:
-            batch.add(
-                service.users().messages().get(
-                    userId=email,
-                    id=mid,
-                    format="metadata",
-                    metadataHeaders=["From", "Subject", "Date"],
+        for batch_start in range(0, len(pending), BATCH_SIZE):
+            batch_ids = pending[batch_start:batch_start + BATCH_SIZE]
+            batch = service.new_batch_http_request(callback=make_callback())
+            for mid in batch_ids:
+                batch.add(
+                    service.users().messages().get(
+                        userId=email,
+                        id=mid,
+                        format="metadata",
+                        metadataHeaders=["From", "Subject", "Date"],
+                    ),
+                    request_id=mid,
                 )
-            )
-        batch.execute()
-        all_messages.extend(batch_results)
+            try:
+                batch.execute()
+            except HttpError as e:
+                if e.resp.status in RETRYABLE_STATUSES:
+                    print(f"    [batch-execute-error] status={e.resp.status}, requeuing {len(batch_ids)} ids")
+                    retry_ids.extend(batch_ids)
+                    rate_limited = True
+                    parsed = _parse_retry_after(e)
+                    if parsed is not None:
+                        if retry_after_seconds is None or parsed > retry_after_seconds:
+                            retry_after_seconds = parsed
+                else:
+                    raise
+
+            time.sleep(0.5)
+
+        if not retry_ids:
+            break
+
+        pending = retry_ids
+        if rate_limited and retry_after_seconds is not None:
+            wait = min(retry_after_seconds, 90.0)
+        else:
+            wait = min(2 ** attempt + random.random(), 30.0)
+        print(f"    [batch-retry {attempt}/{max_attempts}] {len(pending)} mensajes pendientes, sleep {wait:.1f}s")
+        time.sleep(wait)
+        retry_after_seconds = None
+
+    if pending:
+        print(f"    [WARN] {len(pending)} mensajes no descargados tras {max_attempts} reintentos")
 
     return all_messages
 
@@ -504,97 +626,102 @@ def main():
     print("  [4/9] Escaneando buzones...")
     state = load_scan_state()
     scan_results = []
+    skipped_mailboxes = []
 
-    for i, mailbox in enumerate(mailboxes):
-        print(f"\n  --- Buzon {i+1}/{len(mailboxes)}: {mailbox['nombre']} ---")
-        result = scan_mailbox(mailbox, state, blocked_domains,
-                              days_override=args.days,
-                              max_results=args.max_results)
-        scan_results.append(result)
-        print(f"    Dominios encontrados: {len(result)}")
+    try:
+        for i, mailbox in enumerate(mailboxes):
+            email_key = mailbox["email"]
+            print(f"\n  --- Buzon {i+1}/{len(mailboxes)}: {mailbox['nombre']} ---")
+            try:
+                result = scan_mailbox(mailbox, state, blocked_domains,
+                                      days_override=args.days,
+                                      max_results=args.max_results)
+            except Exception as e:
+                status = getattr(getattr(e, "resp", None), "status", "?")
+                print(f"::warning::Mailbox {email_key} saltado por error: {type(e).__name__} status={status}: {e}")
+                skipped_mailboxes.append(email_key)
+                continue
 
-        # Update state timestamp for this mailbox (preserve dict schema if present)
-        email_key = mailbox["email"]
-        now_iso = datetime.now(timezone.utc).isoformat()
-        if isinstance(state.get(email_key), dict):
-            state[email_key]["last_scan_timestamp"] = now_iso
-        else:
-            state[email_key] = {"last_scan_timestamp": now_iso}
+            scan_results.append(result)
+            print(f"    Dominios encontrados: {len(result)}")
 
-    # [5/9] Merge all mailbox results
-    print(f"\n  [5/9] Combinando resultados de {len(mailboxes)} buzones...")
-    grouped = merge_all_mailboxes(scan_results)
-    print(f"  -> {len(grouped)} dominios unicos totales")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            if isinstance(state.get(email_key), dict):
+                state[email_key]["last_scan_timestamp"] = now_iso
+            else:
+                state[email_key] = {"last_scan_timestamp": now_iso}
 
-    if not grouped:
-        print("\n  No hay emails nuevos. Guardando estado y saliendo.")
+        # [5/9] Merge all mailbox results
+        print(f"\n  [5/9] Combinando resultados de {len(mailboxes)} buzones...")
+        grouped = merge_all_mailboxes(scan_results)
+        print(f"  -> {len(grouped)} dominios unicos totales")
+
+        if not grouped:
+            print("\n  No hay emails nuevos.")
+            if skipped_mailboxes:
+                print(f"  WARN: {len(skipped_mailboxes)} buzones saltados: {', '.join(skipped_mailboxes)}")
+            return False
+
+        # Filter out blocked domains
+        grouped = {d: v for d, v in grouped.items() if d not in blocked_domains}
+        print(f"  -> {len(grouped)} dominios tras filtrar blocklist")
+
+        # [6/9] Apply to companies
+        print("  [6/9] Fusionando con datos existentes...")
+        new_domain_keys = apply_to_companies(grouped, all_companies)
+        updated_count = len(grouped) - len(new_domain_keys)
+        print(f"  -> {len(new_domain_keys)} empresas nuevas, {updated_count} actualizadas")
+
+        # [7/9] Classify and enrich new domains
+        print("  [7/9] Enriquecimiento IA...")
+        classify_and_enrich(all_companies, new_domain_keys, grouped)
+
+        # [8/9] Update employees
+        print("  [8/9] Actualizando registro de empleados...")
+        emp_ids = {e["id"] for e in employees}
+        for mailbox in mailboxes:
+            if mailbox["id"] not in emp_ids:
+                employees.append({
+                    "id": mailbox["id"],
+                    "name": mailbox["nombre"],
+                    "importedAt": datetime.now().isoformat(),
+                    "companiesCount": 0,
+                })
+                emp_ids.add(mailbox["id"])
+
+        emp_company_count = defaultdict(int)
+        for co in all_companies.values():
+            for emp_id in co.get("sources", {}):
+                emp_company_count[emp_id] += 1
+        for e in employees:
+            if e["id"] in emp_company_count:
+                e["companiesCount"] = emp_company_count[e["id"]]
+
+        # [9/9] Write output files
+        print("  [9/9] Escribiendo archivos...")
+
+        full_data = {"companies": all_companies, "employees": employees}
+        with open(paths["full"], "w", encoding="utf-8") as f:
+            json.dump(full_data, f, ensure_ascii=False, indent=2)
+
+        compact = export_to_compact(all_companies)
+        with open(paths["compact"], "w", encoding="utf-8") as f:
+            json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
+
+        with open(paths["employees"], "w", encoding="utf-8") as f:
+            json.dump(employees, f, ensure_ascii=False, indent=2)
+
+        print()
+        print(f"  OK: {len(all_companies)} empresas totales ({len(new_domain_keys)} nuevas)")
+        print(f"  OK: Empleados: {', '.join(e['name'] for e in employees)}")
+        if skipped_mailboxes:
+            print(f"  WARN: {len(skipped_mailboxes)} buzones saltados: {', '.join(skipped_mailboxes)}")
+        print()
+
+        return True
+    finally:
         save_scan_state(state)
-        return False
-
-    # Filter out blocked domains
-    grouped = {d: v for d, v in grouped.items() if d not in blocked_domains}
-    print(f"  -> {len(grouped)} dominios tras filtrar blocklist")
-
-    # [6/9] Apply to companies
-    print("  [6/9] Fusionando con datos existentes...")
-    initial_count = len(all_companies)
-    new_domain_keys = apply_to_companies(grouped, all_companies)
-    updated_count = len(grouped) - len(new_domain_keys)
-    print(f"  -> {len(new_domain_keys)} empresas nuevas, {updated_count} actualizadas")
-
-    # [7/9] Classify and enrich new domains
-    print("  [7/9] Enriquecimiento IA...")
-    classify_and_enrich(all_companies, new_domain_keys, grouped)
-
-    # [8/9] Update employees
-    print("  [8/9] Actualizando registro de empleados...")
-    emp_ids = {e["id"] for e in employees}
-    for mailbox in mailboxes:
-        if mailbox["id"] not in emp_ids:
-            employees.append({
-                "id": mailbox["id"],
-                "name": mailbox["nombre"],
-                "importedAt": datetime.now().isoformat(),
-                "companiesCount": 0,
-            })
-            emp_ids.add(mailbox["id"])
-
-    # Recount companies per employee
-    emp_company_count = defaultdict(int)
-    for co in all_companies.values():
-        for emp_id in co.get("sources", {}):
-            emp_company_count[emp_id] += 1
-    for e in employees:
-        if e["id"] in emp_company_count:
-            e["companiesCount"] = emp_company_count[e["id"]]
-
-    # [9/9] Write output files
-    print("  [9/9] Escribiendo archivos...")
-
-    # companies_full.json
-    full_data = {"companies": all_companies, "employees": employees}
-    with open(paths["full"], "w", encoding="utf-8") as f:
-        json.dump(full_data, f, ensure_ascii=False, indent=2)
-
-    # companies.json (compact)
-    compact = export_to_compact(all_companies)
-    with open(paths["compact"], "w", encoding="utf-8") as f:
-        json.dump(compact, f, ensure_ascii=False, separators=(",", ":"))
-
-    # employees.json
-    with open(paths["employees"], "w", encoding="utf-8") as f:
-        json.dump(employees, f, ensure_ascii=False, indent=2)
-
-    # scan_state.json
-    save_scan_state(state)
-
-    print()
-    print(f"  OK: {len(all_companies)} empresas totales ({len(new_domain_keys)} nuevas)")
-    print(f"  OK: Empleados: {', '.join(e['name'] for e in employees)}")
-    print(f"  OK: Estado guardado en {SCAN_STATE_FILE}")
-    print()
-
-    return True
+        print(f"  Estado guardado en {SCAN_STATE_FILE}")
 
 
 if __name__ == "__main__":
