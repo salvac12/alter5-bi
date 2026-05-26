@@ -86,11 +86,16 @@ def _parse_retry_after(error):
     return None
 
 
-def execute_with_retry(request, max_attempts=6, label=""):
+def execute_with_retry(request, max_attempts=3, label="", max_wait=900.0):
     """Execute a googleapiclient request with exponential backoff on 429/5xx.
 
-    For parsed Retry-After: cap wait at 90s.
+    For parsed Retry-After: honor it up to max_wait (default 900s = 15min).
     Without Retry-After: exponential backoff capped at 30s.
+
+    Gmail per-user-quota resets every 100s burst; daily/per-minute hits can
+    return Retry-After of 5-15min when another system (Pub/Sub watch, Mastra
+    agent) consumed the same user-delegated quota. Honoring the Retry-After
+    actually scans the mailbox instead of skipping it.
     """
     from googleapiclient.errors import HttpError
 
@@ -102,7 +107,7 @@ def execute_with_retry(request, max_attempts=6, label=""):
                 raise
             parsed = _parse_retry_after(e)
             if parsed is not None:
-                wait = min(parsed, 90.0)
+                wait = min(parsed, max_wait)
             else:
                 wait = min(2 ** attempt + random.random(), 30.0)
             print(f"    [retry {attempt}/{max_attempts}] {label}: status={e.resp.status}, sleep {wait:.1f}s")
@@ -231,7 +236,7 @@ def fetch_messages_batch(service, email, msg_ids, max_attempts=5):
 
         pending = retry_ids
         if rate_limited and retry_after_seconds is not None:
-            wait = min(retry_after_seconds, 90.0)
+            wait = min(retry_after_seconds, 300.0)
         else:
             wait = min(2 ** attempt + random.random(), 30.0)
         print(f"    [batch-retry {attempt}/{max_attempts}] {len(pending)} mensajes pendientes, sleep {wait:.1f}s")
@@ -628,28 +633,47 @@ def main():
     scan_results = []
     skipped_mailboxes = []
 
+    def _scan_one(mailbox, label):
+        email_key = mailbox["email"]
+        print(f"\n  --- {label}: {mailbox['nombre']} ---")
+        try:
+            result = scan_mailbox(mailbox, state, blocked_domains,
+                                  days_override=args.days,
+                                  max_results=args.max_results)
+        except Exception as e:
+            status = getattr(getattr(e, "resp", None), "status", "?")
+            return None, f"{type(e).__name__} status={status}: {e}"
+        scan_results.append(result)
+        print(f"    Dominios encontrados: {len(result)}")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if isinstance(state.get(email_key), dict):
+            state[email_key]["last_scan_timestamp"] = now_iso
+        else:
+            state[email_key] = {"last_scan_timestamp": now_iso}
+        return result, None
+
     try:
+        # First pass — normal order
+        pending_retry = []
         for i, mailbox in enumerate(mailboxes):
-            email_key = mailbox["email"]
-            print(f"\n  --- Buzon {i+1}/{len(mailboxes)}: {mailbox['nombre']} ---")
-            try:
-                result = scan_mailbox(mailbox, state, blocked_domains,
-                                      days_override=args.days,
-                                      max_results=args.max_results)
-            except Exception as e:
-                status = getattr(getattr(e, "resp", None), "status", "?")
-                print(f"::warning::Mailbox {email_key} saltado por error: {type(e).__name__} status={status}: {e}")
-                skipped_mailboxes.append(email_key)
-                continue
+            label = f"Buzon {i+1}/{len(mailboxes)}"
+            _, err = _scan_one(mailbox, label)
+            if err is not None:
+                print(f"    [pasada 1] fallo: {err}")
+                pending_retry.append(mailbox)
 
-            scan_results.append(result)
-            print(f"    Dominios encontrados: {len(result)}")
-
-            now_iso = datetime.now(timezone.utc).isoformat()
-            if isinstance(state.get(email_key), dict):
-                state[email_key]["last_scan_timestamp"] = now_iso
-            else:
-                state[email_key] = {"last_scan_timestamp": now_iso}
+        # Second pass — retry failures after a quota cool-down
+        if pending_retry:
+            cooldown = 60
+            print(f"\n  --- Pasada 2: reintentando {len(pending_retry)} buzon(es) tras {cooldown}s de pausa ---")
+            time.sleep(cooldown)
+            for j, mailbox in enumerate(pending_retry):
+                label = f"Reintento {j+1}/{len(pending_retry)}"
+                _, err = _scan_one(mailbox, label)
+                if err is not None:
+                    email_key = mailbox["email"]
+                    print(f"::error::Mailbox {email_key} no escaneado tras 2 pasadas: {err}")
+                    skipped_mailboxes.append(email_key)
 
         # [5/9] Merge all mailbox results
         print(f"\n  [5/9] Combinando resultados de {len(mailboxes)} buzones...")
