@@ -9,7 +9,7 @@
     "id": "gonzalo_de_gracia",
     "name": "Gonzalo de Gracia",
     "importedAt": "2026-03-10T09:20:19.188902",
-    "companiesCount": 81
+    "companiesCount": 82
   },
   {
     "id": "guillermo_souto",
@@ -21,19 +21,19 @@
     "id": "javier_ruiz",
     "name": "Javier Ruiz",
     "importedAt": "2026-03-10T09:20:19.188917",
-    "companiesCount": 1212
+    "companiesCount": 1213
   },
   {
     "id": "leticia_menéndez",
     "name": "Leticia Menéndez",
     "importedAt": "2026-03-10T09:20:19.188921",
-    "companiesCount": 688
+    "companiesCount": 690
   },
   {
     "id": "miguel_solana",
     "name": "Miguel Solana",
     "importedAt": "2026-03-10T09:20:19.188925",
-    "companiesCount": 2445
+    "companiesCount": 2447
   },
   {
     "id": "rafael_nevado",
@@ -45,6 +45,6 @@
     "id": "salvador_carrillo",
     "name": "Salvador Carrillo",
     "importedAt": "2026-03-10T09:20:19.188932",
-    "companiesCount": 2243
+    "companiesCount": 2245
   }
 ]
