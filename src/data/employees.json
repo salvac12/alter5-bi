@@ -3,13 +3,13 @@
     "id": "carlos_almodóvar",
     "name": "Carlos Almodóvar",
     "importedAt": "2026-03-10T09:20:19.188879",
-    "companiesCount": 306
+    "companiesCount": 309
   },
   {
     "id": "gonzalo_de_gracia",
     "name": "Gonzalo de Gracia",
     "importedAt": "2026-03-10T09:20:19.188902",
-    "companiesCount": 108
+    "companiesCount": 109
   },
   {
     "id": "guillermo_souto",
@@ -21,7 +21,7 @@
     "id": "javier_ruiz",
     "name": "Javier Ruiz",
     "importedAt": "2026-03-10T09:20:19.188917",
-    "companiesCount": 1249
+    "companiesCount": 1250
   },
   {
     "id": "leticia_menéndez",
@@ -33,18 +33,18 @@
     "id": "miguel_solana",
     "name": "Miguel Solana",
     "importedAt": "2026-03-10T09:20:19.188925",
-    "companiesCount": 2501
+    "companiesCount": 2504
   },
   {
     "id": "rafael_nevado",
     "name": "Rafael Nevado",
     "importedAt": "2026-03-10T09:20:19.188928",
-    "companiesCount": 399
+    "companiesCount": 401
   },
   {
     "id": "salvador_carrillo",
     "name": "Salvador Carrillo",
     "importedAt": "2026-03-10T09:20:19.188932",
-    "companiesCount": 2319
+    "companiesCount": 2320
   }
 ]
