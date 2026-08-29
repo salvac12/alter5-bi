@@ -263,6 +263,35 @@ New -> Origination (Prep & NDA -> Fin. Analysis -> Termsheet) -> Distribution (P
 
 ---
 
+## Pipedrive Comparison
+
+Script para comparar todos los contactos y organizaciones de Pipedrive CRM contra los datos locales de `companies_full.json`.
+
+```bash
+# Basico — imprime el reporte en stdout
+PIPEDRIVE_API_TOKEN=xxxxx python scripts/compare_pipedrive.py
+
+# Guardar reporte JSON completo
+PIPEDRIVE_API_TOKEN=xxxxx python scripts/compare_pipedrive.py --output report.json
+
+# Exportar CSVs (5 ficheros en el directorio actual)
+PIPEDRIVE_API_TOKEN=xxxxx python scripts/compare_pipedrive.py --csv
+
+# Mostrar detalle de matching fuzzy
+PIPEDRIVE_API_TOKEN=xxxxx python scripts/compare_pipedrive.py --verbose
+```
+
+El script:
+1. Carga `src/data/companies_full.json` (~3,943 empresas)
+2. Descarga todas las Organizaciones, Contactos y Deals de Pipedrive (paginado)
+3. Aplica matching por dominio exacto, nombre fuzzy (>85%) y dominio de email
+4. Genera un reporte con 5 secciones: solo en Pipedrive, solo en local, matches, contactos solo en Pipedrive, contactos solo en local
+5. Opcional: JSON estructurado (`--output`) y CSVs (`--csv`)
+
+No requiere dependencias externas (usa `urllib.request` como el resto de scripts).
+
+---
+
 ## Variables de entorno
 
 ### Frontend (Vite — build time)
